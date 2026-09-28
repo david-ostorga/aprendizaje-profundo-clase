@@ -1,0 +1,3321 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guía Regresión Lineal en PyTorch</title>
+<style>
+:root{
+  --bg:#fbfaf8;
+  --surface:#ffffff;
+  --surface-2:#f4f2ee;
+  --border:#e3dfd8;
+  --text:#22201d;
+  --text-2:#5d5852;
+  --text-3:#8a847c;
+  --accent:#b5502a;
+  --accent-soft:#fdf0ea;
+  --ok:#2f6f4f;
+  --ok-soft:#eaf4ee;
+  --warn:#8a6116;
+  --warn-soft:#fdf4e2;
+  --code-bg:#f6f4f0;
+  --code-kw:#a13d7a;
+  --code-str:#2f6f4f;
+  --code-com:#8a847c;
+  --code-num:#b5502a;
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.05);
+  --radius:12px;
+  --maxw:820px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#161513;
+    --surface:#1e1d1a;
+    --surface-2:#262521;
+    --border:#34322d;
+    --text:#ece9e3;
+    --text-2:#b2ada4;
+    --text-3:#857f76;
+    --accent:#e08a63;
+    --accent-soft:#2c211b;
+    --ok:#7fc0a0;
+    --ok-soft:#1c2721;
+    --warn:#dab06a;
+    --warn-soft:#2a241a;
+    --code-bg:#1a1917;
+    --code-kw:#d98cba;
+    --code-str:#8fc7a8;
+    --code-com:#7c766d;
+    --code-num:#e5a07a;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#161513;
+  --surface:#1e1d1a;
+  --surface-2:#262521;
+  --border:#34322d;
+  --text:#ece9e3;
+  --text-2:#b2ada4;
+  --text-3:#857f76;
+  --accent:#e08a63;
+  --accent-soft:#2c211b;
+  --ok:#7fc0a0;
+  --ok-soft:#1c2721;
+  --warn:#dab06a;
+  --warn-soft:#2a241a;
+  --code-bg:#1a1917;
+  --code-kw:#d98cba;
+  --code-str:#8fc7a8;
+  --code-com:#7c766d;
+  --code-num:#e5a07a;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:80px}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  font-size:17px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+.sans{font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif}
+code, pre, .mono{font-family:ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace}
+
+/* ---------- progress ---------- */
+#progress{
+  position:fixed; top:0; left:0; height:3px; width:0%;
+  background:var(--accent); z-index:100; transition:width .1s linear;
+}
+
+/* ---------- layout ---------- */
+.shell{display:flex; gap:0; align-items:flex-start}
+#toc{
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+  width:280px; flex:0 0 280px;
+  padding:28px 18px 60px 24px;
+  border-right:1px solid var(--border);
+  background:var(--surface);
+}
+#toc .toc-title{
+  font-family:ui-sans-serif, system-ui, sans-serif;
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--text-3); margin:0 0 14px 8px;
+}
+#toc a{
+  display:block; padding:5px 10px; margin:1px 0;
+  font-family:ui-sans-serif, system-ui, sans-serif;
+  font-size:13.5px; line-height:1.4;
+  color:var(--text-2); text-decoration:none;
+  border-radius:7px; border-left:2px solid transparent;
+  transition:background .15s, color .15s;
+}
+#toc a:hover{background:var(--surface-2); color:var(--text)}
+#toc a.sub{padding-left:22px; font-size:12.5px; color:var(--text-3)}
+#toc a.active{background:var(--accent-soft); color:var(--accent); border-left-color:var(--accent); font-weight:600}
+
+main{flex:1 1 auto; min-width:0; padding:0 0 120px}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+
+/* ---------- topbar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 24px;
+  background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+}
+.topbar .crumb{
+  font-family:ui-sans-serif, system-ui, sans-serif; font-size:12.5px; color:var(--text-3);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.btn{
+  font-family:ui-sans-serif, system-ui, sans-serif; font-size:12.5px;
+  background:var(--surface); color:var(--text-2);
+  border:1px solid var(--border); border-radius:8px;
+  padding:6px 11px; cursor:pointer; white-space:nowrap;
+  transition:background .15s, color .15s, border-color .15s;
+}
+.btn:hover{background:var(--surface-2); color:var(--text)}
+.btn.primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08); color:#fff}
+.btn[disabled]{opacity:.4; cursor:not-allowed}
+#menuBtn{display:none}
+
+/* ---------- hero ---------- */
+.hero{padding:56px 0 36px; border-bottom:1px solid var(--border); margin-bottom:8px}
+.hero .eyebrow{
+  font-family:ui-sans-serif, system-ui, sans-serif; font-size:11.5px;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--accent); margin-bottom:14px;
+}
+.hero h1{font-size:40px; line-height:1.15; margin:0 0 16px; letter-spacing:-.02em}
+.hero p{font-size:18.5px; color:var(--text-2); margin:0 0 12px; max-width:640px}
+.hero .meta{
+  font-family:ui-sans-serif, system-ui, sans-serif; font-size:13px; color:var(--text-3);
+  margin-top:24px; padding-top:18px; border-top:1px solid var(--border);
+}
+
+/* ---------- typography ---------- */
+h2{
+  font-size:28px; letter-spacing:-.015em; margin:64px 0 6px; scroll-margin-top:80px;
+  padding-top:8px;
+}
+h2 .num{
+  display:block;
+  font-family:ui-sans-serif, system-ui, sans-serif;
+  font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--accent); margin-bottom:8px; font-weight:600;
+}
+h3{font-size:20.5px; margin:38px 0 6px; letter-spacing:-.01em; scroll-margin-top:80px}
+h4{font-size:16px; margin:26px 0 4px; font-family:ui-sans-serif,system-ui,sans-serif; color:var(--text)}
+p{margin:14px 0}
+ul,ol{margin:14px 0; padding-left:22px}
+li{margin:7px 0}
+li::marker{color:var(--text-3)}
+strong{font-weight:650}
+a{color:var(--accent)}
+hr{border:none; border-top:1px solid var(--border); margin:44px 0}
+.lead{font-size:18px; color:var(--text-2)}
+
+/* inline code */
+p code, li code, td code, .ic{
+  font-size:.855em; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:5px;
+  padding:1px 5px; color:var(--text);
+  white-space:nowrap;
+}
+
+/* ---------- code blocks ---------- */
+figure.code{
+  margin:20px 0; background:var(--code-bg);
+  border:1px solid var(--border); border-radius:var(--radius);
+  overflow:hidden; box-shadow:var(--shadow);
+}
+figure.code figcaption{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 12px; background:var(--surface-2);
+  border-bottom:1px solid var(--border);
+  font-family:ui-sans-serif, system-ui, sans-serif;
+  font-size:11.5px; color:var(--text-3); letter-spacing:.03em;
+}
+figure.code pre{
+  margin:0; padding:15px 16px; overflow-x:auto;
+  font-size:13.2px; line-height:1.62; color:var(--text);
+  -webkit-overflow-scrolling:touch;
+}
+.copy{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px;
+  background:transparent; border:1px solid var(--border); color:var(--text-3);
+  border-radius:6px; padding:3px 8px; cursor:pointer; transition:all .15s;
+}
+.copy:hover{background:var(--bg); color:var(--text)}
+.copy.done{color:var(--ok); border-color:var(--ok)}
+.k{color:var(--code-kw)} .s{color:var(--code-str)} .c{color:var(--code-com); font-style:italic} .n{color:var(--code-num)}
+
+/* ---------- callouts ---------- */
+.note{
+  margin:22px 0; padding:15px 18px;
+  background:var(--surface); border:1px solid var(--border);
+  border-left:3px solid var(--text-3);
+  border-radius:0 var(--radius) var(--radius) 0;
+}
+.note .tag{
+  display:block;
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--text-3);
+  margin-bottom:6px; font-weight:600;
+}
+.note p:first-of-type{margin-top:0} .note p:last-child{margin-bottom:0}
+.note.key{border-left-color:var(--accent); background:var(--accent-soft)}
+.note.key .tag{color:var(--accent)}
+.note.fix{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.fix .tag{color:var(--warn)}
+.note.good{border-left-color:var(--ok); background:var(--ok-soft)}
+.note.good .tag{color:var(--ok)}
+
+/* question block */
+.q{
+  margin:30px 0 4px; padding:12px 16px;
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:var(--radius);
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:15px; color:var(--text);
+}
+.q .qlabel{
+  font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--accent); font-weight:700; display:block; margin-bottom:3px;
+}
+
+/* ---------- math ---------- */
+.eq{
+  margin:20px 0; padding:16px 18px; text-align:center;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius);
+  font-family:ui-serif, Georgia, serif; font-size:19px; line-height:2.1;
+  overflow-x:auto;
+}
+.eq .lbl{
+  display:block; margin-top:8px;
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; color:var(--text-3);
+}
+.var{font-style:italic}
+.frac{display:inline-block; vertical-align:-0.55em; text-align:center; margin:0 .3em; line-height:1.25}
+.frac>.num{display:block; padding:0 .35em; font-size:.88em}
+.frac>.den{display:block; padding:0 .35em; font-size:.88em; border-top:1.2px solid currentColor}
+.sub{font-size:.72em; vertical-align:-.28em}
+.sup{font-size:.72em; vertical-align:.5em}
+
+/* ---------- tables ---------- */
+.tbl{width:100%; border-collapse:collapse; margin:22px 0; font-size:14.5px;
+  font-family:ui-sans-serif,system-ui,sans-serif;}
+.tbl th,.tbl td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top}
+.tbl th{
+  font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--text-3); font-weight:600; border-bottom:1.5px solid var(--border);
+}
+.tbl tr:last-child td{border-bottom:none}
+.tbl code{white-space:nowrap}
+.scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+
+/* ---------- flow diagram ---------- */
+.flow{
+  display:flex; flex-wrap:wrap; gap:8px; align-items:stretch;
+  margin:26px 0; font-family:ui-sans-serif,system-ui,sans-serif;
+}
+.flow .node{
+  flex:1 1 130px; min-width:120px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; padding:11px 12px; box-shadow:var(--shadow);
+}
+.flow .node .t{font-size:12.5px; font-weight:650; margin-bottom:3px; color:var(--accent)}
+.flow .node .d{font-size:12px; color:var(--text-2); line-height:1.45}
+.flow .node code{font-size:11px; white-space:nowrap}
+
+/* ---------- stepper widget ---------- */
+.widget{
+  margin:28px 0; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); overflow:hidden;
+}
+.widget-head{
+  padding:11px 16px; border-bottom:1px solid var(--border); background:var(--surface-2);
+  font-family:ui-sans-serif,system-ui,sans-serif;
+}
+.widget-head .wt{font-size:14px; font-weight:650}
+.widget-head .ws{font-size:12px; color:var(--text-3); margin-top:2px}
+.widget-body{padding:16px}
+.widget-foot{
+  padding:11px 16px; border-top:1px solid var(--border); background:var(--surface-2);
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+}
+.codeframe{
+  background:var(--code-bg); border:1px solid var(--border); border-radius:9px;
+  padding:13px 4px 13px 0; overflow-x:auto; font-size:13px; line-height:1.75;
+}
+.codeframe .line{
+  display:block; padding:1px 14px 1px 14px; white-space:pre;
+  border-left:3px solid transparent; transition:background .18s, border-color .18s, opacity .18s;
+  opacity:.42;
+}
+.codeframe .line.on{background:var(--accent-soft); border-left-color:var(--accent); opacity:1}
+.codeframe .line.seen{opacity:.78}
+.stepinfo{
+  margin-top:14px; padding:13px 15px; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:9px; min-height:96px;
+}
+.stepinfo .sh{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px;
+  font-weight:650; color:var(--accent); margin-bottom:5px;
+}
+.stepinfo .sb{font-size:14.5px; color:var(--text-2); line-height:1.6}
+.pill{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:11.5px;
+  color:var(--text-3); margin-left:auto;
+}
+
+/* ---------- gd lab ---------- */
+.lab-grid{display:grid; grid-template-columns:1fr 210px; gap:16px}
+canvas{
+  width:100%; height:auto; display:block;
+  background:var(--code-bg); border:1px solid var(--border); border-radius:9px;
+}
+.readout{
+  font-family:ui-monospace,monospace; font-size:12.5px;
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:9px; padding:12px;
+}
+.readout .row{display:flex; justify-content:space-between; gap:8px; padding:3px 0}
+.readout .row span:first-child{color:var(--text-3)}
+.readout .row span:last-child{font-weight:600}
+.ctrl{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px; color:var(--text-2); margin-bottom:10px}
+.ctrl label{display:block; margin-bottom:5px}
+input[type=range]{width:100%; accent-color:var(--accent)}
+.status{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px;
+  padding:8px 11px; border-radius:8px; margin-top:10px; line-height:1.45;
+}
+.status.ok{background:var(--ok-soft); color:var(--ok)}
+.status.bad{background:var(--warn-soft); color:var(--warn)}
+
+/* ---------- details ---------- */
+details{
+  margin:20px 0; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
+}
+details summary{
+  padding:12px 16px; cursor:pointer; list-style:none;
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; font-weight:600;
+  color:var(--accent); background:var(--surface-2); user-select:none;
+}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ "; display:inline-block; transition:transform .2s}
+details[open] summary::before{content:"▾ "}
+details .dbody{padding:2px 18px 14px}
+details .dbody > :first-child{margin-top:12px}
+
+/* ---------- glossary ---------- */
+.gloss{margin:24px 0}
+.gloss .item{padding:13px 0; border-bottom:1px solid var(--border)}
+.gloss .item:last-child{border-bottom:none}
+.gloss .term{
+  font-family:ui-monospace,monospace; font-size:13.5px; color:var(--accent);
+  font-weight:600; margin-bottom:3px;
+}
+.gloss .def{font-size:15px; color:var(--text-2); line-height:1.55}
+
+footer{
+  margin-top:70px; padding-top:22px; border-top:1px solid var(--border);
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--text-3);
+}
+
+/* ---------- matrices (lab forward) ---------- */
+.mat-row{
+  display:flex; gap:14px; align-items:center; justify-content:center;
+  flex-wrap:wrap; margin:10px 0;
+}
+.mat{display:inline-block; text-align:center}
+.mat .cap{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:10.5px;
+  letter-spacing:.06em; color:var(--text-3); margin-bottom:5px; white-space:nowrap;
+}
+.mat .grid{
+  display:inline-grid; gap:3px; padding:5px 7px;
+  border-left:2px solid var(--text-3); border-right:2px solid var(--text-3);
+  border-radius:3px;
+}
+.cell{
+  min-width:50px; padding:4px 7px;
+  font-family:ui-monospace,monospace; font-size:12px; text-align:right;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:4px;
+  color:var(--text); transition:background .22s, color .22s, border-color .22s, opacity .22s;
+}
+.cell.hl{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:600}
+.cell.hl2{background:var(--accent-soft); color:var(--accent); border-color:var(--accent)}
+.cell.ok{background:var(--ok); color:#fff; border-color:var(--ok); font-weight:600}
+.cell.dim{opacity:.3}
+.cell.empty{color:var(--text-3)}
+.op{font-size:19px; color:var(--text-3); font-family:ui-serif,serif; padding:0 2px}
+.dimtag{
+  font-family:ui-monospace,monospace; font-size:10.5px; color:var(--text-3);
+  margin-top:5px; display:block;
+}
+.calcline{
+  margin-top:12px; padding:10px 13px; background:var(--code-bg);
+  border:1px solid var(--border); border-radius:8px;
+  font-family:ui-monospace,monospace; font-size:12.5px; color:var(--text-2);
+  overflow-x:auto; white-space:nowrap; min-height:38px; line-height:1.6;
+}
+.calcline b{color:var(--accent); font-weight:600}
+
+/* ---------- grafo computacional ---------- */
+.graphwrap{overflow-x:auto; padding:4px 2px 10px}
+.graph{display:flex; gap:4px; align-items:center; min-width:min-content}
+.gnode{
+  flex:0 0 auto; min-width:84px; text-align:center; padding:9px 11px;
+  border:1px solid var(--border); border-radius:9px; background:var(--surface-2);
+  transition:background .25s, border-color .25s, color .25s, transform .25s;
+}
+.gnode .gn{font-family:ui-monospace,monospace; font-size:12px; font-weight:650}
+.gnode .gv{font-family:ui-monospace,monospace; font-size:10.5px; color:var(--text-3); margin-top:3px; white-space:nowrap}
+.gnode.on{background:var(--accent); border-color:var(--accent); color:#fff; transform:translateY(-2px)}
+.gnode.on .gv{color:rgba(255,255,255,.88)}
+.gnode.done{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}
+.gnode.done .gv{color:var(--accent)}
+.gnode.bon{background:var(--ok); border-color:var(--ok); color:#fff; transform:translateY(-2px)}
+.gnode.bon .gv{color:rgba(255,255,255,.88)}
+.gnode.bdone{background:var(--ok-soft); border-color:var(--ok); color:var(--ok)}
+.gnode.bdone .gv{color:var(--ok)}
+.garrow{
+  flex:0 0 auto; color:var(--text-3); font-size:15px; font-family:ui-sans-serif,sans-serif;
+  transition:color .25s, transform .25s;
+}
+.garrow.rev{color:var(--ok); transform:scaleX(-1)}
+.modetabs{display:flex; gap:6px; margin-bottom:12px}
+.modetabs button{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px;
+  padding:6px 13px; border-radius:8px; cursor:pointer;
+  border:1px solid var(--border); background:var(--surface); color:var(--text-2);
+  transition:all .15s;
+}
+.modetabs button.sel{background:var(--accent); color:#fff; border-color:var(--accent)}
+.modetabs button.sel.green{background:var(--ok); border-color:var(--ok)}
+
+/* ---------- entrenador en vivo ---------- */
+.param-row{
+  display:flex; align-items:center; gap:9px; padding:4px 0;
+  font-family:ui-monospace,monospace; font-size:12px;
+}
+.param-row .pl{width:26px; color:var(--text-3); flex:0 0 auto}
+.param-row .bar{
+  flex:1 1 auto; height:6px; background:var(--surface-2);
+  border-radius:4px; overflow:hidden; min-width:40px;
+}
+.param-row .bar i{display:block; height:100%; background:var(--accent); width:0%; transition:width .25s}
+.param-row .bar i.near{background:var(--ok)}
+.param-row .pv{width:104px; text-align:right; flex:0 0 auto}
+.param-row .pv .tgt{color:var(--text-3); font-size:10.5px}
+.trainer-grid{display:grid; grid-template-columns:1fr 240px; gap:16px}
+.mini{
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px;
+  color:var(--text-3); letter-spacing:.06em; text-transform:uppercase;
+  margin:14px 0 6px;
+}
+.selrow{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:4px}
+.selrow button{
+  font-family:ui-monospace,monospace; font-size:11.5px;
+  padding:4px 10px; border-radius:7px; cursor:pointer;
+  border:1px solid var(--border); background:var(--surface); color:var(--text-2);
+  transition:all .15s;
+}
+.selrow button.sel{background:var(--accent); color:#fff; border-color:var(--accent)}
+
+/* ---------- grid de minibatches ---------- */
+.bgrid{
+  display:grid; grid-template-columns:repeat(50, 1fr); gap:2px;
+  margin:12px 0 6px;
+}
+.bcell{
+  aspect-ratio:1/1; border-radius:2px; background:var(--surface-2);
+  transition:background .18s, opacity .18s;
+}
+.bcell.a{background:var(--accent)}
+.bcell.d{background:var(--accent-soft)}
+.bcell.v{background:var(--border)}
+.legend{
+  display:flex; gap:16px; flex-wrap:wrap; margin-top:10px;
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:11.5px; color:var(--text-3);
+}
+.legend span{display:flex; align-items:center; gap:6px}
+.legend i{width:11px; height:11px; border-radius:3px; display:inline-block}
+.counters{
+  display:flex; gap:20px; flex-wrap:wrap; margin-top:12px;
+  font-family:ui-sans-serif,system-ui,sans-serif;
+}
+.counters .cbox{flex:0 0 auto}
+.counters .cl{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3)}
+.counters .cvv{font-family:ui-monospace,monospace; font-size:19px; font-weight:650; color:var(--accent); line-height:1.3}
+
+/* ---------- comparación zero_grad ---------- */
+.cmp{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+.cmp .col{
+  border:1px solid var(--border); border-radius:10px; overflow:hidden; background:var(--surface-2);
+}
+.cmp .col h5{
+  margin:0; padding:9px 12px; font-size:12.5px;
+  font-family:ui-sans-serif,system-ui,sans-serif; font-weight:650;
+  border-bottom:1px solid var(--border);
+}
+.cmp .col.good h5{background:var(--ok-soft); color:var(--ok)}
+.cmp .col.bad h5{background:var(--warn-soft); color:var(--warn)}
+.cmp .col .rows{padding:6px 10px 10px}
+.crow{
+  display:flex; justify-content:space-between; gap:8px; padding:4px 2px;
+  font-family:ui-monospace,monospace; font-size:12px;
+  border-bottom:1px dashed var(--border); opacity:.25; transition:opacity .25s;
+}
+.crow:last-child{border-bottom:none}
+.crow.on{opacity:1}
+.crow .ci{color:var(--text-3)}
+.crow .cg{font-weight:600}
+.cmp .col.bad .crow.on .cg{color:var(--warn)}
+.cmp .col.good .crow.on .cg{color:var(--ok)}
+.cmp .foot{
+  padding:8px 12px; border-top:1px solid var(--border);
+  font-family:ui-monospace,monospace; font-size:12px;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width:980px){
+  .lab-grid{grid-template-columns:1fr}
+  .trainer-grid{grid-template-columns:1fr}
+}
+@media (max-width:620px){
+  .cmp{grid-template-columns:1fr}
+  .bgrid{grid-template-columns:repeat(25, 1fr)}
+}
+@media (max-width:860px){
+  body{font-size:16.5px}
+  #menuBtn{display:inline-block}
+  #toc{
+    position:fixed; left:0; top:0; z-index:90;
+    transform:translateX(-100%); transition:transform .25s ease;
+    width:min(84vw,300px); flex-basis:auto; box-shadow:var(--shadow);
+  }
+  #toc.open{transform:translateX(0)}
+  .scrim{
+    position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:80;
+    opacity:0; pointer-events:none; transition:opacity .25s;
+  }
+  .scrim.on{opacity:1; pointer-events:auto}
+  .wrap{padding:0 16px}
+  .topbar{padding:9px 16px}
+  .hero h1{font-size:30px}
+  .hero p{font-size:16.5px}
+  h2{font-size:24px; margin-top:52px}
+  h3{font-size:18.5px}
+  .eq{font-size:16px; padding:14px 12px}
+  figure.code pre{font-size:12.4px}
+}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc">
+  <p class="toc-title">Contenido</p>
+  <a href="#inicio">Inicio</a>
+  <a href="#mapa">1 · El mapa completo</a>
+  <a href="#conceptos">2 · Conceptos base</a>
+  <a href="#modelo">3 · El modelo</a>
+  <a href="#modelo-clase" class="sub">¿Por qué una clase?</a>
+  <a href="#modelo-super" class="sub">super().__init__()</a>
+  <a href="#modelo-init" class="sub">__init__</a>
+  <a href="#modelo-forward" class="sub">forward</a>
+  <a href="#lab-forward" class="sub">◆ Lab: el forward</a>
+  <a href="#modelo-loss" class="sub">loss</a>
+  <a href="#modelo-optim" class="sub">configure_optimizers</a>
+  <a href="#sgd">4 · El optimizador SGD</a>
+  <a href="#sgd-step" class="sub">step: p.data y p.grad</a>
+  <a href="#sgd-zero" class="sub">zero_grad</a>
+  <a href="#lab-zerograd" class="sub">◆ Lab: acumulación</a>
+  <a href="#secuencia">5 · La secuencia</a>
+  <a href="#secuencia-porque" class="sub">¿Por qué gradientes?</a>
+  <a href="#secuencia-ciclo" class="sub">El ciclo paso a paso</a>
+  <a href="#secuencia-mate" class="sub">La matemática</a>
+  <a href="#lab-grafo" class="sub">◆ Lab: el grafo</a>
+  <a href="#secuencia-lab" class="sub">◆ Lab: descenso 1-D</a>
+  <a href="#datos">6 · Los datos</a>
+  <a href="#lab-batches" class="sub">◆ Lab: minibatches</a>
+  <a href="#loop">7 · El loop de entrenamiento</a>
+  <a href="#loop-sim" class="sub">◆ Lab: el loop</a>
+  <a href="#loop-registro" class="sub">total_train y count_train</a>
+  <a href="#loop-val" class="sub">La validación</a>
+  <a href="#cierre">8 · Evaluación y gráfica</a>
+  <a href="#lab-trainer" class="sub">◆ Lab: entrenador completo</a>
+  <a href="#aclaraciones">9 · Aclaraciones clave</a>
+  <a href="#completo">10 · Código completo</a>
+  <a href="#glosario">11 · Glosario</a>
+  <a href="#referencias">12 · Documentación oficial</a>
+</nav>
+
+<main>
+
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Guía · Regresión lineal en PyTorch</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Notebook Intro_Pytorch</div>
+  <h1>Regresión lineal en PyTorch, desde cero</h1>
+  <p class="lead">Una guía de repaso construida a partir de las dudas que surgieron al leer el notebook: qué hace cada pieza, por qué está escrita así, y qué matemática hay debajo.</p>
+  <p>El notebook implementa una regresión lineal sin usar las capas ni los optimizadores prefabricados de PyTorch. El objetivo no es resolver la regresión de la forma más eficiente —para eso existe una fórmula cerrada— sino <strong>construir a mano el mecanismo de entrenamiento</strong> que después usarás sin cambios en redes neuronales de verdad.</p>
+  <div class="meta">Archivo fuente: <code>notebooks/Intro_Pytorch_david.ipynb</code> &nbsp;·&nbsp; Lectura secuencial recomendada, pero cada sección se sostiene sola.</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>El mapa completo</h2>
+
+<p>Antes de entrar en detalle, conviene tener el esqueleto en la cabeza. Todo el notebook son cuatro bloques que encajan entre sí:</p>
+
+<div class="flow">
+  <div class="node"><div class="t">1. El modelo</div><div class="d"><code>LinearRegression</code><br>Guarda <code>w</code> y <code>b</code>, predice, y sabe medir su propio error.</div></div>
+  <div class="node"><div class="t">2. El optimizador</div><div class="d"><code>SGD</code><br>Recibe <code>w</code> y <code>b</code> y sabe cómo corregirlos con los gradientes.</div></div>
+  <div class="node"><div class="t">3. Los datos</div><div class="d"><code>DataLoader</code><br>Datos sintéticos partidos en train/validación y servidos en minibatches.</div></div>
+  <div class="node"><div class="t">4. El loop</div><div class="d">Une los tres anteriores y repite el ciclo de aprendizaje época tras época.</div></div>
+</div>
+
+<p>Y dentro del loop, el ciclo que se repite una y otra vez —el corazón de todo el deep learning— es este:</p>
+
+<div class="flow">
+  <div class="node"><div class="t">Forward</div><div class="d">Con los <code>w</code>, <code>b</code> actuales, predice <span class="mono">ŷ</span>.</div></div>
+  <div class="node"><div class="t">Loss</div><div class="d">Compara <span class="mono">ŷ</span> contra <span class="mono">y</span>: un número que resume el error.</div></div>
+  <div class="node"><div class="t">Backward</div><div class="d">Calcula hacia dónde mover <code>w</code> y <code>b</code> para que ese error baje.</div></div>
+  <div class="node"><div class="t">Step</div><div class="d">Mueve <code>w</code> y <code>b</code> un poquito en esa dirección.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>Todo lo demás —las clases, los <code>DataLoader</code>, las listas de pérdidas— es infraestructura alrededor de ese ciclo de cuatro pasos. Si entiendes el ciclo, entiendes el notebook.</p>
+</div>
+
+<!-- ============ 2. CONCEPTOS ============ -->
+<h2 id="conceptos"><span class="num">Sección 2</span>Conceptos base</h2>
+
+<p>Cuatro definiciones que el notebook da por sentadas y que conviene tener claras antes de leer código.</p>
+
+<h3>Tensor</h3>
+<p>Es la estructura de datos fundamental de PyTorch: un arreglo multidimensional, generalización de vectores y matrices a cualquier número de dimensiones. Un escalar es un tensor 0-D, un vector 1-D, una matriz 2-D, y un lote de imágenes sería 4-D <span class="ic">(batch, canales, alto, ancho)</span>. Internamente puede vivir en CPU o en GPU.</p>
+
+<p>Lo que lo distingue de un simple arreglo de NumPy es que un tensor puede <strong>rastrear las operaciones que se hacen sobre él</strong> para después calcular derivadas automáticamente. Esa capacidad es lo que hace posible el <code>backward()</code> del que hablaremos más adelante.</p>
+
+<h3>Minibatch</h3>
+<p>En vez de calcular el error sobre todo el dataset (caro) o sobre un solo ejemplo (ruidoso), se agrupan los ejemplos en lotes de tamaño <code>batch_size</code>. Cada minibatch:</p>
+<ul>
+  <li>da un estimado del gradiente más estable que usar un solo ejemplo,</li>
+  <li>aprovecha el paralelismo de CPU/GPU (una multiplicación de matrices en vez de muchas pequeñas),</li>
+  <li>e introduce un ruido estocástico que actúa como regularizador y ayuda a escapar de mínimos locales.</li>
+</ul>
+
+<h3>Época</h3>
+<p>Una pasada completa por todo el conjunto de entrenamiento. Con 800 ejemplos de entrenamiento y <code>batch_size = 32</code>, una época son 800 ÷ 32 = <strong>25 minibatches</strong>. El notebook entrena durante 10 épocas, así que el modelo ve los datos completos 10 veces.</p>
+
+<h3>Clase de Python</h3>
+<p>Una plantilla para crear objetos, compuesta de <strong>datos (atributos)</strong> y <strong>funcionalidades (métodos)</strong>. Las piezas que aparecen en el notebook:</p>
+<ul>
+  <li><span class="ic">class MiClase:</span> — declara la clase.</li>
+  <li><span class="ic">__init__</span> — el <em>constructor</em>: se ejecuta automáticamente al crear un objeto y define su estado inicial. Su primer parámetro siempre es <code>self</code>, que es la referencia al objeto mismo.</li>
+  <li><strong>Atributos</strong> — variables ligadas a la instancia (<code>self.lr</code>, <code>self.w</code>).</li>
+  <li><strong>Métodos</strong> — funciones ligadas al objeto (<code>forward</code>, <code>loss</code>).</li>
+  <li><strong>Herencia</strong> — una clase puede heredar atributos y métodos de otra, como <code>LinearRegression</code> hereda de <code>nn.Module</code>.</li>
+</ul>
+
+<!-- ============ 3. MODELO ============ -->
+<h2 id="modelo"><span class="num">Sección 3</span>El modelo: <span class="mono">LinearRegression</span></h2>
+
+<figure class="code">
+  <figcaption><span>El modelo completo</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">import torch
+import torch.nn as nn
+
+class LinearRegression(nn.Module):
+    """Modelo de regresión lineal implementado desde cero en PyTorch"""
+    def __init__(self, num_inputs, lr, sigma=0.01):
+        super(LinearRegression, self).__init__()
+        # Guardamos los hiperparámetros "a mano"
+        self.num_inputs = num_inputs
+        self.lr = lr
+        self.sigma = sigma
+        # Parámetros del modelo: pesos y sesgo
+        self.w = nn.Parameter(
+            torch.normal(0.0, sigma, size=(num_inputs, 1))
+        )
+        self.b = nn.Parameter(
+            torch.zeros(1)
+        )
+
+    def forward(self, X):
+        """Calcula la estimación y_hat dados los parámetros actuales y X"""
+        return torch.matmul(X, self.w) + self.b
+
+    def loss(self, y_hat, y):
+        """Calcula la pérdida y devuelve el valor medio sobre el minibatch."""
+        l = (y_hat - y) ** 2 / 2
+        return l.mean()
+
+    def configure_optimizers(self):
+        """Crea y devuelve el optimizador SGD configurado con nuestros parámetros."""
+        return SGD([self.w, self.b], self.lr)</code></pre>
+</figure>
+
+<!-- 3.1 -->
+<h3 id="modelo-clase">¿Por qué todo esto está dentro de una clase?</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Por qué todo esto hasta ahora está en una clase?</div>
+
+<p>Porque un modelo no es solo una función matemática: es una <strong>función que además tiene estado propio</strong> —sus parámetros <code>w</code> y <code>b</code>— y ese estado tiene que persistir y actualizarse a lo largo de miles de iteraciones.</p>
+
+<p>Imagina el alternativo con funciones sueltas:</p>
+
+<figure class="code">
+  <figcaption><span>La alternativa incómoda</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">def forward(X, w, b):
+    return X @ w + b</code></pre>
+</figure>
+
+<p>Tendrías que ir cargando <code>w</code> y <code>b</code> a mano en cada llamada, y cada vez que el optimizador los actualice, reasignarlos por fuera y volver a pasarlos a todos lados. Con dos parámetros es molesto; con una red de cincuenta capas es inviable.</p>
+
+<p>Usar una clase te da cuatro cosas concretas:</p>
+<ol>
+  <li><strong>Encapsula el estado.</strong> <code>w</code> y <code>b</code> viven dentro del objeto, así que <code>forward</code> y <code>loss</code> los encuentran solos vía <code>self</code>.</li>
+  <li><strong>Agrupa comportamiento relacionado.</strong> El modelo no solo predice: también sabe calcular su propia pérdida y construir su propio optimizador. Todo lo que le pertenece queda en un lugar.</li>
+  <li><strong>Hereda infraestructura de <code>nn.Module</code>.</strong> Registro automático de parámetros, los modos <code>.train()</code>/<code>.eval()</code>, mover el modelo a GPU con <code>.to(device)</code>, guardar y cargar pesos. Nada de eso existiría con variables sueltas.</li>
+  <li><strong>Escala.</strong> Si mañana cambias la regresión por una red de varias capas, sigues exactamente el mismo patrón y el resto del código (loop, optimizador, DataLoaders) no cambia, porque todos interactúan con el modelo de forma genérica: <code>model(Xb)</code>, <code>model.loss(...)</code>.</li>
+</ol>
+
+<div class="note">
+  <span class="tag">En una frase</span>
+  <p>Estado + comportamiento asociado a ese estado, juntos en un mismo lugar: eso es exactamente para lo que existen las clases.</p>
+</div>
+
+<!-- 3.2 -->
+<h3 id="modelo-super">Qué hace <span class="mono">super(LinearRegression, self).__init__()</span></h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Qué es lo que hace super(LinearRegression...?</div>
+
+<p><code>super()</code> te da acceso a la clase padre de <code>LinearRegression</code>, que aquí es <code>nn.Module</code> (por la declaración <span class="ic">class LinearRegression(nn.Module)</span>). Al llamar <code>.__init__()</code> sobre eso, estás ejecutando el constructor de <code>nn.Module</code> <strong>antes</strong> de seguir inicializando tu propia clase.</p>
+
+<p>¿Por qué es obligatorio? Porque <code>nn.Module</code> prepara internamente varias estructuras que PyTorch necesita: los diccionarios donde registra parámetros, submódulos, buffers y hooks. Si no llamas a <code>super().__init__()</code> antes de asignar <span class="ic">self.w = nn.Parameter(...)</span>, PyTorch no tiene dónde engancharlo y lanza un error del tipo <span class="ic">cannot assign parameters before Module.__init__() call</span>.</p>
+
+<p>El orden importa:</p>
+<ol>
+  <li><code>super(LinearRegression, self).__init__()</code> → prepara el esqueleto heredado.</li>
+  <li>Recién entonces puedes asignar <code>self.num_inputs</code>, <code>self.w</code>, <code>self.b</code>, porque ya existe la infraestructura que los va a rastrear.</li>
+</ol>
+
+<div class="note">
+  <span class="tag">Detalle de sintaxis</span>
+  <p><code>super(LinearRegression, self).__init__()</code> es la forma explícita, heredada de Python 2. En Python 3 moderno se escribe simplemente <code>super().__init__()</code> y hace exactamente lo mismo.</p>
+</div>
+
+<!-- 3.3 -->
+<h3 id="modelo-init">El constructor: hiperparámetros vs. parámetros aprendibles</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>Entiendo que <code>__init__</code> declara num_inputs, la learning rate, sigma, los pesos y el bias. ¿Correcto?</div>
+
+<p>Correcto en la mecánica, con un matiz que vale la pena fijar: no son variables sueltas sino <strong>atributos de la instancia</strong> (por eso llevan <code>self.</code>), y hay una diferencia de naturaleza entre los tres primeros y los dos últimos.</p>
+
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Atributo</th><th>De dónde viene</th><th>Qué es</th></tr>
+  <tr>
+    <td><code>self.num_inputs</code><br><code>self.lr</code><br><code>self.sigma</code></td>
+    <td>Los recibes como argumento al crear el objeto</td>
+    <td><strong>Hiperparámetros</strong>: configuración que tú decides. Solo se copian del valor que pasaste, para poder consultarlos después (<code>configure_optimizers</code> usa <code>self.lr</code>).</td>
+  </tr>
+  <tr>
+    <td><code>self.w</code><br><code>self.b</code></td>
+    <td>Se <em>crean</em> dentro de <code>__init__</code></td>
+    <td><strong>Parámetros aprendibles</strong>: lo que el modelo va a ajustar durante el entrenamiento. Nadie se los pasa desde afuera.</td>
+  </tr>
+</table>
+</div>
+
+<h4>Cómo se inicializan <code>w</code> y <code>b</code></h4>
+<ul>
+  <li><span class="ic">torch.normal(0.0, sigma, size=(num_inputs, 1))</span> crea un tensor de forma <span class="mono">(d, 1)</span> con valores sacados de una normal de media 0 y desviación <span class="var">σ</span>. Se inicializa aleatoriamente y no en cero porque, en redes con varias neuronas, arrancar todos los pesos idénticos haría que todas aprendieran exactamente lo mismo (problema de simetría).</li>
+  <li><span class="ic">torch.zeros(1)</span> crea el sesgo, de forma <span class="mono">(1,)</span>, inicializado en cero. El sesgo sí puede arrancar en cero sin problema.</li>
+</ul>
+
+<h4>El papel de <code>nn.Parameter</code></h4>
+<p>Envolver un tensor en <code>nn.Parameter(...)</code> le dice a PyTorch dos cosas: que ese tensor debe aparecer en la lista de parámetros del módulo, y que hay que rastrear sus gradientes (<span class="ic">requires_grad=True</span> es el valor por defecto de este método).</p>
+
+<div class="note key">
+  <span class="tag">Por qué importa</span>
+  <p>Sin <code>nn.Parameter</code>, PyTorch no sabría qué tensores debe actualizar durante el entrenamiento. Serían tensores comunes, sin gradiente, y el modelo nunca aprendería nada.</p>
+</div>
+
+<!-- 3.4 -->
+<h3 id="modelo-forward">El método <span class="mono">forward</span></h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿forward calcula la estimación y_hat usando w y X, a través de una multiplicación de matrices?</div>
+
+<p>Sí, más la suma del sesgo. Desglosado por dimensiones:</p>
+
+<figure class="code">
+  <figcaption><span>forward</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">def forward(self, X):
+    return torch.matmul(X, self.w) + self.b</code></pre>
+</figure>
+
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Elemento</th><th>Forma</th><th>Significado</th></tr>
+  <tr><td><code>X</code></td><td><span class="mono">(batch_size, num_inputs)</span></td><td>Cada fila es un ejemplo, cada columna una característica</td></tr>
+  <tr><td><code>self.w</code></td><td><span class="mono">(num_inputs, 1)</span></td><td>Un peso por característica</td></tr>
+  <tr><td><code>torch.matmul(X, self.w)</code></td><td><span class="mono">(batch_size, 1)</span></td><td>Una predicción cruda por ejemplo</td></tr>
+  <tr><td><code>self.b</code></td><td><span class="mono">(1,)</span></td><td>El sesgo, un solo número</td></tr>
+  <tr><td>resultado</td><td><span class="mono">(batch_size, 1)</span></td><td>La predicción final ŷ</td></tr>
+</table>
+</div>
+
+<div class="eq">
+  ŷ = <span class="var">X</span><span class="var">w</span> + <span class="var">b</span>
+  <span class="lbl">La ecuación de la regresión lineal, aplicada a todo el minibatch de una sola vez</span>
+</div>
+
+<h4>El broadcasting del sesgo</h4>
+<p>Aquí hay un detalle que puede pasar desapercibido: <code>self.b</code> tiene forma <span class="mono">(1,)</span> pero se le está sumando a un tensor de forma <span class="mono">(batch_size, 1)</span>. PyTorch resuelve esto con <strong>broadcasting</strong>: expande automáticamente el sesgo para sumarse a cada una de las <span class="mono">batch_size</span> filas, sin que tengas que replicarlo a mano.</p>
+
+<h4 id="lab-forward">Laboratorio: ver el forward celda por celda</h4>
+
+<p>Aquí está <span class="ic">torch.matmul(X, self.w) + self.b</span> ejecutado a mano, con un minibatch reducido a 4 ejemplos para que quepa en pantalla. Avanza paso a paso: cada fila de <span class="var">X</span> se combina con <span class="var">w</span> para producir una predicción.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">forward: ŷ = X·w + b</div>
+    <div class="ws">Minibatch de 4 ejemplos y 2 características, en vez de los 32 reales</div>
+  </div>
+  <div class="widget-body">
+    <div class="mat-row" id="fwMats"></div>
+    <div class="calcline" id="fwCalc">Pulsa «siguiente» para empezar.</div>
+    <div class="stepinfo">
+      <div class="sh" id="fwTitle">Las piezas</div>
+      <div class="sb" id="fwBody">X tiene forma (4, 2): cuatro ejemplos, dos características cada uno. w tiene forma (2, 1): un peso por característica. b es un solo número.</div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="fwPrev" disabled>← Anterior</button>
+    <button class="btn primary" id="fwNext">Siguiente →</button>
+    <button class="btn" id="fwReset">Reiniciar</button>
+    <span class="pill" id="fwCount">paso 0 / 6</span>
+  </div>
+</div>
+
+<div class="note">
+  <span class="tag">Lo que revela</span>
+  <p>Cada predicción sale de un <strong>producto punto</strong> entre una fila de <span class="var">X</span> y la columna <span class="var">w</span>. Con 32 ejemplos ocurre lo mismo 32 veces, pero PyTorch lo hace en una sola operación paralela en vez de un bucle. Por eso importa tanto que las formas encajen: <span class="mono">(4, 2) × (2, 1) → (4, 1)</span>, donde el 2 interior debe coincidir y desaparece del resultado.</p>
+</div>
+
+<h4 id="modelo-call">Por qué funciona <code>model(Xb)</code> sin escribir <code>.forward</code></h4>
+
+<div class="q"><span class="qlabel">Duda original</span>No entiendo por qué funciona <code>y_hat = model(Xb)</code>.</div>
+
+<p>Parece magia: <code>model</code> es un objeto, no una función, ¿cómo se puede "llamar"? La respuesta está en el método especial <code>__call__</code> de Python.</p>
+
+<p>En Python, cualquier objeto se vuelve <em>invocable</em> si su clase define <code>__call__</code>. Cuando escribes <span class="ic">objeto(argumento)</span>, Python lo traduce a <span class="ic">objeto.__call__(argumento)</span>. Y <code>nn.Module</code> define su propio <code>__call__</code>, que a grandes rasgos hace esto:</p>
+
+<figure class="code">
+  <figcaption><span>Simplificación de lo que hace nn.Module internamente</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">class Module:
+    def __call__(self, *args, **kwargs):
+        # ... lógica interna de PyTorch: hooks, modo train/eval, etc. ...
+        return self.forward(*args, **kwargs)</code></pre>
+</figure>
+
+<p>Entonces <span class="ic">y_hat = model(Xb)</span> dispara esta cadena:</p>
+<ol>
+  <li>Python ve que llamas al objeto como función y busca <code>__call__</code>.</li>
+  <li>Lo encuentra subiendo por la herencia hasta <code>nn.Module</code>.</li>
+  <li>Ese <code>__call__</code> hace trabajo interno y termina invocando <strong>tu</strong> <code>forward(self, X)</code>.</li>
+  <li>Lo que devuelve <code>forward</code> es lo que recibes como <code>y_hat</code>.</li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Convención importante</span>
+  <p>Nunca llames <code>model.forward(Xb)</code> directamente. Hacerlo se salta toda la lógica adicional de <code>__call__</code> (hooks de depuración, manejo del modo train/eval, etc.). La forma correcta en PyTorch es siempre <code>model(Xb)</code>.</p>
+</div>
+
+<!-- 3.5 -->
+<h3 id="modelo-loss">El método <span class="mono">loss</span></h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿loss calcula cuánto falla entre y_hat y y? ¿Y lo hace para cada par del minibatch, lo promedia, y eso usa para el gradiente?</div>
+
+<p>Exacto. Con <code>batch_size = 32</code>, <code>y_hat</code> e <code>y</code> tienen forma <span class="mono">(32, 1)</span>:</p>
+
+<figure class="code">
+  <figcaption><span>loss</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">def loss(self, y_hat, y):
+    # 1) Error al cuadrado, escalado por 1/2  ->  tensor (32, 1)
+    l = (y_hat - y) ** 2 / 2
+    # 2) Promedio sobre todas las muestras    ->  escalar
+    return l.mean()</code></pre>
+</figure>
+
+<p><strong>Paso 1.</strong> La resta se hace elemento por elemento, así que obtienes <strong>32 pérdidas individuales</strong>, una por cada par <span class="mono">(X<span class="sub">i</span>, y<span class="sub">i</span>)</span>. Todavía no hay ningún promedio.</p>
+
+<p><strong>Paso 2.</strong> <code>l.mean()</code> colapsa esas 32 pérdidas en <strong>un solo número escalar</strong>.</p>
+
+<div class="note key">
+  <span class="tag">Por qué tiene que ser un escalar</span>
+  <p>Es un requisito técnico de <code>.backward()</code>: necesita partir de un tensor de un solo valor para poder calcular derivadas sin ambigüedad. Si le pasaras un vector, tendrías que decirle explícitamente cómo ponderar cada componente.</p>
+</div>
+
+<p>Como el promedio es la suma de los términos dividida entre 32, el gradiente resultante es literalmente el <strong>promedio de los 32 gradientes individuales</strong> que obtendrías calculando uno por ejemplo. De ahí viene el efecto de "suavizado" del minibatch que se mencionaba en los conceptos base.</p>
+
+<h4>¿Por qué el ÷ 2?</h4>
+<p>Por conveniencia matemática. Al derivar <span class="mono">½(ŷ − y)²</span> respecto a <span class="mono">ŷ</span>, el 2 del exponente baja y se cancela con el ½, dejando el gradiente limpio: simplemente <span class="mono">(ŷ − y)</span>. Sin el ½ arrastrarías un factor 2 en todas las fórmulas. No cambia dónde está el mínimo, solo la escala.</p>
+
+<!-- 3.6 -->
+<h3 id="modelo-optim">El método <span class="mono">configure_optimizers</span></h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Por qué el primer argumento es una lista?</div>
+
+<figure class="code">
+  <figcaption><span>configure_optimizers</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">def configure_optimizers(self):
+    return SGD([self.w, self.b], self.lr)</code></pre>
+</figure>
+
+<p>Porque el optimizador necesita conocer <strong>todos</strong> los parámetros que debe actualizar, y un modelo generalmente tiene más de uno. Su método <code>step()</code> hace <span class="ic">for p in self.params:</span>, así que necesita algo iterable que recorrer.</p>
+
+<p>Si le pasaras solo <code>self.w</code>, el optimizador jamás tocaría el sesgo: <code>b</code> quedaría congelado en su valor inicial (cero) para siempre y el modelo nunca podría aprender el intercepto correcto —en este caso, 4.2.</p>
+
+<p>Esto explica también por qué <code>SGD.__init__</code> hace <span class="ic">self.params = list(params)</span>: convierte lo que reciba en una lista concreta, para poder recorrerla múltiples veces en cada <code>step()</code> y <code>zero_grad()</code> sin que se agote (un generador solo se puede recorrer una vez).</p>
+
+<div class="note">
+  <span class="tag">La idea general</span>
+  <p>Es una lista porque el optimizador está diseñado para actualizar <em>cualquier cantidad</em> de parámetros de forma genérica. En una red real le pasarías <code>model.parameters()</code>, que devuelve todos los parámetros registrados automáticamente.</p>
+</div>
+
+<!-- ============ 4. SGD ============ -->
+<h2 id="sgd"><span class="num">Sección 4</span>El optimizador: <span class="mono">SGD</span></h2>
+
+<figure class="code">
+  <figcaption><span>El optimizador completo</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">class SGD:
+    """Descenso de gradiente estocástico por minibatches."""
+    def __init__(self, params, lr):
+        # params: iterable de nn.Parameter
+        self.params = list(params)
+        self.lr = lr
+
+    def step(self):
+        """Actualiza cada parámetro: θ ← θ − lr * ∇θ."""
+        for p in self.params:
+            # p.grad es el gradiente calculado en backward()
+            p.data -= self.lr * p.grad
+
+    def zero_grad(self):
+        """Pone a cero todos los gradientes para la siguiente iteración."""
+        for p in self.params:
+            if p.grad is not None:
+                p.grad.zero_()</code></pre>
+</figure>
+
+<p>Esta clase implementa desde cero el algoritmo de <strong>descenso de gradiente estocástico por minibatches</strong>, en lugar de usar el <code>torch.optim.SGD</code> que PyTorch ya trae.</p>
+
+<div class="note">
+  <span class="tag">Observación</span>
+  <p>Nota que <code>SGD</code> <strong>no hereda de <code>nn.Module</code></strong>, a diferencia del modelo. Y tiene sentido: un optimizador no necesita registrar parámetros propios ni tener modo train/eval. Solo necesita guardar una referencia a los parámetros que va a mover y la tasa de aprendizaje.</p>
+</div>
+
+<p>Es "estocástico por minibatches" porque el gradiente no se calcula sobre todo el dataset, sino sobre lotes pequeños que el <code>DataLoader</code> entrega en orden aleatorio (<code>shuffle=True</code>). De ahí el componente aleatorio —estocástico— del nombre.</p>
+
+<!-- 4.1 -->
+<h3 id="sgd-step">El método <span class="mono">step</span>: por qué <span class="mono">p.data</span> y <span class="mono">p.grad</span></h3>
+
+<div class="q"><span class="qlabel">Duda original</span>De la función step, ¿por qué se usa p.data y p.grad?</div>
+
+<h4><code>p.grad</code> — de dónde sale</h4>
+<p>Cada <code>p</code> es un <code>nn.Parameter</code>, o sea un tensor con <span class="ic">requires_grad=True</span>. Cuando llamas <code>loss.backward()</code>, PyTorch calcula la derivada parcial de la pérdida respecto a ese parámetro y la <strong>guarda en su atributo <code>.grad</code></strong>. Así que <code>p.grad</code> es, literalmente, el gradiente que acaba de calcular el backward.</p>
+
+<h4><code>p.data</code> — por qué no usar <code>p</code> a secas</h4>
+<p>Aquí está el detalle sutil. <code>p</code> no es un tensor cualquiera: PyTorch lo está <em>rastreando</em> para construir el grafo computacional. Si escribieras la actualización directamente sobre <code>p</code>:</p>
+
+<figure class="code">
+  <figcaption><span>Problemático</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">p -= self.lr * p.grad   # esto se registraría en el grafo de autograd</code></pre>
+</figure>
+
+<p>esa operación quedaría registrada en el grafo, como si fuera parte del cálculo hacia adelante del modelo —algo que no queremos, porque la actualización del optimizador es un paso administrativo, no parte del <em>forward pass</em>. En la práctica esto produce errores como <span class="ic">RuntimeError: a leaf Variable that requires grad is being used in an in-place operation</span>, o ensucia el grafo para el siguiente <code>backward()</code>.</p>
+
+<p><code>p.data</code> te da acceso al <strong>tensor subyacente sin el rastreo de autograd</strong>. Es una forma de decir: <em>"modifica los valores numéricos crudos de este parámetro, pero no registres esta operación como parte del grafo de gradientes"</em>.</p>
+
+<div class="eq">
+  <span class="var">θ</span> ← <span class="var">θ</span> − <span class="var">lr</span> · ∇<span class="var">θ</span>
+  <span class="lbl">La regla de actualización que implementa <code>step()</code></span>
+</div>
+
+<h4>El signo negativo</h4>
+<p>El gradiente apunta en la dirección donde la pérdida <strong>aumenta</strong> más rápido. Por eso se <strong>resta</strong>: te mueves en la dirección contraria, hacia donde la pérdida baja. Si sumaras en vez de restar, el modelo empeoraría deliberadamente en cada iteración.</p>
+
+<div class="note">
+  <span class="tag">Nota moderna</span>
+  <p>La forma recomendada hoy por PyTorch para esto es <span class="ic">with torch.no_grad(): p -= self.lr * p.grad</span>, que logra el mismo efecto de manera más explícita. El notebook usa <code>.data</code> porque es más directo de leer cuando estás aprendiendo el mecanismo.</p>
+</div>
+
+<!-- 4.2 -->
+<h3 id="sgd-zero">El método <span class="mono">zero_grad</span>: por qué es indispensable</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Por qué es necesaria la función zero_grad?</div>
+
+<p>Por una decisión de diseño de PyTorch que sorprende la primera vez: <strong>el autograd acumula gradientes en vez de reemplazarlos</strong>.</p>
+
+<p>Cada vez que llamas <code>loss.backward()</code>, PyTorch no sobrescribe <code>p.grad</code> con el nuevo gradiente: lo <strong>suma</strong> al valor que ya estaba ahí. Ese comportamiento es útil en algunos casos (acumular gradientes de varios minibatches antes de un <code>step()</code> para simular un batch grande, o en redes recurrentes), pero significa que si no limpias <code>p.grad</code> antes de cada nueva pasada, los gradientes viejos se quedan pegados y se suman a los nuevos.</p>
+
+<figure class="code">
+  <figcaption><span>El orden correcto dentro del loop</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">optim.zero_grad()   # 1) limpia los gradientes de la iteración anterior
+loss.backward()     # 2) calcula gradientes nuevos, desde cero
+optim.step()        # 3) actualiza w y b con esos gradientes</code></pre>
+</figure>
+
+<p>Si quitaras <code>zero_grad()</code>, después de varias iteraciones <code>p.grad</code> contendría la suma acumulada de los gradientes de <em>todos</em> los minibatches anteriores. En vez de moverte en la dirección correcta para el minibatch actual, te moverías en una dirección distorsionada por gradientes viejos que corresponden a valores de <code>w</code> y <code>b</code> que ya ni existen. El entrenamiento diverge o converge mal.</p>
+
+<h4>El <code>if p.grad is not None</code></h4>
+<p>En la primerísima iteración, antes de haber llamado nunca a <code>backward()</code>, <code>p.grad</code> todavía vale <code>None</code> —el tensor de gradiente aún no existe—. Llamar <code>.zero_()</code> sobre <code>None</code> daría error. Ese <code>if</code> protege exactamente ese caso inicial.</p>
+
+<h4 id="lab-zerograd">Laboratorio: qué pasa si olvidas <span class="mono">zero_grad()</span></h4>
+
+<p>Las dos columnas reciben exactamente los mismos gradientes por minibatch. La única diferencia es si se limpia <code>.grad</code> antes de cada <code>backward()</code>. Avanza los seis minibatches y compara.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">Con zero_grad vs. sin zero_grad</div>
+    <div class="ws">Mismos gradientes de entrada, con <code>lr = 0.1</code> y <code>w</code> inicial <code>1.000</code></div>
+  </div>
+  <div class="widget-body">
+    <div class="cmp">
+      <div class="col good">
+        <h5>✓ Con optim.zero_grad()</h5>
+        <div class="rows" id="zgGood"></div>
+        <div class="foot">w final: <strong id="zgGoodW">1.000</strong></div>
+      </div>
+      <div class="col bad">
+        <h5>✗ Sin optim.zero_grad()</h5>
+        <div class="rows" id="zgBad"></div>
+        <div class="foot">w final: <strong id="zgBadW">1.000</strong></div>
+      </div>
+    </div>
+    <div class="stepinfo">
+      <div class="sh" id="zgTitle">Estado inicial</div>
+      <div class="sb" id="zgBody">Ambos modelos arrancan con w = 1.000 y el gradiente en cero. Pulsa «siguiente minibatch».</div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="zgNext">Siguiente minibatch →</button>
+    <button class="btn" id="zgAll">Correr los 6</button>
+    <button class="btn" id="zgReset">Reiniciar</button>
+    <span class="pill" id="zgCount">minibatch 0 / 6</span>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Lo que muestra el experimento</span>
+  <p>En la columna correcta, <code>.grad</code> siempre contiene el gradiente <em>de ese minibatch</em>, y <code>w</code> avanza de forma controlada. En la columna rota, <code>.grad</code> va creciendo como suma de todo lo anterior, así que cada paso es más grande que el previo: <code>w</code> se aleja mucho más de la cuenta, aunque ambas columnas reciben exactamente los mismos gradientes de entrada.</p>
+  <p>Es un error silencioso: el código corre sin lanzar ninguna excepción, simplemente aprende mal.</p>
+</div>
+
+<!-- ============ 5. SECUENCIA ============ -->
+<h2 id="secuencia"><span class="num">Sección 5</span>La secuencia: forward → backward → step</h2>
+
+<h3 id="secuencia-porque">¿Por qué gradientes, si la regresión lineal tiene solución cerrada?</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>Si es una regresión, ¿por qué necesito un forward y un backward, además de los gradientes?</div>
+
+<p>Es una objeción legítima: la regresión lineal <strong>sí</strong> tiene solución analítica cerrada (mínimos cuadrados, con pura álgebra lineal, sin ninguna iteración). Podrías resolverla de un golpe.</p>
+
+<p>Pero el objetivo del notebook no es resolver la regresión de la forma más eficiente, sino <strong>aprender el mecanismo de optimización iterativa por gradiente descendente</strong> —que es el único que funciona cuando el modelo se vuelve una red neuronal compleja, donde no existe ninguna fórmula cerrada. La regresión lineal es el terreno de práctica perfecto: tiene toda la infraestructura de un modelo de deep learning, pero la matemática de fondo es simple y puedes verificar a mano si el resultado salió bien.</p>
+
+<!-- 5.2 -->
+<h3 id="secuencia-ciclo">El ciclo, paso a paso</h3>
+
+<figure class="code">
+  <figcaption><span>El corazón del entrenamiento</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">for Xb, yb in train_loader:
+    y_hat = model(Xb)             # 1) FORWARD
+    loss = model.loss(y_hat, yb)  # 2) PÉRDIDA
+    optim.zero_grad()             # 3) LIMPIAR GRADIENTES
+    loss.backward()               # 4) BACKWARD
+    optim.step()                  # 5) ACTUALIZAR</code></pre>
+</figure>
+
+<ol>
+  <li><strong>Forward.</strong> Con los valores <em>actuales</em> de <code>w</code> y <code>b</code> (al inicio, básicamente aleatorios) calculas ŷ = Xw + b para el minibatch. Es una predicción, probablemente mala al principio.</li>
+  <li><strong>Pérdida.</strong> Comparas esa predicción contra el valor real y obtienes un número que resume qué tan mal está el modelo ahora mismo.</li>
+  <li><strong>Limpiar gradientes.</strong> Como PyTorch acumula, hay que borrar los de la iteración pasada antes de calcular nuevos.</li>
+  <li><strong>Backward.</strong> Aquí está la pregunta clave: <em>¿en qué dirección debo mover w y b para que la pérdida baje?</em> Eso es lo que calcula <code>loss.backward()</code>: usando la regla de la cadena, propaga el error hacia atrás a través de todas las operaciones que produjeron <code>loss</code> (la resta, el cuadrado, el <code>matmul</code>, la suma del sesgo) y deja el resultado en <code>w.grad</code> y <code>b.grad</code>.</li>
+  <li><strong>Step.</strong> Con esos gradientes, el optimizador mueve los parámetros un poco en la dirección que reduce la pérdida.</li>
+</ol>
+
+<div class="note key">
+  <span class="tag">Analogía: bajar la montaña con niebla</span>
+  <p>Imagina que estás bajando una montaña envuelto en niebla: no ves el paisaje completo, no conoces la ruta óptima. En cada punto donde estás parado (los parámetros actuales) solo puedes hacer tres cosas:</p>
+  <ul>
+    <li>Ver qué tan alto estás → eso es el <strong>forward</strong> y la <strong>pérdida</strong>.</li>
+    <li>Sentir hacia dónde se inclina el terreno bajo tus pies → eso es el <strong>backward</strong>, el gradiente.</li>
+    <li>Dar un paso pequeño cuesta abajo → eso es el <strong>step</strong>, y el tamaño del paso es la <em>learning rate</em>.</li>
+  </ul>
+  <p>Repites miles de veces y terminas en el valle, sin haber visto nunca el mapa completo.</p>
+</div>
+
+<h4>¿El gradiente se recalcula en cada iteración?</h4>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Cada iteración cambia la derivada parcial? ¿Se vuelve a calcular?</div>
+
+<p>Sí, se recalcula por completo desde cero en cada minibatch. Y cambia siempre, por dos razones independientes:</p>
+
+<ol>
+  <li><strong>Los parámetros cambiaron.</strong> Después de cada <code>optim.step()</code>, <code>w</code> y <code>b</code> tienen valores nuevos. Como la fórmula del gradiente depende de ŷ, y ŷ depende de <code>w</code> y <code>b</code>, el gradiente de la siguiente vuelta es necesariamente distinto aunque usaras exactamente los mismos datos.</li>
+  <li><strong>El minibatch cambió.</strong> En cada vuelta del <code>for</code> estás usando un subconjunto distinto de datos (por el <code>shuffle=True</code>). Distintos X, y producen distintos gradientes.</li>
+</ol>
+
+<p>Esto es justo lo que hace indispensable a <code>zero_grad()</code>: si no borraras el gradiente anterior, estarías mezclando información de un estado de <code>w</code>, <code>b</code> que ya no existe con el gradiente correcto del estado actual. Siguiendo la analogía: sería como decidir tu próximo paso usando la pendiente del lugar donde estabas hace diez pasos, sumada a la de ahora.</p>
+
+<!-- 5.3 -->
+<h3 id="secuencia-mate">La matemática: de dónde salen los gradientes</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿El gradiente es la derivada parcial de w y b respecto a la pérdida?</div>
+
+<p>Casi: el orden de la notación es al revés. El gradiente es la <strong>derivada parcial de la pérdida respecto a cada parámetro</strong>:</p>
+
+<div class="eq">
+  ∇<span class="var">w</span> = <span class="frac"><span class="num">∂ <span class="var">L</span></span><span class="den">∂ <span class="var">w</span></span></span>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  ∇<span class="var">b</span> = <span class="frac"><span class="num">∂ <span class="var">L</span></span><span class="den">∂ <span class="var">b</span></span></span>
+  <span class="lbl">Cuánto cambia la pérdida si muevo un poquito el parámetro</span>
+</div>
+
+<p>Dicho en palabras: <em>"si muevo <code>w</code> un poquito, ¿cuánto y en qué dirección cambia la pérdida?"</em>. Eso es exactamente lo que necesitas para saber hacia dónde corregir.</p>
+
+<h4>La derivación completa</h4>
+
+<p>Partimos de las dos ecuaciones del modelo. Para un solo ejemplo:</p>
+
+<div class="eq">
+  ŷ = <span class="var">X</span>·<span class="var">w</span> + <span class="var">b</span>
+  <span class="lbl">Predicción (forward)</span>
+</div>
+
+<div class="eq">
+  <span class="var">L</span> = <span class="frac"><span class="num">1</span><span class="den">2</span></span> (ŷ − <span class="var">y</span>)<span class="sup">2</span>
+  <span class="lbl">Pérdida cuadrática</span>
+</div>
+
+<p>Aplicamos la <strong>regla de la cadena</strong>. Primero, la derivada de la pérdida respecto a la predicción:</p>
+
+<div class="eq">
+  <span class="frac"><span class="num">∂ <span class="var">L</span></span><span class="den">∂ ŷ</span></span>
+  = 2 · <span class="frac"><span class="num">1</span><span class="den">2</span></span> (ŷ − <span class="var">y</span>)
+  = (ŷ − <span class="var">y</span>)
+  <span class="lbl">Aquí se ve por qué el ½ era conveniente: cancela el 2</span>
+</div>
+
+<p>Después, las derivadas de la predicción respecto a cada parámetro:</p>
+
+<div class="eq">
+  <span class="frac"><span class="num">∂ ŷ</span><span class="den">∂ <span class="var">w</span></span></span> = <span class="var">X</span>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <span class="frac"><span class="num">∂ ŷ</span><span class="den">∂ <span class="var">b</span></span></span> = 1
+  <span class="lbl">Porque w multiplica a X, mientras que b solo se suma</span>
+</div>
+
+<p>Encadenando, obtenemos los gradientes finales:</p>
+
+<div class="eq">
+  <span class="frac"><span class="num">∂ <span class="var">L</span></span><span class="den">∂ <span class="var">w</span></span></span>
+  = (ŷ − <span class="var">y</span>) · <span class="var">X</span>
+  <br>
+  <span class="frac"><span class="num">∂ <span class="var">L</span></span><span class="den">∂ <span class="var">b</span></span></span>
+  = (ŷ − <span class="var">y</span>)
+  <span class="lbl">Promediados sobre el minibatch, por el .mean() dentro de loss</span>
+</div>
+
+<div class="note good">
+  <span class="tag">Lectura intuitiva</span>
+  <p>El error de predicción <span class="mono">(ŷ − y)</span> se multiplica por <span class="mono">X</span> para el gradiente de <code>w</code>, porque <code>w</code> es quien interactúa con <code>X</code> en el forward. Para <code>b</code> se toma el error tal cual, porque <code>b</code> solo se suma, sin multiplicar por nada.</p>
+  <p>Esto tiene sentido: si una característica <span class="mono">X</span> era grande, un error en su peso tiene más impacto, y el gradiente lo refleja siendo proporcionalmente mayor.</p>
+</div>
+
+<details>
+  <summary>Versión matricial, sobre el minibatch completo</summary>
+  <div class="dbody">
+    <p>Para un minibatch de <span class="var">m</span> ejemplos, con <span class="var">X</span> de forma <span class="mono">(m, d)</span> y <span class="var">y</span> de forma <span class="mono">(m, 1)</span>, la pérdida promedio es:</p>
+    <div class="eq">
+      <span class="var">L</span> = <span class="frac"><span class="num">1</span><span class="den">2<span class="var">m</span></span></span> ‖ <span class="var">X</span><span class="var">w</span> + <span class="var">b</span> − <span class="var">y</span> ‖<span class="sup">2</span>
+    </div>
+    <p>Y los gradientes, en forma matricial:</p>
+    <div class="eq">
+      ∇<span class="var">w</span> = <span class="frac"><span class="num">1</span><span class="den"><span class="var">m</span></span></span> <span class="var">X</span><span class="sup">T</span>(ŷ − <span class="var">y</span>)
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      ∇<span class="var">b</span> = <span class="frac"><span class="num">1</span><span class="den"><span class="var">m</span></span></span> Σ (ŷ − <span class="var">y</span>)
+    </div>
+    <p>El <span class="var">X</span><span class="sup">T</span> aparece porque hay que "des-hacer" la multiplicación matricial del forward, y el <span class="mono">1/m</span> viene del <code>.mean()</code>. Esto es exactamente lo que <code>loss.backward()</code> calcula por ti, sin que tengas que escribirlo.</p>
+  </div>
+</details>
+
+<details>
+  <summary>Por qué esto escala a redes neuronales</summary>
+  <div class="dbody">
+    <p>En una red con varias capas, la misma regla de la cadena se aplica repetidamente, capa por capa, de la salida hacia la entrada. Si la red fuera <span class="mono">entrada → capa1 → activación → capa2 → pérdida</span>, el gradiente respecto a los pesos de la capa 1 sería un producto encadenado de todas las derivadas intermedias.</p>
+    <p>Eso es literalmente el algoritmo de <em>backpropagation</em>, y es lo que <code>backward()</code> hace de forma automática recorriendo el grafo computacional que PyTorch fue construyendo durante el forward. La diferencia con nuestra regresión lineal es solo el número de eslabones en la cadena: el principio es idéntico.</p>
+  </div>
+</details>
+
+<!-- 5.35 LAB GRAFO -->
+<h3 id="lab-grafo">Laboratorio: el grafo computacional</h3>
+
+<p>Esta es la pieza que más cuesta visualizar, porque <code>backward()</code> ocurre de forma invisible. Lo que PyTorch hace durante el forward es <strong>ir anotando cada operación en un grafo</strong>; cuando llamas <code>backward()</code>, recorre ese grafo en sentido inverso aplicando la regla de la cadena en cada nodo.</p>
+
+<p>Aquí puedes recorrerlo en ambas direcciones con números concretos —los mismos 4 ejemplos del laboratorio anterior—. Observa que <strong>ningún paso del backward modifica <code>w</code> ni <code>b</code></strong>: solo va llenando <code>.grad</code>.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">De X hasta la pérdida, y de vuelta</div>
+    <div class="ws">Forward en naranja, backward en verde. Los valores son reales, calculados en vivo.</div>
+  </div>
+  <div class="widget-body">
+    <div class="modetabs">
+      <button id="cgTabF" class="sel">▶ Forward</button>
+      <button id="cgTabB">◀ Backward</button>
+    </div>
+    <div class="graphwrap">
+      <div class="graph" id="cgGraph"></div>
+    </div>
+    <div class="calcline" id="cgCalc">Pulsa «siguiente» para construir el grafo.</div>
+    <div class="stepinfo">
+      <div class="sh" id="cgTitle">El grafo todavía no existe</div>
+      <div class="sb" id="cgBody">Se construye a medida que se ejecuta el forward. Cada operación sobre un tensor con requires_grad=True queda anotada, junto con lo necesario para derivarla después.</div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="cgPrev" disabled>← Anterior</button>
+    <button class="btn primary" id="cgNext">Siguiente →</button>
+    <button class="btn" id="cgAuto">Reproducir todo</button>
+    <button class="btn" id="cgReset">Reiniciar</button>
+    <span class="pill" id="cgCount">paso 0 / 12</span>
+  </div>
+</div>
+
+<div class="note key">
+  <span class="tag">Las tres ideas que deja ver</span>
+  <ul>
+    <li><strong>El grafo se construye solo.</strong> Tú escribes operaciones normales; PyTorch anota la ruta por detrás. Por eso <code>torch.no_grad()</code> ahorra tanto: apaga esa anotación.</li>
+    <li><strong>El backward es multiplicación encadenada.</strong> Cada nodo toma el gradiente que le llega de la derecha y lo multiplica por su derivada local. Nada más.</li>
+    <li><strong>Los gradientes de <code>w</code> y <code>b</code> son el final del recorrido</strong>, no el principio. Por eso <code>step()</code> tiene que ir después de <code>backward()</code>: antes, <code>.grad</code> todavía no existe.</li>
+  </ul>
+</div>
+
+<!-- 5.4 LAB -->
+<h3 id="secuencia-lab">Laboratorio: el descenso de gradiente en acción</h3>
+
+<p>Para fijar la intuición, aquí hay una versión de un solo parámetro. La pérdida es una parábola <span class="mono">L(w) = ½(w − 2)²</span>, cuyo mínimo está en <span class="mono">w = 2</span>. El algoritmo arranca lejos y usa exactamente la misma regla del notebook: <span class="mono">w ← w − lr · ∇w</span>, donde <span class="mono">∇w = (w − 2)</span>.</p>
+
+<p>Mueve la tasa de aprendizaje y observa qué pasa. Es el mismo parámetro <code>lr = 0.03</code> que aparece en el modelo, aquí en un rango exagerado para que se vean los tres regímenes.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">Descenso de gradiente, un parámetro</div>
+    <div class="ws">La curva es la pérdida; los puntos son las posiciones sucesivas de w</div>
+  </div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div>
+        <canvas id="gdCanvas" width="640" height="340"></canvas>
+      </div>
+      <div>
+        <div class="ctrl">
+          <label>Learning rate: <strong id="lrVal" class="mono">0.30</strong></label>
+          <input type="range" id="lrSlider" min="0.02" max="2.40" step="0.02" value="0.30">
+        </div>
+        <div class="readout">
+          <div class="row"><span>paso</span><span id="roStep">0</span></div>
+          <div class="row"><span>w</span><span id="roW">-3.000</span></div>
+          <div class="row"><span>∇w</span><span id="roG">-5.000</span></div>
+          <div class="row"><span>pérdida</span><span id="roL">12.500</span></div>
+        </div>
+        <div class="status ok" id="gdStatus">Listo. Pulsa «un paso» o «correr».</div>
+      </div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="gdStep">Un paso</button>
+    <button class="btn" id="gdRun">Correr</button>
+    <button class="btn" id="gdReset">Reiniciar</button>
+    <span class="pill" id="gdHint">mínimo en w = 2</span>
+  </div>
+</div>
+
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><strong>lr pequeña (0.05):</strong> converge, pero lentísimo. Muchos pasos diminutos.</li>
+    <li><strong>lr moderada (0.3 – 1.0):</strong> converge rápido y limpio. Es el régimen deseable.</li>
+    <li><strong>lr cerca de 2:</strong> oscila de un lado a otro del mínimo antes de estabilizarse.</li>
+    <li><strong>lr mayor que 2:</strong> <em>diverge</em>. Cada paso se pasa tanto de largo que termina más lejos que antes, y la pérdida explota.</li>
+  </ul>
+  <p>Por eso <code>lr</code> es un hiperparámetro delicado: demasiado chica y nunca llegas, demasiado grande y el entrenamiento se rompe. El <code>0.03</code> del notebook es un valor conservador y seguro.</p>
+</div>
+
+<!-- ============ 6. DATOS ============ -->
+<h2 id="datos"><span class="num">Sección 6</span>Los datos</h2>
+
+<h3>Generar datos sintéticos</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿synthetic_regression_data genera los datos sintéticos? ¿Las y se generan con las w y b verdaderas que yo declaro, y esos son los valores que el modelo intentará estimar?</div>
+
+<p>Exactamente. Esa es toda la lógica del experimento.</p>
+
+<figure class="code">
+  <figcaption><span>Generación de datos</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">def synthetic_regression_data(w, b, num_samples=1000):
+    """Genera X ~ N(0,1) y y = Xw + b + ruido."""
+    num_inputs = w.shape[0]
+    X = torch.randn(num_samples, num_inputs)
+    y = X @ w.reshape(-1, 1) + b
+    y += torch.randn_like(y) * 0.01   # agrega ruido a nuestros datos
+    return X, y
+
+true_w = torch.tensor([2.0, -3.4])
+true_b = 4.2
+X, y = synthetic_regression_data(true_w, true_b)</code></pre>
+</figure>
+
+<ol>
+  <li><code>num_inputs = w.shape[0]</code> — deduce cuántas características necesita a partir del tamaño del <code>w</code> verdadero. Como <code>true_w</code> tiene 2 elementos, cada ejemplo tendrá 2 características.</li>
+  <li><code>X = torch.randn(num_samples, num_inputs)</code> — genera 1000 ejemplos con 2 características cada uno, sacados de una normal estándar.</li>
+  <li><code>y = X @ w.reshape(-1, 1) + b</code> — aplica la <strong>verdadera</strong> relación lineal que queremos que el modelo descubra. El <code>.reshape(-1, 1)</code> pone <code>w</code> en forma <span class="mono">(2, 1)</span> para que la multiplicación funcione, igual que en <code>forward</code>.</li>
+  <li><code>y += torch.randn_like(y) * 0.01</code> — agrega ruido gaussiano pequeño. Esto simula que en datos reales nunca hay una relación perfectamente lineal: siempre hay variabilidad que el modelo no puede explicar. Sin ruido la tarea sería trivial.</li>
+</ol>
+
+<div class="note key">
+  <span class="tag">Por qué datos sintéticos</span>
+  <p>El modelo <strong>no tiene acceso</strong> a <code>true_w</code> ni <code>true_b</code>: solo ve los pares <span class="mono">(X, y)</span>. Su trabajo es, partiendo de valores aleatorios, ajustar sus propios <code>w</code> y <code>b</code> hasta acercarse a <span class="mono">[2.0, -3.4]</span> y <span class="mono">4.2</span>.</p>
+  <p>Como tú fabricaste la respuesta correcta, puedes <strong>verificar objetivamente</strong> si el algoritmo funcionó, en vez de confiar ciegamente en que "el código corrió sin errores". Con datos reales nunca tendrías esa certeza.</p>
+</div>
+
+<h3>Empaquetar y partir el dataset</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿El paso 3 crea el dataset y lo divide en dos, uno para train y otro para test?</div>
+
+<figure class="code">
+  <figcaption><span>TensorDataset + random_split</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">dataset = TensorDataset(X, y)
+train_size = int(0.8 * len(dataset))
+val_size = len(dataset) - train_size
+train_dataset, val_dataset = random_split(dataset, [train_size, val_size])</code></pre>
+</figure>
+
+<p>Correcto en la mecánica, con un ajuste de vocabulario: es <strong>validación</strong>, no <em>test</em>. Son dos operaciones distintas:</p>
+
+<ol>
+  <li><strong><code>TensorDataset(X, y)</code></strong> — empaqueta los dos tensores sueltos en un solo objeto tipo <code>Dataset</code>, donde cada elemento es un par <span class="mono">(X<span class="sub">i</span>, y<span class="sub">i</span>)</span>. Esto es lo que necesita el <code>DataLoader</code>, que espera un <code>Dataset</code> y no tensores sueltos.</li>
+  <li><strong><code>random_split(...)</code></strong> — reparte los 1000 ejemplos en dos subconjuntos: 800 de entrenamiento (80 %) y 200 de validación (20 %). El <em>random</em> importa: no toma los primeros 800 en orden, sino que mezcla antes de partir, para evitar sesgos si los datos originales tuvieran algún orden particular.</li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Validación ≠ Test</span>
+  <p><strong>Validación</strong>: se usa <em>durante</em> el entrenamiento, después de cada época, para monitorear si el modelo generaliza o está memorizando. Es lo que produce la segunda curva de la gráfica final.</p>
+  <p><strong>Test</strong>: se reserva aparte y se usa <em>una sola vez, al final de todo</em>, para dar una evaluación imparcial. Este notebook no crea ese tercer conjunto.</p>
+</div>
+
+<h3>Los DataLoaders</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Creo batches de 32 dividiendo los 1000, mezclo en train y no en validación?</div>
+
+<figure class="code">
+  <figcaption><span>DataLoaders</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">batch_size = 32
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)</code></pre>
+</figure>
+
+<p>Correcto salvo por un detalle: los batches <strong>no se forman dividiendo los 1000 originales</strong>, sino por separado sobre cada subconjunto ya partido.</p>
+
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Loader</th><th>Ejemplos</th><th>Batches por época</th><th>shuffle</th></tr>
+  <tr><td><code>train_loader</code></td><td>800</td><td>800 / 32 = <strong>25 exactos</strong></td><td><code>True</code></td></tr>
+  <tr><td><code>val_loader</code></td><td>200</td><td>200 / 32 = 6 completos + 1 de 8 ejemplos</td><td><code>False</code></td></tr>
+</table>
+</div>
+
+<p><strong>¿Por qué <code>shuffle=True</code> solo en entrenamiento?</strong> Porque al inicio de cada época el orden de los 800 ejemplos se vuelve a mezclar antes de agruparlos, así el modelo no ve siempre los mismos ejemplos juntos en el mismo batch. Eso evita que el gradiente estocástico siga un patrón artificial derivado del orden de los datos.</p>
+
+<p>En validación no importa el orden: no estás actualizando parámetros, solo midiendo. Mezclar no aportaría nada y solo agregaría trabajo innecesario.</p>
+
+<div class="note">
+  <span class="tag">Nota sobre el último batch</span>
+  <p>Fíjate en el <code>val_loader</code>: su último batch tiene solo 8 ejemplos, no 32. Ese detalle es exactamente el motivo por el que el loop de entrenamiento pondera las pérdidas por tamaño de batch, como veremos enseguida.</p>
+</div>
+
+<h3 id="lab-batches">Laboratorio: ver los minibatches y las épocas</h3>
+
+<p>Cada cuadrito es uno de los 1000 ejemplos. Los grises claros son los 200 de validación, que nunca se usan para actualizar parámetros. Los 800 restantes se reparten en minibatches, y el reparto <strong>cambia en cada época</strong> por el <code>shuffle=True</code>.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">1000 ejemplos, 25 minibatches por época</div>
+    <div class="ws">Cada minibatch resaltado equivale a una llamada a <code>optim.step()</code></div>
+  </div>
+  <div class="widget-body">
+    <div class="bgrid" id="bGrid"></div>
+    <div class="legend">
+      <span><i style="background:var(--accent)"></i> minibatch actual</span>
+      <span><i style="background:var(--accent-soft); border:1px solid var(--accent)"></i> ya procesado en esta época</span>
+      <span><i style="background:var(--surface-2); border:1px solid var(--border)"></i> pendiente</span>
+      <span><i style="background:var(--border)"></i> validación (200)</span>
+    </div>
+    <div class="counters">
+      <div class="cbox"><div class="cl">Época</div><div class="cvv" id="bEpoch">0 / 10</div></div>
+      <div class="cbox"><div class="cl">Minibatch</div><div class="cvv" id="bBatch">0 / 25</div></div>
+      <div class="cbox"><div class="cl">Actualizaciones de w y b</div><div class="cvv" id="bUpd">0</div></div>
+    </div>
+    <div class="stepinfo">
+      <div class="sh" id="bTitle">Sin empezar</div>
+      <div class="sb" id="bBody">Pulsa «un minibatch» para avanzar de uno en uno, o «correr época» para ver una época completa.</div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="bStep">Un minibatch</button>
+    <button class="btn" id="bEpochBtn">Correr época</button>
+    <button class="btn" id="bAll">Las 10 épocas</button>
+    <button class="btn" id="bReset">Reiniciar</button>
+  </div>
+</div>
+
+<div class="note good">
+  <span class="tag">El número que conviene recordar</span>
+  <p>Al terminar las 10 épocas el contador llega a <strong>250 actualizaciones</strong>, no a 10. Esa es, visualmente, la diferencia entre "actualizar una vez por época" y lo que realmente hace el minibatch SGD del notebook.</p>
+  <p>Fíjate también en que al empezar cada época los colores se redistribuyen: son los mismos 800 ejemplos, agrupados de forma distinta.</p>
+</div>
+
+<h3>Instanciar el modelo</h3>
+
+<figure class="code">
+  <figcaption><span>Modelo y optimizador</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">model = LinearRegression(num_inputs = 2, lr = 0.03)
+optim = model.configure_optimizers()   # nuestra clase SGD</code></pre>
+</figure>
+
+<p><code>num_inputs=2</code> porque los datos tienen exactamente 2 características —recuerda que <code>true_w</code> tiene 2 elementos y <code>synthetic_regression_data</code> heredó ese número para generar <code>X</code>—. Ese 2 determina la forma de <code>self.w</code>: <span class="ic">size=(2, 1)</span>, o sea dos pesos aleatorios, uno por característica, más el sesgo.</p>
+
+<p><code>configure_optimizers()</code> devuelve una instancia de <code>SGD</code> ya conectada a los parámetros de <strong>este</strong> modelo específico y con <code>lr = 0.03</code>.</p>
+
+<!-- ============ 7. LOOP ============ -->
+<h2 id="loop"><span class="num">Sección 7</span>El loop de entrenamiento</h2>
+
+<figure class="code">
+  <figcaption><span>El loop completo</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">num_epochs = 10
+train_losses, val_losses = [], []
+
+for epoch in range(1, num_epochs + 1):
+    # ---------- Fase de entrenamiento ----------
+    model.train()
+    total_train, count_train = 0.0, 0
+    for Xb, yb in train_loader:
+        y_hat = model(Xb)
+        loss = model.loss(y_hat, yb)
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+        total_train += loss.item() * yb.shape[0]
+        count_train += yb.shape[0]
+    train_losses.append(total_train / count_train)
+
+    # ---------- Fase de validación ----------
+    model.eval()
+    total_val, count_val = 0.0, 0
+    with torch.no_grad():
+        for Xv, yv in val_loader:
+            loss_val = model.loss(model(Xv), yv)
+            total_val += loss_val.item() * yv.shape[0]
+            count_val += yv.shape[0]
+    val_losses.append(total_val / count_val)</code></pre>
+</figure>
+
+<p>Son dos bucles anidados. El externo recorre las 10 épocas; dentro de cada época hay dos fases separadas: entrenamiento (donde el modelo aprende) y validación (donde solo se mide).</p>
+
+<p>Las listas <code>train_losses</code> y <code>val_losses</code> guardan un número por época, para poder graficar después cómo evolucionó el aprendizaje.</p>
+
+<p><code>model.train()</code> y <code>model.eval()</code> activan los modos correspondientes. Como bien señala el comentario original del notebook, aquí no cambian nada en la práctica porque este modelo no tiene capas como <em>Dropout</em> o <em>BatchNorm</em> que se comporten distinto en cada modo, pero es buena práctica incluirlos siempre.</p>
+
+<!-- 7.1 SIMULADOR -->
+<h3 id="loop-sim">Simulador: una vuelta del loop, línea por línea</h3>
+
+<p>Avanza paso a paso para ver qué hace cada línea y en qué estado queda el modelo.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">Una iteración del bucle interno</div>
+    <div class="ws">El bucle sobre <code>train_loader</code>, ejecutado instrucción por instrucción</div>
+  </div>
+  <div class="widget-body">
+    <div class="codeframe" id="simCode"></div>
+    <div class="stepinfo">
+      <div class="sh" id="simTitle">Listo para empezar</div>
+      <div class="sb" id="simBody">Pulsa «siguiente» para recorrer una iteración completa del minibatch.</div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="simPrev" disabled>← Anterior</button>
+    <button class="btn primary" id="simNext">Siguiente →</button>
+    <button class="btn" id="simReset">Reiniciar</button>
+    <span class="pill" id="simCount">paso 0 / 8</span>
+  </div>
+</div>
+
+<!-- 7.2 -->
+<h3 id="loop-actualizacion">Cuándo se actualizan los pesos</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Hace eso para todos los minibatches de la época antes de actualizar los pesos?</div>
+
+<div class="note fix">
+  <span class="tag">Aclaración importante</span>
+  <p>Es justo al revés. Los pesos se actualizan <strong>inmediatamente después de cada minibatch</strong>, no al final de la época.</p>
+</div>
+
+<p>La clave está en dónde vive <code>optim.step()</code>: <strong>dentro</strong> del <span class="ic">for Xb, yb in train_loader:</span>, no después de que ese bucle termine. Entonces la secuencia real, con 25 batches por época, es:</p>
+
+<ol>
+  <li>Batch 1 → forward, loss, backward, <strong>step()</strong> → <code>w</code> y <code>b</code> cambian.</li>
+  <li>Batch 2 → forward (ya con los <code>w</code>, <code>b</code> actualizados), loss, backward, <strong>step()</strong> → cambian otra vez.</li>
+  <li>… y así 25 veces.</li>
+</ol>
+
+<p>Es decir, <strong>25 actualizaciones de parámetros por época</strong>, no una sola. A lo largo de las 10 épocas, el modelo actualiza sus parámetros 250 veces.</p>
+
+<p>Lo único que sí se acumula hasta el final de la época son <code>total_train</code> y <code>count_train</code>, pero eso es puramente para registro y no afecta el aprendizaje.</p>
+
+<div class="note">
+  <span class="tag">La distinción de fondo</span>
+  <p>Esa es exactamente la diferencia entre <strong>batch gradient descent</strong> (calcular el gradiente sobre todo el dataset y actualizar una vez) y <strong>minibatch SGD</strong> (lo que hace este notebook): muchas actualizaciones baratas por época en vez de una sola actualización cara al final.</p>
+</div>
+
+<!-- 7.3 -->
+<h3 id="loop-registro"><span class="mono">total_train</span> y <span class="mono">count_train</span></h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Qué hacen total_train y count_train?</div>
+
+<p>Son variables de <strong>contabilidad</strong>. No participan en el entrenamiento —no afectan a <code>w</code> ni a <code>b</code>— y sirven solo para calcular correctamente la pérdida promedio de la época.</p>
+
+<figure class="code">
+  <figcaption><span>El acumulador</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">total_train, count_train = 0.0, 0        # se reinician al inicio de CADA época
+for Xb, yb in train_loader:
+    ...
+    total_train += loss.item() * yb.shape[0]   # suma de pérdidas
+    count_train += yb.shape[0]                 # ejemplos vistos
+train_losses.append(total_train / count_train) # promedio ponderado</code></pre>
+</figure>
+
+<ul>
+  <li><strong><code>loss.item()</code></strong> convierte el tensor escalar de pérdida en un número de Python puro.</li>
+  <li><strong><code>* yb.shape[0]</code></strong> deshace el promedio. Como <code>model.loss</code> ya devolvió un promedio (por el <code>.mean()</code>), multiplicar por el tamaño del batch recupera la <em>suma</em> de pérdidas de ese batch.</li>
+  <li><strong><code>total_train</code></strong> acumula esa suma a lo largo de todos los batches: al terminar la época contiene la suma de las pérdidas de los 800 ejemplos.</li>
+  <li><strong><code>count_train</code></strong> lleva la cuenta de ejemplos individuales vistos (no de batches).</li>
+</ul>
+
+<h4>¿Por qué no promediar directamente las 25 pérdidas?</h4>
+<p>Porque si algún batch tuviera menos ejemplos que los demás —como pasa en el <code>val_loader</code>, cuyo último batch tiene 8—, promediar "pérdidas de batch" le daría el mismo peso a un batch de 8 que a uno de 32, sesgando el resultado.</p>
+
+<p>Al acumular sumas totales y contar ejemplos totales, la división <code>total_train / count_train</code> da el promedio <strong>real por ejemplo</strong>, sin importar que los batches sean desiguales.</p>
+
+<h4>Y <code>train_losses.append(...)</code></h4>
+
+<div class="q"><span class="qlabel">Duda original</span>¿train_losses.append es la pérdida de entrenamiento por época?</div>
+
+<p>Sí. Esa línea está <strong>fuera</strong> del bucle de minibatches pero <strong>dentro</strong> del bucle de épocas, así que se ejecuta exactamente una vez por época. Al terminar las 10 épocas, <code>train_losses</code> es una lista de 10 elementos —por ejemplo <span class="mono">[0.45, 0.21, 0.10, ..., 0.0002]</span>, idealmente decreciendo—. Lo mismo aplica a <code>val_losses</code>.</p>
+
+<!-- 7.4 -->
+<h3 id="loop-val">La fase de validación</h3>
+
+<h4>Por qué <code>torch.no_grad()</code></h4>
+
+<div class="q"><span class="qlabel">Duda original</span>En la parte de validación, ¿por qué uso torch.no_grad?</div>
+
+<p>Porque en validación <strong>no vas a llamar <code>.backward()</code></strong>, así que no tiene sentido que PyTorch gaste recursos construyendo el grafo computacional necesario para calcular gradientes.</p>
+
+<p>Recuerda el mecanismo: cada operación sobre tensores con <span class="ic">requires_grad=True</span> —como <code>self.w</code> y <code>self.b</code>— queda <strong>registrada automáticamente</strong> en un grafo en segundo plano. Ese registro es lo que permite después recorrerlo hacia atrás con <code>backward()</code>, pero tiene un costo: memoria para guardar los tensores intermedios, y cómputo para la contabilidad interna.</p>
+
+<p>Durante entrenamiento ese costo es necesario. Durante validación es puro desperdicio: solo quieres medir. <span class="ic">with torch.no_grad():</span> le dice explícitamente a PyTorch que no registre nada dentro de ese bloque. Esto:</p>
+
+<ol>
+  <li><strong>Ahorra memoria</strong> — no guarda tensores intermedios para un backward que nunca llegará.</li>
+  <li><strong>Ahorra cómputo</strong> — se salta la contabilidad del autograd.</li>
+  <li><strong>Refuerza la separación conceptual</strong> — dentro del bloque ni siquiera podrías llamar <code>backward()</code>, lo cual deja explícito que esta es la fase donde solo observas.</li>
+</ol>
+
+<div class="note key">
+  <span class="tag">Por qué importa de verdad</span>
+  <p>En una red grande, con millones de parámetros, este ahorro de memoria puede ser la diferencia entre que el código corra o se quede sin memoria de GPU. Por eso usar <code>torch.no_grad()</code> en evaluación es práctica estándar en PyTorch, no un detalle opcional.</p>
+</div>
+
+<h4>La llamada anidada <code>model.loss(model(Xv), yv)</code></h4>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Por qué otra vez model(Xv) dentro de model.loss(...)?</div>
+
+<p>No es una llamada repetida por error: son <strong>dos métodos distintos del mismo objeto</strong>, escritos en una sola línea en vez de dos.</p>
+
+<p>Compara con la fase de entrenamiento, donde está en dos pasos:</p>
+
+<figure class="code">
+  <figcaption><span>En entrenamiento: dos líneas</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">y_hat = model(Xb)              # 1) forward: obtiene la predicción
+loss = model.loss(y_hat, yb)   # 2) loss: compara predicción vs. real</code></pre>
+</figure>
+
+<figure class="code">
+  <figcaption><span>En validación: la misma lógica, condensada</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">loss_val = model.loss(model(Xv), yv)</code></pre>
+</figure>
+
+<p>Desglosado, es idéntico:</p>
+<ul>
+  <li><code>model(Xv)</code> → el <strong>forward</strong>, que calcula ŷ = Xw + b para los datos de validación.</li>
+  <li><code>model.loss(..., yv)</code> → el método <strong>loss</strong>, que compara esa predicción contra el valor real.</li>
+</ul>
+
+<p>El forward se pasa <em>como argumento</em> al método <code>loss</code>, sin crear una variable intermedia, porque en validación no la necesitas para nada más. Equivale exactamente a:</p>
+
+<figure class="code">
+  <figcaption><span>Equivalente explícito</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">y_hat_val = model(Xv)
+loss_val = model.loss(y_hat_val, yv)</code></pre>
+</figure>
+
+<p>La razón de fondo es simple: antes de poder calcular una pérdida, siempre necesitas primero una predicción. No es redundancia, son los dos pasos de siempre.</p>
+
+<!-- ============ 8. CIERRE ============ -->
+<h2 id="cierre"><span class="num">Sección 8</span>Evaluación final y gráfica</h2>
+
+<h3>Verificar los parámetros aprendidos</h3>
+
+<figure class="code">
+  <figcaption><span>Evaluación final</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">with torch.no_grad():
+    est_w = model.w.reshape(true_w.shape)
+    est_b = model.b
+    print("Error en w:", true_w - est_w)
+    print("Error en b:", true_b - est_b)</code></pre>
+</figure>
+
+<p>Este es el cierre del experimento controlado: comparar lo que el modelo aprendió por su cuenta contra la respuesta verdadera que tú conoces.</p>
+
+<ul>
+  <li><strong><code>with torch.no_grad()</code></strong> — igual que en validación, aquí solo lees valores para imprimirlos; no hay necesidad de rastrear nada.</li>
+  <li><strong><code>est_w = model.w.reshape(true_w.shape)</code></strong> — <code>model.w</code> tiene forma <span class="mono">(2, 1)</span> mientras que <code>true_w</code> tiene forma <span class="mono">(2,)</span>. El <code>reshape</code> los pone en la misma forma para poder restarlos elemento por elemento.</li>
+  <li><strong><code>est_b = model.b</code></strong> — no necesita reshape: <code>true_b</code> es un escalar y <code>model.b</code> tiene forma <span class="mono">(1,)</span>, compatibles por broadcasting.</li>
+  <li><strong>Las restas</strong> — si el entrenamiento funcionó, estas diferencias deberían ser números muy pequeños, cercanos a cero, del orden de <span class="mono">0.001</span>.</li>
+</ul>
+
+<div class="note good">
+  <span class="tag">Por qué este paso cierra el círculo</span>
+  <p>Aquí es donde obtienes <strong>evidencia concreta</strong> de que tu implementación —modelo, SGD y loop— funciona de verdad. Sin este paso, solo sabrías que el código no lanzó errores, que no es lo mismo que decir que el modelo aprendió.</p>
+</div>
+
+<h3>La gráfica de pérdidas</h3>
+
+<figure class="code">
+  <figcaption><span>Visualización</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">plt.plot(range(1, num_epochs + 1), train_losses, label='Train loss')
+plt.plot(range(1, num_epochs + 1), val_losses, label='Validation loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.title('Training y Validation Loss por Epoch')
+plt.show()</code></pre>
+</figure>
+
+<p>Dibuja las dos listas que fuiste llenando durante el entrenamiento. En el eje X, <code>range(1, 11)</code> genera las posiciones de las 10 épocas; en el eje Y, la pérdida promedio de cada una. Los <code>label=</code> son los que después usa <code>plt.legend()</code> para distinguir las curvas.</p>
+
+<h4>Cómo leer la gráfica</h4>
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Lo que ves</th><th>Lo que significa</th></tr>
+  <tr><td>Ambas curvas bajan y terminan cerca una de otra</td><td>Buena señal: el modelo generaliza, no está memorizando.</td></tr>
+  <tr><td>Train sigue bajando, validación sube o se estanca mucho más arriba</td><td><strong>Overfitting</strong>: el modelo se ajusta a las particularidades de los datos de entrenamiento y pierde capacidad de generalizar.</td></tr>
+  <tr><td>Ninguna de las dos baja</td><td>Algo está mal: tasa de aprendizaje inadecuada, error en los gradientes, o el modelo no tiene capacidad suficiente.</td></tr>
+</table>
+</div>
+
+<p>En este caso —regresión lineal sobre datos sintéticos limpios— lo esperable es ver ambas curvas caer rápido y estabilizarse muy cerca una de otra en un valor bajo, confirmando visualmente lo mismo que ya viste numéricamente en el paso anterior.</p>
+
+<h3 id="lab-trainer">Laboratorio: el notebook completo, corriendo aquí</h3>
+
+<p>Esta es una reimplementación del notebook entero: genera los mismos 1000 datos sintéticos con <span class="mono">true_w = [2.0, −3.4]</span> y <span class="mono">true_b = 4.2</span>, los parte 80/20, y entrena con minibatch SGD usando las fórmulas de gradiente que derivamos en la sección 5.</p>
+
+<p>Mueve la tasa de aprendizaje y el tamaño de batch, y observa cómo cambian la curva de pérdidas y la convergencia de los parámetros hacia sus valores verdaderos.</p>
+
+<div class="widget">
+  <div class="widget-head">
+    <div class="wt">Entrenamiento completo, 1000 ejemplos</div>
+    <div class="ws">Eje vertical en escala logarítmica, porque la pérdida cae varios órdenes de magnitud</div>
+  </div>
+  <div class="widget-body">
+    <div class="trainer-grid">
+      <div>
+        <canvas id="trCanvas" width="660" height="330"></canvas>
+      </div>
+      <div>
+        <div class="ctrl">
+          <label>Learning rate: <strong id="trLrVal" class="mono">0.030</strong></label>
+          <input type="range" id="trLr" min="0.001" max="0.300" step="0.001" value="0.030">
+        </div>
+        <div class="mini">Batch size</div>
+        <div class="selrow" id="trBs">
+          <button data-v="8">8</button>
+          <button data-v="16">16</button>
+          <button data-v="32" class="sel">32</button>
+          <button data-v="64">64</button>
+          <button data-v="800">800</button>
+        </div>
+        <div class="mini">Parámetros aprendidos</div>
+        <div class="param-row">
+          <span class="pl">w₁</span>
+          <span class="bar"><i id="trBarW1"></i></span>
+          <span class="pv"><span id="trW1">0.000</span> <span class="tgt">/ 2.0</span></span>
+        </div>
+        <div class="param-row">
+          <span class="pl">w₂</span>
+          <span class="bar"><i id="trBarW2"></i></span>
+          <span class="pv"><span id="trW2">0.000</span> <span class="tgt">/ −3.4</span></span>
+        </div>
+        <div class="param-row">
+          <span class="pl">b</span>
+          <span class="bar"><i id="trBarB"></i></span>
+          <span class="pv"><span id="trB">0.000</span> <span class="tgt">/ 4.2</span></span>
+        </div>
+        <div class="mini">Estado</div>
+        <div class="readout">
+          <div class="row"><span>época</span><span id="trEpoch">0 / 10</span></div>
+          <div class="row"><span>updates</span><span id="trUpd">0</span></div>
+          <div class="row"><span>train loss</span><span id="trTl">—</span></div>
+          <div class="row"><span>val loss</span><span id="trVl">—</span></div>
+        </div>
+        <div class="status ok" id="trStatus">Listo para entrenar.</div>
+      </div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="trRun">Entrenar 10 épocas</button>
+    <button class="btn" id="trEpochBtn">Una época</button>
+    <button class="btn" id="trReset">Reiniciar</button>
+    <span class="pill">naranja: train · verde: validación</span>
+  </div>
+</div>
+
+<div class="note">
+  <span class="tag">Experimentos que vale la pena hacer</span>
+  <ul>
+    <li><strong>lr muy baja (0.001):</strong> la curva baja, pero en 10 épocas no alcanza a converger. Los parámetros se quedan lejos de sus valores verdaderos.</li>
+    <li><strong>lr = 0.03 (la del notebook):</strong> converge limpiamente. Es un valor conservador y confiable.</li>
+    <li><strong>lr alta (0.25):</strong> converge mucho más rápido, pero verás la curva más irregular entre épocas.</li>
+    <li><strong>batch_size = 800:</strong> equivale a <em>batch gradient descent</em>: una sola actualización por época, 10 en total. La curva baja lentísimo, no porque la tasa sea mala sino porque hay 25 veces menos pasos.</li>
+    <li><strong>batch_size = 8:</strong> 100 actualizaciones por época. Converge rapidísimo, pero la curva es más ruidosa: cada gradiente se estima con menos datos.</li>
+  </ul>
+  <p>Ese último contraste es exactamente el compromiso que describía la sección de conceptos: batches chicos dan más pasos pero más ruidosos; batches grandes dan gradientes más estables pero muchos menos pasos.</p>
+</div>
+
+<!-- ============ 9. ACLARACIONES ============ -->
+<h2 id="aclaraciones"><span class="num">Sección 9</span>Aclaraciones conceptuales</h2>
+
+<p>Cuatro puntos que conviene tener fijos, porque son fáciles de confundir.</p>
+
+<h3>1. Esto es una regresión lineal, no una red neuronal</h3>
+
+<div class="q"><span class="qlabel">Duda original</span>¿Está creando una red neuronal que recibe X y genera ŷ?</div>
+
+<p>El flujo general es correcto (recibe X, produce ŷ), pero llamarlo red neuronal sería impreciso.</p>
+
+<div class="scroll">
+<table class="tbl">
+  <tr><th></th><th>Regresión lineal</th><th>Red neuronal</th></tr>
+  <tr><td>Fórmula</td><td>ŷ = Xw + b</td><td>Varias capas lineales encadenadas</td></tr>
+  <tr><td>No-linealidades</td><td>Ninguna</td><td>Funciones de activación (ReLU, sigmoid…) entre capas</td></tr>
+  <tr><td>Capas ocultas</td><td>Ninguna</td><td>Una o muchas</td></tr>
+  <tr><td>Qué puede aprender</td><td>Solo relaciones lineales</td><td>Relaciones arbitrariamente complejas</td></tr>
+</table>
+</div>
+
+<p>Una regresión lineal se puede ver como el caso más simple posible de una red: una sola capa, sin activación. La no-linealidad es precisamente lo que le da a una red neuronal su poder expresivo.</p>
+
+<p><strong>¿Por qué entonces usar <code>nn.Module</code> y toda esta estructura?</strong> Porque el notebook usa deliberadamente el mismo patrón y la misma API que usarías para una red de verdad. La regresión lineal es el ejercicio pedagógico ideal: tiene la infraestructura completa de un modelo de deep learning, pero con matemática simple y resultado verificable.</p>
+
+<h3>2. Los pesos se actualizan por minibatch, no por época</h3>
+<p>Ya lo vimos en detalle, pero vale repetirlo porque es el error conceptual más común: <code>optim.step()</code> está dentro del bucle de minibatches. Son 25 actualizaciones por época, no una.</p>
+
+<h3>3. El gradiente es ∂L/∂parámetro, no al revés</h3>
+<p>Se deriva la <em>pérdida</em> respecto a los <em>parámetros</em>. La pregunta que responde es "si muevo este parámetro, ¿cuánto cambia el error?", no al contrario.</p>
+
+<h3>4. Validación no es test</h3>
+<p>La validación se usa durante el entrenamiento para monitorear. Un conjunto de test se reserva para una única evaluación final imparcial. Este notebook solo tiene los dos primeros.</p>
+
+<hr>
+
+<h3>Tabla de referencia rápida: qué hace cada llamada</h3>
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Llamada</th><th>Qué hace</th><th>¿Modifica w, b?</th></tr>
+  <tr><td><code>model(Xb)</code></td><td>Forward: calcula ŷ vía <code>__call__</code> → <code>forward</code></td><td>No</td></tr>
+  <tr><td><code>model.loss(y_hat, yb)</code></td><td>Calcula el error promedio del minibatch</td><td>No</td></tr>
+  <tr><td><code>optim.zero_grad()</code></td><td>Pone <code>.grad</code> en cero</td><td>No (limpia gradientes)</td></tr>
+  <tr><td><code>loss.backward()</code></td><td>Calcula y guarda gradientes en <code>.grad</code></td><td>No (solo escribe <code>.grad</code>)</td></tr>
+  <tr><td><code>optim.step()</code></td><td>Aplica θ ← θ − lr·∇θ</td><td><strong>Sí</strong></td></tr>
+  <tr><td><code>loss.item()</code></td><td>Convierte el tensor escalar a número de Python</td><td>No</td></tr>
+  <tr><td><code>torch.no_grad()</code></td><td>Suspende el rastreo del autograd en su bloque</td><td>No</td></tr>
+</table>
+</div>
+
+<!-- ============ 10. CÓDIGO COMPLETO ============ -->
+<h2 id="completo"><span class="num">Sección 10</span>Código completo</h2>
+
+<p>Todo junto, en orden de ejecución, para copiar y experimentar.</p>
+
+<figure class="code">
+  <figcaption><span>Notebook completo</span><button class="copy">copiar</button></figcaption>
+  <pre><code class="py">import torch
+import torch.nn as nn
+from torch.utils.data import TensorDataset, DataLoader, random_split
+import matplotlib.pyplot as plt
+
+
+# ============================================================
+# 1. El modelo
+# ============================================================
+class LinearRegression(nn.Module):
+    """Modelo de regresión lineal implementado desde cero en PyTorch"""
+    def __init__(self, num_inputs, lr, sigma=0.01):
+        super(LinearRegression, self).__init__()
+        self.num_inputs = num_inputs
+        self.lr = lr
+        self.sigma = sigma
+        self.w = nn.Parameter(torch.normal(0.0, sigma, size=(num_inputs, 1)))
+        self.b = nn.Parameter(torch.zeros(1))
+
+    def forward(self, X):
+        return torch.matmul(X, self.w) + self.b
+
+    def loss(self, y_hat, y):
+        l = (y_hat - y) ** 2 / 2
+        return l.mean()
+
+    def configure_optimizers(self):
+        return SGD([self.w, self.b], self.lr)
+
+
+# ============================================================
+# 2. El optimizador
+# ============================================================
+class SGD:
+    """Descenso de gradiente estocástico por minibatches."""
+    def __init__(self, params, lr):
+        self.params = list(params)
+        self.lr = lr
+
+    def step(self):
+        for p in self.params:
+            p.data -= self.lr * p.grad
+
+    def zero_grad(self):
+        for p in self.params:
+            if p.grad is not None:
+                p.grad.zero_()
+
+
+# ============================================================
+# 3. Datos sintéticos
+# ============================================================
+def synthetic_regression_data(w, b, num_samples=1000):
+    """Genera X ~ N(0,1) y y = Xw + b + ruido."""
+    num_inputs = w.shape[0]
+    X = torch.randn(num_samples, num_inputs)
+    y = X @ w.reshape(-1, 1) + b
+    y += torch.randn_like(y) * 0.01
+    return X, y
+
+
+true_w = torch.tensor([2.0, -3.4])
+true_b = 4.2
+X, y = synthetic_regression_data(true_w, true_b)
+
+dataset = TensorDataset(X, y)
+train_size = int(0.8 * len(dataset))
+val_size = len(dataset) - train_size
+train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+batch_size = 32
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+
+# ============================================================
+# 4. Entrenamiento
+# ============================================================
+model = LinearRegression(num_inputs=2, lr=0.03)
+optim = model.configure_optimizers()
+
+num_epochs = 10
+train_losses, val_losses = [], []
+
+for epoch in range(1, num_epochs + 1):
+    model.train()
+    total_train, count_train = 0.0, 0
+    for Xb, yb in train_loader:
+        y_hat = model(Xb)
+        loss = model.loss(y_hat, yb)
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+        total_train += loss.item() * yb.shape[0]
+        count_train += yb.shape[0]
+    train_losses.append(total_train / count_train)
+
+    model.eval()
+    total_val, count_val = 0.0, 0
+    with torch.no_grad():
+        for Xv, yv in val_loader:
+            loss_val = model.loss(model(Xv), yv)
+            total_val += loss_val.item() * yv.shape[0]
+            count_val += yv.shape[0]
+    val_losses.append(total_val / count_val)
+
+
+# ============================================================
+# 5. Evaluación y gráfica
+# ============================================================
+with torch.no_grad():
+    est_w = model.w.reshape(true_w.shape)
+    est_b = model.b
+    print("Error en w:", true_w - est_w)
+    print("Error en b:", true_b - est_b)
+
+plt.plot(range(1, num_epochs + 1), train_losses, label='Train loss')
+plt.plot(range(1, num_epochs + 1), val_losses, label='Validation loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.title('Training y Validation Loss por Epoch')
+plt.show()</code></pre>
+</figure>
+
+<!-- ============ 11. GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 11</span>Glosario</h2>
+
+<div class="gloss">
+  <div class="item"><div class="term">tensor</div><div class="def">Arreglo multidimensional de PyTorch que puede rastrear operaciones para calcular derivadas automáticamente.</div></div>
+  <div class="item"><div class="term">nn.Module</div><div class="def">Clase base de todos los modelos en PyTorch. Aporta registro de parámetros, modos train/eval, movilidad a GPU y el <code>__call__</code> que hace funcionar <code>model(X)</code>.</div></div>
+  <div class="item"><div class="term">nn.Parameter</div><div class="def">Envoltura que marca un tensor como parámetro aprendible: se registra en el módulo y se le rastrean gradientes.</div></div>
+  <div class="item"><div class="term">requires_grad</div><div class="def">Bandera de un tensor que indica si PyTorch debe rastrear las operaciones sobre él para el autograd. Es <code>True</code> por defecto en <code>nn.Parameter</code>.</div></div>
+  <div class="item"><div class="term">autograd</div><div class="def">El motor de diferenciación automática de PyTorch. Construye un grafo durante el forward y lo recorre hacia atrás en <code>backward()</code>.</div></div>
+  <div class="item"><div class="term">forward</div><div class="def">El método que define cómo el modelo transforma la entrada en una predicción. Nunca se llama directamente: se invoca vía <code>model(X)</code>.</div></div>
+  <div class="item"><div class="term">backward</div><div class="def">La pasada hacia atrás que calcula las derivadas parciales de la pérdida respecto a cada parámetro, aplicando la regla de la cadena.</div></div>
+  <div class="item"><div class="term">gradiente (∇)</div><div class="def">Vector de derivadas parciales de la pérdida respecto a los parámetros. Apunta hacia donde la pérdida crece más rápido; por eso se resta.</div></div>
+  <div class="item"><div class="term">learning rate (lr)</div><div class="def">El tamaño del paso en cada actualización. Muy pequeña, el entrenamiento es lentísimo; muy grande, diverge.</div></div>
+  <div class="item"><div class="term">minibatch</div><div class="def">Subconjunto de ejemplos sobre el que se calcula un gradiente y se hace una actualización. Equilibrio entre estabilidad y velocidad.</div></div>
+  <div class="item"><div class="term">época</div><div class="def">Una pasada completa por todo el conjunto de entrenamiento. Contiene tantas actualizaciones como minibatches haya.</div></div>
+  <div class="item"><div class="term">broadcasting</div><div class="def">Mecanismo que expande automáticamente tensores de formas distintas para que puedan operarse. Es lo que permite sumar <code>b</code> de forma <span class="mono">(1,)</span> a un tensor <span class="mono">(32, 1)</span>.</div></div>
+  <div class="item"><div class="term">overfitting</div><div class="def">Cuando el modelo se ajusta tanto a los datos de entrenamiento que pierde capacidad de generalizar. Se detecta cuando la pérdida de validación deja de bajar mientras la de entrenamiento sigue cayendo.</div></div>
+  <div class="item"><div class="term">SGD</div><div class="def">Stochastic Gradient Descent. Actualiza los parámetros con el gradiente de un minibatch aleatorio, en vez del dataset completo.</div></div>
+</div>
+
+<!-- ============ 12. REFERENCIAS ============ -->
+<h2 id="referencias"><span class="num">Sección 12</span>Documentación oficial</h2>
+
+<p>Enlaces directos a la documentación de PyTorch y de Python para cada pieza que apareció en el notebook, por si quieres profundizar en alguna.</p>
+
+<h3>PyTorch</h3>
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Tema</th><th>Enlace</th></tr>
+  <tr><td><code>torch.Tensor</code></td><td><a href="https://docs.pytorch.org/docs/stable/tensors.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/tensors.html</a></td></tr>
+  <tr><td><code>torch.nn.Module</code></td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.Module.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/generated/torch.nn.Module.html</a></td></tr>
+  <tr><td><code>torch.nn.Parameter</code></td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.parameter.Parameter.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/generated/torch.nn.parameter.Parameter.html</a></td></tr>
+  <tr><td><code>torch.matmul</code></td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.matmul.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/generated/torch.matmul.html</a></td></tr>
+  <tr><td><code>torch.normal</code></td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.normal.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/generated/torch.normal.html</a></td></tr>
+  <tr><td><code>torch.randn</code></td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.randn.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/generated/torch.randn.html</a></td></tr>
+  <tr><td>Autograd (<code>backward</code>, <code>.grad</code>)</td><td><a href="https://docs.pytorch.org/docs/stable/autograd.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/autograd.html</a></td></tr>
+  <tr><td><code>torch.no_grad</code></td><td><a href="https://docs.pytorch.org/docs/stable/generated/torch.no_grad.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/generated/torch.no_grad.html</a></td></tr>
+  <tr><td>Broadcasting semantics</td><td><a href="https://docs.pytorch.org/docs/stable/notes/broadcasting.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/notes/broadcasting.html</a></td></tr>
+  <tr><td><code>torch.utils.data.TensorDataset</code></td><td><a href="https://docs.pytorch.org/docs/stable/data.html#torch.utils.data.TensorDataset" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/data.html#TensorDataset</a></td></tr>
+  <tr><td><code>torch.utils.data.DataLoader</code></td><td><a href="https://docs.pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/data.html#DataLoader</a></td></tr>
+  <tr><td><code>torch.utils.data.random_split</code></td><td><a href="https://docs.pytorch.org/docs/stable/data.html#torch.utils.data.random_split" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/data.html#random_split</a></td></tr>
+  <tr><td><code>torch.optim</code> (optimizadores oficiales, incl. <code>SGD</code>)</td><td><a href="https://docs.pytorch.org/docs/stable/optim.html" target="_blank" rel="noopener">docs.pytorch.org/docs/stable/optim.html</a></td></tr>
+  <tr><td>Guía introductoria de PyTorch</td><td><a href="https://docs.pytorch.org/tutorials/beginner/basics/intro.html" target="_blank" rel="noopener">docs.pytorch.org/tutorials/beginner/basics/intro.html</a></td></tr>
+</table>
+</div>
+
+<h3>Python</h3>
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Tema</th><th>Enlace</th></tr>
+  <tr><td>Clases (<code>class</code>, <code>__init__</code>, <code>self</code>)</td><td><a href="https://docs.python.org/3/tutorial/classes.html" target="_blank" rel="noopener">docs.python.org/3/tutorial/classes.html</a></td></tr>
+  <tr><td>Herencia y <code>super()</code></td><td><a href="https://docs.python.org/3/library/functions.html#super" target="_blank" rel="noopener">docs.python.org/3/library/functions.html#super</a></td></tr>
+  <tr><td>Métodos especiales (incl. <code>__call__</code>)</td><td><a href="https://docs.python.org/3/reference/datamodel.html#special-method-names" target="_blank" rel="noopener">docs.python.org/3/reference/datamodel.html#special-method-names</a></td></tr>
+  <tr><td>Comprehensions, <code>range</code>, <code>enumerate</code></td><td><a href="https://docs.python.org/3/tutorial/controlflow.html" target="_blank" rel="noopener">docs.python.org/3/tutorial/controlflow.html</a></td></tr>
+</table>
+</div>
+
+<h3>Matplotlib</h3>
+<div class="scroll">
+<table class="tbl">
+  <tr><th>Tema</th><th>Enlace</th></tr>
+  <tr><td><code>matplotlib.pyplot.plot</code></td><td><a href="https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.plot.html" target="_blank" rel="noopener">matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.plot.html</a></td></tr>
+</table>
+</div>
+
+<footer>
+  <p>Guía de repaso construida a partir de la lectura comentada de <code>notebooks/Intro_Pytorch_david.ipynb</code>. El código mostrado corresponde al original del notebook.</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- theme ---------- */
+  var root = document.documentElement;
+  try{
+    var saved = localStorage.getItem('gp-theme');
+    if(saved) root.setAttribute('data-theme', saved);
+  }catch(e){}
+
+  document.getElementById('themeBtn').addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var isDark;
+    if(cur){ isDark = cur === 'dark'; }
+    else { isDark = window.matchMedia('(prefers-color-scheme: dark)').matches; }
+    var next = isDark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try{ localStorage.setItem('gp-theme', next); }catch(e){}
+    redrawAll();
+  });
+
+  /* ---------- syntax highlight ---------- */
+  var KW = "class|def|return|for|in|if|elif|else|with|import|from|as|None|True|False|not|is|and|or|lambda|while|try|except|pass|print|self|super|break|continue";
+  var RE = new RegExp(
+    "(#[^\\n]*)" +
+    "|(\"\"\"[\\s\\S]*?\"\"\"|'''[\\s\\S]*?'''|\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*')" +
+    "|\\b(" + KW + ")\\b" +
+    "|\\b(\\d+\\.?\\d*)\\b",
+    "g"
+  );
+
+  function esc(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function highlight(src){
+    return esc(src).replace(RE, function(m, com, str, kw, num){
+      if(com !== undefined && com !== null && com !== '') return '<span class="c">'+com+'</span>';
+      if(str) return '<span class="s">'+str+'</span>';
+      if(kw)  return '<span class="k">'+kw+'</span>';
+      if(num) return '<span class="n">'+num+'</span>';
+      return m;
+    });
+  }
+
+  var blocks = document.querySelectorAll('code.py');
+  for(var i=0;i<blocks.length;i++){
+    var raw = blocks[i].textContent;
+    blocks[i].setAttribute('data-raw', raw);
+    blocks[i].innerHTML = highlight(raw);
+  }
+
+  /* ---------- copy buttons ---------- */
+  var copies = document.querySelectorAll('.copy');
+  for(var c=0;c<copies.length;c++){
+    (function(btn){
+      btn.addEventListener('click', function(){
+        var fig = btn.closest('figure.code');
+        var code = fig ? fig.querySelector('code') : null;
+        if(!code) return;
+        var txt = code.getAttribute('data-raw') || code.textContent;
+        var done = function(){
+          btn.textContent = 'copiado';
+          btn.classList.add('done');
+          setTimeout(function(){ btn.textContent='copiar'; btn.classList.remove('done'); }, 1600);
+        };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(txt).then(done).catch(function(){ fallback(txt, done); });
+        } else { fallback(txt, done); }
+      });
+    })(copies[c]);
+  }
+  function fallback(txt, cb){
+    var ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); cb(); }catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  /* ---------- toc: scrollspy + mobile ---------- */
+  var toc = document.getElementById('toc');
+  var scrim = document.getElementById('scrim');
+  var menuBtn = document.getElementById('menuBtn');
+  var crumb = document.getElementById('crumb');
+
+  function closeToc(){ toc.classList.remove('open'); scrim.classList.remove('on'); }
+  menuBtn.addEventListener('click', function(){
+    toc.classList.toggle('open');
+    scrim.classList.toggle('on', toc.classList.contains('open'));
+  });
+  scrim.addEventListener('click', closeToc);
+
+  var links = Array.prototype.slice.call(toc.querySelectorAll('a'));
+  links.forEach(function(a){
+    a.addEventListener('click', function(){
+      if(window.innerWidth <= 860) closeToc();
+    });
+  });
+
+  var targets = links.map(function(a){
+    var id = a.getAttribute('href').slice(1);
+    return document.getElementById(id);
+  });
+
+  var prog = document.getElementById('progress');
+
+  function onScroll(){
+    var y = window.scrollY || window.pageYOffset;
+    var h = document.body.scrollHeight - window.innerHeight;
+    prog.style.width = (h > 0 ? Math.min(100, (y/h)*100) : 0) + '%';
+
+    var best = 0;
+    for(var i=0;i<targets.length;i++){
+      var t = targets[i];
+      if(!t) continue;
+      if(t.getBoundingClientRect().top <= 120) best = i;
+    }
+    links.forEach(function(a,i){ a.classList.toggle('active', i===best); });
+    var act = links[best];
+    if(act) crumb.textContent = act.textContent.replace(/^\d+\s·\s/, '');
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', onScroll);
+  onScroll();
+
+  /* ---------- simulador del loop ---------- */
+  var SIM_LINES = [
+    "for Xb, yb in train_loader:",
+    "    y_hat = model(Xb)",
+    "    loss = model.loss(y_hat, yb)",
+    "    optim.zero_grad()",
+    "    loss.backward()",
+    "    optim.step()",
+    "    total_train += loss.item() * yb.shape[0]",
+    "    count_train += yb.shape[0]"
+  ];
+
+  var SIM_STEPS = [
+    {
+      lines: [],
+      title: "Listo para empezar",
+      body: "El modelo tiene w y b con sus valores actuales. Al inicio del entrenamiento son prácticamente aleatorios. Pulsa «siguiente»."
+    },
+    {
+      lines: [0],
+      title: "Tomar un minibatch",
+      body: "El DataLoader entrega el siguiente lote: Xb de forma (32, 2) y yb de forma (32, 1). Como shuffle=True, la composición de este lote cambia en cada época."
+    },
+    {
+      lines: [1],
+      title: "Forward",
+      body: "model(Xb) invoca __call__ de nn.Module, que a su vez llama a tu forward. Calcula ŷ = Xb·w + b con los parámetros actuales. Resultado: 32 predicciones."
+    },
+    {
+      lines: [2],
+      title: "Calcular la pérdida",
+      body: "Compara las 32 predicciones contra los 32 valores reales, eleva las diferencias al cuadrado, las divide entre 2 y promedia. Resultado: un único número escalar."
+    },
+    {
+      lines: [3],
+      title: "Limpiar gradientes",
+      body: "Pone w.grad y b.grad en cero. Indispensable porque PyTorch acumula gradientes: sin esto, los de la iteración anterior se sumarían a los nuevos."
+    },
+    {
+      lines: [4],
+      title: "Backward",
+      body: "Recorre hacia atrás el grafo que se construyó durante el forward y calcula ∂L/∂w y ∂L/∂b con la regla de la cadena. Los guarda en w.grad y b.grad. Los parámetros todavía NO cambian."
+    },
+    {
+      lines: [5],
+      title: "Actualizar los parámetros",
+      body: "Aquí sí cambian w y b: θ ← θ − lr·∇θ. Este es el único paso que modifica el modelo, y ocurre en CADA minibatch, no al final de la época."
+    },
+    {
+      lines: [6,7],
+      title: "Registrar (no afecta el aprendizaje)",
+      body: "Acumula la suma de pérdidas y el número de ejemplos vistos, para poder calcular después el promedio ponderado de la época. Pura contabilidad: no toca w ni b."
+    },
+    {
+      lines: [0],
+      title: "Volver al principio",
+      body: "Se repite con el siguiente minibatch, ahora con w y b ya actualizados. Con 800 ejemplos y batch_size=32, esto ocurre 25 veces por época."
+    }
+  ];
+
+  var simCode = document.getElementById('simCode');
+  var simTitle = document.getElementById('simTitle');
+  var simBody = document.getElementById('simBody');
+  var simPrev = document.getElementById('simPrev');
+  var simNext = document.getElementById('simNext');
+  var simReset = document.getElementById('simReset');
+  var simCount = document.getElementById('simCount');
+  var simIdx = 0;
+
+  SIM_LINES.forEach(function(l, i){
+    var s = document.createElement('span');
+    s.className = 'line';
+    s.setAttribute('data-i', i);
+    s.innerHTML = highlight(l);
+    simCode.appendChild(s);
+  });
+  var simLineEls = simCode.querySelectorAll('.line');
+
+  function renderSim(){
+    var st = SIM_STEPS[simIdx];
+    for(var i=0;i<simLineEls.length;i++){
+      var on = st.lines.indexOf(i) !== -1;
+      simLineEls[i].classList.toggle('on', on);
+      var seen = !on && simIdx > 0 && i < Math.max.apply(null, st.lines.concat([0]));
+      simLineEls[i].classList.toggle('seen', seen);
+    }
+    simTitle.textContent = st.title;
+    simBody.textContent = st.body;
+    simCount.textContent = 'paso ' + simIdx + ' / ' + (SIM_STEPS.length - 1);
+    simPrev.disabled = simIdx === 0;
+    simNext.disabled = simIdx === SIM_STEPS.length - 1;
+  }
+  simNext.addEventListener('click', function(){
+    if(simIdx < SIM_STEPS.length - 1){ simIdx++; renderSim(); }
+  });
+  simPrev.addEventListener('click', function(){
+    if(simIdx > 0){ simIdx--; renderSim(); }
+  });
+  simReset.addEventListener('click', function(){ simIdx = 0; renderSim(); });
+  renderSim();
+
+  /* ---------- laboratorio de descenso de gradiente ---------- */
+  var cv = document.getElementById('gdCanvas');
+  var ctx = cv.getContext('2d');
+  var W = cv.width, H = cv.height;
+  var PAD = {l:44, r:16, t:16, b:34};
+
+  var WMIN = -5, WMAX = 9, LMAX = 26, TARGET = 2;
+  var lr = 0.30;
+  var path = [-3];
+  var running = null;
+
+  function L(w){ return 0.5 * (w - TARGET) * (w - TARGET); }
+  function grad(w){ return (w - TARGET); }
+
+  function sx(w){
+    return PAD.l + ((w - WMIN) / (WMAX - WMIN)) * (W - PAD.l - PAD.r);
+  }
+  function sy(v){
+    var vv = Math.max(0, Math.min(LMAX, v));
+    return H - PAD.b - (vv / LMAX) * (H - PAD.t - PAD.b);
+  }
+  function css(name){
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function drawGD(){
+    var cBorder = css('--border') || '#ccc';
+    var cText3  = css('--text-3') || '#888';
+    var cText   = css('--text') || '#222';
+    var cAcc    = css('--accent') || '#b5502a';
+    var cOk     = css('--ok') || '#2f6f4f';
+
+    ctx.clearRect(0,0,W,H);
+
+    // ejes
+    ctx.strokeStyle = cBorder; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD.l, PAD.t); ctx.lineTo(PAD.l, H-PAD.b); ctx.lineTo(W-PAD.r, H-PAD.b);
+    ctx.stroke();
+
+    // marca del mínimo
+    ctx.setLineDash([4,4]);
+    ctx.strokeStyle = cOk;
+    ctx.beginPath();
+    ctx.moveTo(sx(TARGET), PAD.t); ctx.lineTo(sx(TARGET), H-PAD.b);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // etiquetas
+    ctx.fillStyle = cText3;
+    ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('w', (PAD.l + W - PAD.r)/2, H - 10);
+    ctx.fillText('w = 2', sx(TARGET), H - PAD.b + 14);
+    ctx.save();
+    ctx.translate(13, (PAD.t + H - PAD.b)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('pérdida', 0, 0);
+    ctx.restore();
+
+    // parábola
+    ctx.strokeStyle = cText3; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    var first = true;
+    for(var px = PAD.l; px <= W - PAD.r; px++){
+      var wv = WMIN + ((px - PAD.l)/(W - PAD.l - PAD.r)) * (WMAX - WMIN);
+      var lv = L(wv);
+      if(lv > LMAX){ first = true; continue; }
+      var py = sy(lv);
+      if(first){ ctx.moveTo(px, py); first = false; } else { ctx.lineTo(px, py); }
+    }
+    ctx.stroke();
+
+    // trayectoria
+    ctx.strokeStyle = cAcc; ctx.lineWidth = 1.4;
+    ctx.globalAlpha = .55;
+    ctx.beginPath();
+    for(var i=0;i<path.length;i++){
+      var w = path[i];
+      var x = sx(Math.max(WMIN, Math.min(WMAX, w)));
+      var yv = sy(L(w));
+      if(i===0) ctx.moveTo(x,yv); else ctx.lineTo(x,yv);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // puntos
+    for(var j=0;j<path.length;j++){
+      var wj = path[j];
+      var xj = sx(Math.max(WMIN, Math.min(WMAX, wj)));
+      var yj = sy(L(wj));
+      var last = (j === path.length - 1);
+      ctx.beginPath();
+      ctx.arc(xj, yj, last ? 5.5 : 3, 0, Math.PI*2);
+      ctx.fillStyle = last ? cAcc : cAcc;
+      ctx.globalAlpha = last ? 1 : .38;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      if(last){
+        ctx.strokeStyle = css('--bg') || '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    // etiqueta del punto actual
+    var cw = path[path.length-1];
+    if(isFinite(cw) && cw >= WMIN && cw <= WMAX && L(cw) <= LMAX){
+      ctx.fillStyle = cText;
+      ctx.font = '600 11px ui-monospace, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('w=' + cw.toFixed(2), sx(cw) + 9, sy(L(cw)) - 8);
+    }
+  }
+
+  var roStep = document.getElementById('roStep');
+  var roW = document.getElementById('roW');
+  var roG = document.getElementById('roG');
+  var roL = document.getElementById('roL');
+  var gdStatus = document.getElementById('gdStatus');
+
+  function fmt(v){
+    if(!isFinite(v)) return '∞';
+    if(Math.abs(v) >= 1e6) return v.toExponential(2);
+    return v.toFixed(3);
+  }
+
+  function updateReadout(){
+    var w = path[path.length-1];
+    roStep.textContent = path.length - 1;
+    roW.textContent = fmt(w);
+    roG.textContent = fmt(grad(w));
+    roL.textContent = fmt(L(w));
+
+    var diverging = !isFinite(w) || Math.abs(w - TARGET) > Math.abs(path[0] - TARGET) * 1.5;
+    var converged = isFinite(w) && Math.abs(w - TARGET) < 0.01;
+
+    if(diverging){
+      gdStatus.className = 'status bad';
+      gdStatus.textContent = 'Divergiendo: con lr ≥ 2 cada paso se pasa de largo y la pérdida crece sin control.';
+      stopRun();
+    } else if(converged){
+      gdStatus.className = 'status ok';
+      gdStatus.textContent = 'Convergió: w llegó al mínimo. El gradiente es prácticamente cero, así que ya no se mueve.';
+      stopRun();
+    } else {
+      gdStatus.className = 'status ok';
+      gdStatus.textContent = 'Descendiendo. Cada paso resta lr · ∇w a la posición actual.';
+    }
+  }
+
+  function stepGD(){
+    var w = path[path.length-1];
+    if(!isFinite(w)) return;
+    var nw = w - lr * grad(w);
+    path.push(nw);
+    if(path.length > 90) path.shift();
+    drawGD(); updateReadout();
+  }
+
+  function stopRun(){
+    if(running){ clearInterval(running); running = null; }
+    document.getElementById('gdRun').textContent = 'Correr';
+  }
+
+  document.getElementById('gdStep').addEventListener('click', stepGD);
+  document.getElementById('gdRun').addEventListener('click', function(){
+    if(running){ stopRun(); return; }
+    this.textContent = 'Pausar';
+    running = setInterval(stepGD, 320);
+  });
+  document.getElementById('gdReset').addEventListener('click', function(){
+    stopRun();
+    path = [-3];
+    drawGD(); updateReadout();
+    gdStatus.className = 'status ok';
+    gdStatus.textContent = 'Reiniciado en w = −3. Pulsa «un paso» o «correr».';
+  });
+
+  var lrSlider = document.getElementById('lrSlider');
+  var lrVal = document.getElementById('lrVal');
+  lrSlider.addEventListener('input', function(){
+    lr = parseFloat(this.value);
+    lrVal.textContent = lr.toFixed(2);
+    stopRun();
+    path = [-3];
+    drawGD(); updateReadout();
+    gdStatus.className = 'status ok';
+    gdStatus.textContent = 'lr = ' + lr.toFixed(2) + '. Reiniciado en w = −3.';
+  });
+
+  drawGD();
+  updateReadout();
+
+  /* ================================================================
+     Utilidades compartidas
+     ================================================================ */
+  function shuffleArr(a){
+    for(var i=a.length-1;i>0;i--){
+      var j = Math.floor(Math.random()*(i+1));
+      var t=a[i]; a[i]=a[j]; a[j]=t;
+    }
+    return a;
+  }
+  function vec(a, d){
+    d = (d===undefined) ? 2 : d;
+    var out = [];
+    for(var i=0;i<a.length;i++) out.push(a[i].toFixed(d));
+    return '[' + out.join(', ') + ']';
+  }
+  function num(v, d){
+    d = (d===undefined) ? 2 : d;
+    if(!isFinite(v)) return '∞';
+    return v.toFixed(d);
+  }
+  function el(tag, cls, txt){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(txt !== undefined) e.textContent = txt;
+    return e;
+  }
+
+  /* ================================================================
+     Datos compartidos por los labs de forward y de grafo
+     ================================================================ */
+  var DX = [[1,2],[2,-1],[0,3],[-1,1]];
+  var DW = [0.5,-0.5];
+  var DB = 0.1;
+  var DY = [2.0,1.0,-1.0,0.5];
+  var M = DX.length;
+
+  var DU = [], DYH = [], DD = [], DS = [], DL = 0;
+  (function computeChain(){
+    var tot = 0;
+    for(var i=0;i<M;i++){
+      DU[i]  = DX[i][0]*DW[0] + DX[i][1]*DW[1];
+      DYH[i] = DU[i] + DB;
+      DD[i]  = DYH[i] - DY[i];
+      DS[i]  = DD[i]*DD[i]/2;
+      tot += DS[i];
+    }
+    DL = tot / M;
+  })();
+
+  // gradientes analíticos de la misma cadena
+  var G_S = 1/M;
+  var G_D = [], G_YH = [], G_U = [], G_B = 0, G_W = [0,0];
+  (function computeGrads(){
+    for(var i=0;i<M;i++){
+      G_D[i]  = DD[i] * G_S;
+      G_YH[i] = G_D[i];
+      G_U[i]  = G_YH[i];
+      G_B    += G_YH[i];
+      G_W[0] += DX[i][0] * G_U[i];
+      G_W[1] += DX[i][1] * G_U[i];
+    }
+  })();
+
+  /* ================================================================
+     LAB A — forward celda por celda
+     ================================================================ */
+  var fwMats = document.getElementById('fwMats');
+  var fwCalc = document.getElementById('fwCalc');
+  var fwTitle = document.getElementById('fwTitle');
+  var fwBody = document.getElementById('fwBody');
+  var fwCount = document.getElementById('fwCount');
+  var fwIdx = 0;
+  var fwCells = {X:[], W:[], B:null, R:[]};
+  var fwResCap = null;
+
+  (function buildFw(){
+    function matrix(cap, rows, cols, fill, store, dims){
+      var box = el('div','mat');
+      var c = el('div','cap', cap);
+      box.appendChild(c);
+      var g = el('div','grid');
+      g.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
+      for(var i=0;i<rows;i++){
+        var rowArr = [];
+        for(var j=0;j<cols;j++){
+          var cell = el('div','cell', fill(i,j));
+          g.appendChild(cell);
+          rowArr.push(cell);
+        }
+        if(store) store.push(rowArr);
+      }
+      box.appendChild(g);
+      if(dims) box.appendChild(el('span','dimtag', dims));
+      return {box:box, cap:c};
+    }
+
+    var mx = matrix('X', M, 2, function(i,j){ return DX[i][j].toFixed(1); }, fwCells.X, '(4, 2)');
+    fwMats.appendChild(mx.box);
+    fwMats.appendChild(el('div','op','×'));
+
+    var wStore = [];
+    var mw = matrix('w', 2, 1, function(i){ return DW[i].toFixed(1); }, wStore, '(2, 1)');
+    fwCells.W = [wStore[0][0], wStore[1][0]];
+    fwMats.appendChild(mw.box);
+    fwMats.appendChild(el('div','op','+'));
+
+    var bStore = [];
+    var mb = matrix('b', 1, 1, function(){ return DB.toFixed(1); }, bStore, '(1,)');
+    fwCells.B = bStore[0][0];
+    fwMats.appendChild(mb.box);
+    fwMats.appendChild(el('div','op','='));
+
+    var rStore = [];
+    var mr = matrix('resultado', M, 1, function(){ return '·'; }, rStore, '(4, 1)');
+    for(var i=0;i<M;i++){ fwCells.R.push(rStore[i][0]); fwCells.R[i].classList.add('empty'); }
+    fwResCap = mr.cap;
+    fwMats.appendChild(mr.box);
+  })();
+
+  var FW_STEPS = [
+    {
+      title:'Las piezas',
+      body:'X tiene forma (4, 2): cuatro ejemplos, dos características cada uno. w tiene forma (2, 1): un peso por característica. b es un solo número que se sumará al final.',
+      calc:'Pulsa «siguiente» para calcular la primera fila.'
+    },
+    {row:0}, {row:1}, {row:2}, {row:3},
+    {
+      title:'Sumar el sesgo (broadcasting)',
+      body:'b tiene forma (1,) pero el resultado tiene forma (4, 1). PyTorch expande b automáticamente y lo suma a las cuatro filas, sin que tengas que replicarlo.',
+      bias:true
+    },
+    {
+      title:'Listo: ŷ',
+      body:'Cuatro predicciones, una por ejemplo. Esto es exactamente lo que devuelve model(Xb), y lo que después entra en model.loss junto con los valores reales.',
+      done:true
+    }
+  ];
+
+  function fwRender(){
+    var i, j;
+    for(i=0;i<M;i++){
+      for(j=0;j<2;j++) fwCells.X[i][j].className = 'cell';
+    }
+    fwCells.W[0].className = 'cell';
+    fwCells.W[1].className = 'cell';
+    fwCells.B.className = 'cell';
+
+    var st = FW_STEPS[fwIdx];
+    var rowsDone = 0;
+    if(fwIdx >= 1 && fwIdx <= 4) rowsDone = fwIdx;
+    else if(fwIdx >= 5) rowsDone = 4;
+
+    for(i=0;i<M;i++){
+      if(i < rowsDone){
+        var withB = (fwIdx >= 5);
+        fwCells.R[i].textContent = (withB ? DYH[i] : DU[i]).toFixed(2);
+        fwCells.R[i].className = 'cell' + (withB ? ' ok' : ' hl2');
+      } else {
+        fwCells.R[i].textContent = '·';
+        fwCells.R[i].className = 'cell empty';
+      }
+    }
+
+    if(st.row !== undefined){
+      var r = st.row;
+      fwCells.X[r][0].className = 'cell hl';
+      fwCells.X[r][1].className = 'cell hl';
+      fwCells.W[0].className = 'cell hl';
+      fwCells.W[1].className = 'cell hl';
+      fwCells.R[r].className = 'cell hl';
+      fwTitle.textContent = 'Fila ' + (r+1) + ' de X';
+      fwBody.textContent = 'Producto punto entre la fila ' + (r+1) + ' de X y la columna w. Cada característica se multiplica por su peso y se suman los resultados. Esto produce una sola predicción cruda, todavía sin el sesgo.';
+      fwCalc.innerHTML = 'fila ' + (r+1) + ' · w = (' + DX[r][0].toFixed(1) + ')(' + DW[0].toFixed(1) + ')' +
+        ' + (' + DX[r][1].toFixed(1) + ')(' + DW[1].toFixed(1) + ')' +
+        ' = <b>' + DU[r].toFixed(2) + '</b>';
+      fwResCap.textContent = 'X·w';
+    } else if(st.bias){
+      fwCells.B.className = 'cell hl';
+      fwTitle.textContent = st.title;
+      fwBody.textContent = st.body;
+      fwCalc.innerHTML = vec(DU) + ' + ' + DB.toFixed(1) + ' &nbsp;→&nbsp; <b>' + vec(DYH) + '</b>';
+      fwResCap.textContent = 'ŷ = X·w + b';
+    } else if(st.done){
+      fwTitle.textContent = st.title;
+      fwBody.textContent = st.body;
+      fwCalc.innerHTML = 'ŷ = <b>' + vec(DYH) + '</b> &nbsp;&nbsp; forma (4, 1)';
+      fwResCap.textContent = 'ŷ = X·w + b';
+    } else {
+      fwTitle.textContent = st.title;
+      fwBody.textContent = st.body;
+      fwCalc.textContent = st.calc;
+      fwResCap.textContent = 'resultado';
+    }
+
+    fwCount.textContent = 'paso ' + fwIdx + ' / ' + (FW_STEPS.length-1);
+    document.getElementById('fwPrev').disabled = (fwIdx === 0);
+    document.getElementById('fwNext').disabled = (fwIdx === FW_STEPS.length-1);
+  }
+
+  document.getElementById('fwNext').addEventListener('click', function(){
+    if(fwIdx < FW_STEPS.length-1){ fwIdx++; fwRender(); }
+  });
+  document.getElementById('fwPrev').addEventListener('click', function(){
+    if(fwIdx > 0){ fwIdx--; fwRender(); }
+  });
+  document.getElementById('fwReset').addEventListener('click', function(){
+    fwIdx = 0; fwRender();
+  });
+  fwRender();
+
+  /* ================================================================
+     LAB B — grafo computacional (forward + backward)
+     ================================================================ */
+  var CG_NODES = [
+    {n:'X, w, b',     k:'in'},
+    {n:'u = X·w',     k:'u'},
+    {n:'ŷ = u + b',   k:'yh'},
+    {n:'d = ŷ − y',   k:'d'},
+    {n:'s = d²/2',    k:'s'},
+    {n:'L = mean(s)', k:'L'}
+  ];
+
+  var cgGraph = document.getElementById('cgGraph');
+  var cgNodeEls = [], cgArrowEls = [];
+
+  (function buildCg(){
+    for(var i=0;i<CG_NODES.length;i++){
+      if(i > 0){
+        var ar = el('div','garrow','→');
+        cgGraph.appendChild(ar);
+        cgArrowEls.push(ar);
+      }
+      var nd = el('div','gnode');
+      nd.appendChild(el('div','gn', CG_NODES[i].n));
+      var gv = el('div','gv','—');
+      nd.appendChild(gv);
+      cgGraph.appendChild(nd);
+      cgNodeEls.push({box:nd, val:gv});
+    }
+  })();
+
+  var CG_STEPS = [
+    { // 0
+      phase:'none', node:-1,
+      title:'El grafo todavía no existe',
+      body:'Se construye a medida que se ejecuta el forward. Cada operación sobre un tensor con requires_grad=True queda anotada, junto con lo necesario para derivarla después.',
+      calc:'Pulsa «siguiente» para construir el grafo.'
+    },
+    { phase:'f', node:0, title:'Entradas',
+      body:'X son los datos del minibatch (4 ejemplos, 2 características). w y b son los parámetros aprendibles: van envueltos en nn.Parameter, así que PyTorch los vigila. y son los valores reales.',
+      calc:'X = 4×2 &nbsp;·&nbsp; w = ' + vec(DW,1) + ' &nbsp;·&nbsp; b = ' + DB.toFixed(1) + ' &nbsp;·&nbsp; y = ' + vec(DY,1),
+      val:'w=' + vec(DW,1) + ' b=' + DB.toFixed(1) },
+    { phase:'f', node:1, title:'Multiplicación matricial',
+      body:'torch.matmul(X, self.w). PyTorch anota en el grafo: "aquí hubo un matmul, y para derivarlo después necesitaré X".',
+      calc:'u = X·w = <b>' + vec(DU) + '</b>', val:vec(DU) },
+    { phase:'f', node:2, title:'Suma del sesgo',
+      body:'Se suma b a las cuatro filas por broadcasting. El grafo anota que b participó en las cuatro salidas, dato que será clave en el backward.',
+      calc:'ŷ = u + b = <b>' + vec(DYH) + '</b>', val:vec(DYH) },
+    { phase:'f', node:3, title:'Error de cada ejemplo',
+      body:'Primera operación dentro de model.loss: la diferencia entre lo predicho y lo real. Todavía conserva el signo.',
+      calc:'d = ŷ − y = <b>' + vec(DD) + '</b>', val:vec(DD) },
+    { phase:'f', node:4, title:'Cuadrado y escala',
+      body:'Elevar al cuadrado elimina el signo y penaliza más los errores grandes. El ÷2 es la conveniencia que simplificará la derivada.',
+      calc:'s = d²/2 = <b>' + vec(DS) + '</b>', val:vec(DS) },
+    { phase:'f', node:5, title:'La pérdida: un escalar',
+      body:'l.mean() promedia los cuatro valores. El resultado es un único número, requisito para poder llamar backward(). Aquí el grafo queda completo.',
+      calc:'L = mean(s) = <b>' + DL.toFixed(3) + '</b>', val:DL.toFixed(3) },
+    { phase:'b', node:5, title:'Arranca el backward',
+      body:'loss.backward() empieza con la semilla ∂L/∂L = 1: la derivada de la pérdida respecto a sí misma. A partir de aquí todo es multiplicar por derivadas locales.',
+      calc:'∂L/∂L = <b>1</b>', val:'∇ = 1' },
+    { phase:'b', node:4, title:'A través del promedio',
+      body:'mean() suma los m elementos y divide entre m. Al derivar, cada elemento recibe exactamente 1/m del gradiente que llegó.',
+      calc:'∂L/∂s<sub>i</sub> = 1/' + M + ' = <b>' + G_S.toFixed(2) + '</b>', val:'∇ = ' + G_S.toFixed(2) },
+    { phase:'b', node:3, title:'A través del cuadrado',
+      body:'Como s = d²/2, la derivada local es ∂s/∂d = d. El gradiente que llegaba (0.25) se multiplica por el valor de d de cada ejemplo. Aquí se ve por qué el ÷2 era cómodo: canceló el 2 del exponente.',
+      calc:'∂L/∂d = d · ' + G_S.toFixed(2) + ' = <b>' + vec(G_D) + '</b>', val:'∇ = ' + vec(G_D) },
+    { phase:'b', node:2, title:'A través de la resta — y nace ∇b',
+      body:'d = ŷ − y, así que ∂d/∂ŷ = 1: el gradiente pasa sin alterarse. Y aquí aparece el gradiente del sesgo: como b se sumó a las cuatro filas por broadcasting, su gradiente es la SUMA de los cuatro.',
+      calc:'∂L/∂ŷ = <b>' + vec(G_YH) + '</b> &nbsp;&nbsp;→&nbsp;&nbsp; ∇b = suma = <b>' + G_B.toFixed(2) + '</b>',
+      val:'∇ = ' + vec(G_YH) },
+    { phase:'b', node:1, title:'A través de la suma',
+      body:'La suma reparte el gradiente sin modificarlo, así que ∂L/∂u es idéntico a ∂L/∂ŷ. Las sumas son transparentes para el backward.',
+      calc:'∂L/∂u = <b>' + vec(G_U) + '</b>', val:'∇ = ' + vec(G_U) },
+    { phase:'b', node:0, title:'Fin: los gradientes de w y b',
+      body:'Para deshacer el matmul se usa X transpuesta. Estos dos valores quedan guardados en w.grad y b.grad. Nota que w y b TODAVÍA no han cambiado: eso lo hará optim.step() después.',
+      calc:'∇w = Xᵀ·∂L/∂u = <b>' + vec(G_W) + '</b> &nbsp;&nbsp;·&nbsp;&nbsp; ∇b = <b>' + G_B.toFixed(2) + '</b>' +
+           ' &nbsp;&nbsp;→&nbsp;&nbsp; step(): w ← w − 0.03·∇w = ' + vec([DW[0]-0.03*G_W[0], DW[1]-0.03*G_W[1]],3),
+      val:'∇w=' + vec(G_W) }
+  ];
+
+  var cgIdx = 0, cgAutoTimer = null;
+  var cgCalc = document.getElementById('cgCalc');
+  var cgTitle = document.getElementById('cgTitle');
+  var cgBody = document.getElementById('cgBody');
+  var cgCount = document.getElementById('cgCount');
+  var cgTabF = document.getElementById('cgTabF');
+  var cgTabB = document.getElementById('cgTabB');
+
+  function cgRender(){
+    var st = CG_STEPS[cgIdx];
+    var i;
+
+    for(i=0;i<cgNodeEls.length;i++) cgNodeEls[i].box.className = 'gnode';
+    for(i=0;i<cgArrowEls.length;i++){
+      cgArrowEls[i].className = 'garrow';
+      cgArrowEls[i].textContent = '→';
+    }
+
+    if(st.phase === 'f'){
+      for(i=0;i<=st.node;i++){
+        cgNodeEls[i].box.classList.add(i === st.node ? 'on' : 'done');
+      }
+      for(i=0;i<st.node;i++) cgArrowEls[i].className = 'garrow';
+    } else if(st.phase === 'b'){
+      for(i=0;i<cgNodeEls.length;i++) cgNodeEls[i].box.classList.add('done');
+      for(i=st.node;i<cgNodeEls.length;i++){
+        cgNodeEls[i].box.className = 'gnode ' + (i === st.node ? 'bon' : 'bdone');
+      }
+      for(i=st.node;i<cgArrowEls.length;i++){
+        cgArrowEls[i].className = 'garrow rev';
+        cgArrowEls[i].textContent = '→';
+      }
+    }
+
+    // valores mostrados: se conservan los del forward hasta que el backward los sustituye
+    for(i=0;i<cgNodeEls.length;i++){
+      var shown = '—';
+      for(var k=1;k<=cgIdx;k++){
+        if(CG_STEPS[k].node === i && CG_STEPS[k].val) shown = CG_STEPS[k].val;
+      }
+      cgNodeEls[i].val.textContent = shown;
+    }
+
+    cgTitle.textContent = st.title;
+    cgBody.textContent = st.body;
+    cgCalc.innerHTML = st.calc;
+    cgCount.textContent = 'paso ' + cgIdx + ' / ' + (CG_STEPS.length-1);
+
+    cgTabF.className = (st.phase === 'f') ? 'sel' : '';
+    cgTabB.className = (st.phase === 'b') ? 'sel green' : '';
+
+    document.getElementById('cgPrev').disabled = (cgIdx === 0);
+    document.getElementById('cgNext').disabled = (cgIdx === CG_STEPS.length-1);
+  }
+
+  function cgStopAuto(){
+    if(cgAutoTimer){ clearInterval(cgAutoTimer); cgAutoTimer = null; }
+    document.getElementById('cgAuto').textContent = 'Reproducir todo';
+  }
+  document.getElementById('cgNext').addEventListener('click', function(){
+    cgStopAuto();
+    if(cgIdx < CG_STEPS.length-1){ cgIdx++; cgRender(); }
+  });
+  document.getElementById('cgPrev').addEventListener('click', function(){
+    cgStopAuto();
+    if(cgIdx > 0){ cgIdx--; cgRender(); }
+  });
+  document.getElementById('cgReset').addEventListener('click', function(){
+    cgStopAuto(); cgIdx = 0; cgRender();
+  });
+  document.getElementById('cgAuto').addEventListener('click', function(){
+    if(cgAutoTimer){ cgStopAuto(); return; }
+    if(cgIdx >= CG_STEPS.length-1) cgIdx = 0;
+    this.textContent = 'Pausar';
+    cgAutoTimer = setInterval(function(){
+      if(cgIdx >= CG_STEPS.length-1){ cgStopAuto(); return; }
+      cgIdx++; cgRender();
+    }, 1500);
+    cgRender();
+  });
+  cgTabF.addEventListener('click', function(){ cgStopAuto(); cgIdx = 1; cgRender(); });
+  cgTabB.addEventListener('click', function(){ cgStopAuto(); cgIdx = 7; cgRender(); });
+  cgRender();
+
+  /* ================================================================
+     LAB C — zero_grad: con vs sin
+     ================================================================ */
+  var ZG = [0.40, 0.35, 0.30, 0.28, 0.25, 0.22];
+  var ZLR = 0.1, ZW0 = 1.0;
+  var zgGood = document.getElementById('zgGood');
+  var zgBad = document.getElementById('zgBad');
+  var zgIdx = 0, zgTimer = null;
+  var zgGoodRows = [], zgBadRows = [];
+
+  (function buildZg(){
+    for(var i=0;i<ZG.length;i++){
+      var rg = el('div','crow');
+      rg.appendChild(el('span','ci','mb ' + (i+1)));
+      var g1 = el('span','cg','.grad —'); rg.appendChild(g1);
+      var w1 = el('span','', 'w —');     rg.appendChild(w1);
+      zgGood.appendChild(rg);
+      zgGoodRows.push({row:rg, g:g1, w:w1});
+
+      var rb = el('div','crow');
+      rb.appendChild(el('span','ci','mb ' + (i+1)));
+      var g2 = el('span','cg','.grad —'); rb.appendChild(g2);
+      var w2 = el('span','', 'w —');      rb.appendChild(w2);
+      zgBad.appendChild(rb);
+      zgBadRows.push({row:rb, g:g2, w:w2});
+    }
+  })();
+
+  function zgRender(){
+    var wg = ZW0, wb = ZW0, acc = 0;
+    for(var i=0;i<ZG.length;i++){
+      var on = i < zgIdx;
+      // con zero_grad: el gradiente es solo el de este minibatch
+      var gGood = ZG[i];
+      // sin zero_grad: se acumula
+      acc += ZG[i];
+      var gBad = acc;
+      if(on){ wg -= ZLR*gGood; wb -= ZLR*gBad; }
+
+      zgGoodRows[i].row.className = 'crow' + (on ? ' on' : '');
+      zgBadRows[i].row.className  = 'crow' + (on ? ' on' : '');
+      zgGoodRows[i].g.textContent = '.grad ' + gGood.toFixed(2);
+      zgBadRows[i].g.textContent  = '.grad ' + gBad.toFixed(2);
+      zgGoodRows[i].w.textContent = on ? ('w ' + wg.toFixed(3)) : 'w —';
+      zgBadRows[i].w.textContent  = on ? ('w ' + wb.toFixed(3)) : 'w —';
+    }
+    document.getElementById('zgGoodW').textContent = wg.toFixed(3);
+    document.getElementById('zgBadW').textContent  = wb.toFixed(3);
+    document.getElementById('zgCount').textContent = 'minibatch ' + zgIdx + ' / ' + ZG.length;
+    document.getElementById('zgNext').disabled = (zgIdx >= ZG.length);
+
+    var t = document.getElementById('zgTitle');
+    var b = document.getElementById('zgBody');
+    if(zgIdx === 0){
+      t.textContent = 'Estado inicial';
+      b.textContent = 'Ambos modelos arrancan con w = 1.000 y el gradiente en cero. Pulsa «siguiente minibatch».';
+    } else if(zgIdx === 1){
+      t.textContent = 'Minibatch 1: el gradiente de este lote es ' + ZG[0].toFixed(2);
+      b.textContent = 'Todavía coinciden: en el primer minibatch no hay nada acumulado que limpiar, así que ambas columnas dan el mismo paso. La diferencia empieza en el segundo.';
+    } else if(zgIdx < ZG.length){
+      t.textContent = 'Minibatch ' + zgIdx + ': el gradiente de este lote es ' + ZG[zgIdx-1].toFixed(2);
+      b.textContent = 'A la izquierda .grad vale exactamente eso, porque se limpió antes. A la derecha vale ' +
+        gradAcc(zgIdx).toFixed(2) + ', la suma de todos los minibatches anteriores. El paso resultante es ' +
+        (gradAcc(zgIdx)/ZG[zgIdx-1]).toFixed(1) + ' veces más grande de lo que debería.';
+    } else {
+      t.textContent = 'Resultado tras 6 minibatches';
+      b.textContent = 'Mismos gradientes de entrada, dos destinos distintos: w = ' + wg.toFixed(3) +
+        ' con zero_grad, frente a w = ' + wb.toFixed(3) + ' sin él. El segundo se movió ' +
+        (Math.abs(ZW0-wb)/Math.abs(ZW0-wg)).toFixed(1) + ' veces más de la cuenta, y la brecha crece con cada iteración adicional.';
+    }
+  }
+  function gradAcc(n){
+    var s = 0;
+    for(var i=0;i<n;i++) s += ZG[i];
+    return s;
+  }
+  function zgStop(){ if(zgTimer){ clearInterval(zgTimer); zgTimer = null; } }
+  document.getElementById('zgNext').addEventListener('click', function(){
+    zgStop();
+    if(zgIdx < ZG.length){ zgIdx++; zgRender(); }
+  });
+  document.getElementById('zgAll').addEventListener('click', function(){
+    zgStop(); zgIdx = 0; zgRender();
+    zgTimer = setInterval(function(){
+      if(zgIdx >= ZG.length){ zgStop(); return; }
+      zgIdx++; zgRender();
+    }, 650);
+  });
+  document.getElementById('zgReset').addEventListener('click', function(){
+    zgStop(); zgIdx = 0; zgRender();
+  });
+  zgRender();
+
+  /* ================================================================
+     LAB D — minibatches y épocas
+     ================================================================ */
+  var BN = 1000, BTRAIN = 800, BBS = 32;
+  var BNB = Math.ceil(BTRAIN / BBS);
+  var BEPOCHS = 10;
+  var bGrid = document.getElementById('bGrid');
+  var bCells = [], bValSet = {}, bTrainList = [];
+  var bOrder = [], bEpochN = 0, bBatchN = 0, bUpd = 0, bTimer = null, bPrev = [];
+
+  (function buildB(){
+    var idx = [];
+    for(var i=0;i<BN;i++) idx.push(i);
+    shuffleArr(idx);
+    for(i=0;i<BN;i++){
+      if(i >= BTRAIN) bValSet[idx[i]] = true;
+      else bTrainList.push(idx[i]);
+    }
+    var frag = document.createDocumentFragment();
+    for(i=0;i<BN;i++){
+      var c = el('div','bcell' + (bValSet[i] ? ' v' : ''));
+      frag.appendChild(c);
+      bCells.push(c);
+    }
+    bGrid.appendChild(frag);
+  })();
+
+  function bClearEpoch(){
+    for(var i=0;i<BN;i++){
+      if(!bValSet[i]) bCells[i].className = 'bcell';
+    }
+    bPrev = [];
+  }
+  function bUpdateCounters(){
+    document.getElementById('bEpoch').textContent = bEpochN + ' / ' + BEPOCHS;
+    document.getElementById('bBatch').textContent = bBatchN + ' / ' + BNB;
+    document.getElementById('bUpd').textContent = bUpd;
+  }
+  function bStepOnce(){
+    if(bEpochN >= BEPOCHS && bBatchN >= BNB) return false;
+    if(bEpochN === 0 || bBatchN >= BNB){
+      if(bEpochN >= BEPOCHS) return false;
+      bOrder = shuffleArr(bTrainList.slice());
+      bEpochN++; bBatchN = 0; bClearEpoch();
+    }
+    var i;
+    for(i=0;i<bPrev.length;i++) bCells[bPrev[i]].className = 'bcell d';
+    var start = bBatchN * BBS;
+    var batch = bOrder.slice(start, start + BBS);
+    for(i=0;i<batch.length;i++) bCells[batch[i]].className = 'bcell a';
+    bPrev = batch;
+    bBatchN++; bUpd++;
+    bUpdateCounters();
+
+    document.getElementById('bTitle').textContent =
+      'Época ' + bEpochN + ', minibatch ' + bBatchN + ' de ' + BNB;
+    document.getElementById('bBody').textContent =
+      'Estos ' + batch.length + ' ejemplos acaban de pasar por forward, loss, backward y step. ' +
+      'w y b ya cambiaron: van ' + bUpd + ' actualizaciones en total. Los grises claros de validación siguen sin tocarse.';
+    return true;
+  }
+  function bStop(){
+    if(bTimer){ clearInterval(bTimer); bTimer = null; }
+  }
+  document.getElementById('bStep').addEventListener('click', function(){ bStop(); bStepOnce(); });
+  document.getElementById('bEpochBtn').addEventListener('click', function(){
+    bStop();
+    var target = (bBatchN >= BNB || bEpochN === 0) ? bEpochN + 1 : bEpochN;
+    bTimer = setInterval(function(){
+      var ok = bStepOnce();
+      if(!ok || (bEpochN === target && bBatchN >= BNB)) bStop();
+    }, 55);
+  });
+  document.getElementById('bAll').addEventListener('click', function(){
+    bStop();
+    bTimer = setInterval(function(){
+      if(!bStepOnce()) bStop();
+    }, 18);
+  });
+  document.getElementById('bReset').addEventListener('click', function(){
+    bStop();
+    bEpochN = 0; bBatchN = 0; bUpd = 0;
+    bClearEpoch(); bUpdateCounters();
+    document.getElementById('bTitle').textContent = 'Sin empezar';
+    document.getElementById('bBody').textContent =
+      'Pulsa «un minibatch» para avanzar de uno en uno, o «correr época» para ver una época completa.';
+  });
+  bUpdateCounters();
+
+  /* ================================================================
+     LAB E — entrenador completo
+     ================================================================ */
+  var TW = [2.0, -3.4], TB = 4.2, TN = 1000, TNTRAIN = 800, TEPOCHS = 10;
+  var tX = null, tY = null, tTrain = [], tVal = [];
+  var mw = [0,0], mb = 0;
+  var histT = [], histV = [];
+  var tEpoch = 0, tUpd = 0, tLR = 0.03, tBS = 32, tTimer = null, tDead = false;
+
+  function randn(){
+    var u = 0, v = 0;
+    while(u === 0) u = Math.random();
+    while(v === 0) v = Math.random();
+    return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+  }
+
+  function tGenData(){
+    tX = new Float64Array(TN*2);
+    tY = new Float64Array(TN);
+    for(var i=0;i<TN;i++){
+      var a = randn(), c = randn();
+      tX[2*i] = a; tX[2*i+1] = c;
+      tY[i] = a*TW[0] + c*TW[1] + TB + randn()*0.01;
+    }
+    var idx = [];
+    for(i=0;i<TN;i++) idx.push(i);
+    shuffleArr(idx);
+    tTrain = idx.slice(0, TNTRAIN);
+    tVal = idx.slice(TNTRAIN);
+  }
+
+  function tResetModel(){
+    mw = [randn()*0.01, randn()*0.01];
+    mb = 0;
+    histT = []; histV = [];
+    tEpoch = 0; tUpd = 0; tDead = false;
+  }
+
+  function tLossOn(list){
+    var tot = 0;
+    for(var k=0;k<list.length;k++){
+      var i = list[k];
+      var yh = tX[2*i]*mw[0] + tX[2*i+1]*mw[1] + mb;
+      var dd = yh - tY[i];
+      tot += dd*dd/2;
+    }
+    return tot / list.length;
+  }
+
+  function tTrainEpoch(){
+    if(tDead || tEpoch >= TEPOCHS) return false;
+    var order = shuffleArr(tTrain.slice());
+    var totalTrain = 0, countTrain = 0;
+    for(var s=0; s<order.length; s+=tBS){
+      var end = Math.min(s+tBS, order.length);
+      var m = end - s;
+      var gw0 = 0, gw1 = 0, gb = 0, lo = 0;
+      for(var k=s;k<end;k++){
+        var i = order[k];
+        var x0 = tX[2*i], x1 = tX[2*i+1];
+        var yh = x0*mw[0] + x1*mw[1] + mb;
+        var dd = yh - tY[i];
+        lo += dd*dd/2;
+        gw0 += dd*x0; gw1 += dd*x1; gb += dd;
+      }
+      lo /= m; gw0 /= m; gw1 /= m; gb /= m;
+      mw[0] -= tLR*gw0;
+      mw[1] -= tLR*gw1;
+      mb    -= tLR*gb;
+      tUpd++;
+      totalTrain += lo*m; countTrain += m;
+    }
+    var tl = totalTrain/countTrain;
+    var vl = tLossOn(tVal);
+    if(!isFinite(tl) || !isFinite(vl) || tl > 1e12){ tDead = true; }
+    histT.push(tl); histV.push(vl);
+    tEpoch++;
+    return true;
+  }
+
+  var trCv = document.getElementById('trCanvas');
+  var trCtx = trCv.getContext('2d');
+  var TW_ = trCv.width, TH_ = trCv.height;
+  var TPAD = {l:56, r:14, t:14, b:32};
+
+  function drawTrainer(){
+    var cBorder = css('--border') || '#ccc';
+    var cText3  = css('--text-3') || '#888';
+    var cAcc    = css('--accent') || '#b5502a';
+    var cOk     = css('--ok') || '#2f6f4f';
+
+    trCtx.clearRect(0,0,TW_,TH_);
+
+    var all = [];
+    var i;
+    for(i=0;i<histT.length;i++){
+      if(isFinite(histT[i]) && histT[i] > 0) all.push(histT[i]);
+      if(isFinite(histV[i]) && histV[i] > 0) all.push(histV[i]);
+    }
+    var loExp, hiExp;
+    if(all.length === 0){ loExp = -5; hiExp = 1; }
+    else {
+      var mn = Math.min.apply(null, all), mx = Math.max.apply(null, all);
+      loExp = Math.floor(Math.log(mn)/Math.LN10) - 0.2;
+      hiExp = Math.ceil(Math.log(mx)/Math.LN10) + 0.2;
+      if(hiExp - loExp < 1.5) hiExp = loExp + 1.5;
+    }
+
+    function px(e){ return TPAD.l + (e/(TEPOCHS-1)) * (TW_-TPAD.l-TPAD.r); }
+    function py(v){
+      var lg = Math.log(Math.max(v, 1e-14))/Math.LN10;
+      var t = (lg - loExp)/(hiExp - loExp);
+      t = Math.max(0, Math.min(1, t));
+      return TH_ - TPAD.b - t*(TH_-TPAD.t-TPAD.b);
+    }
+
+    // rejilla por décadas
+    trCtx.font = '10px ui-monospace, monospace';
+    trCtx.textAlign = 'right';
+    for(var e = Math.ceil(loExp); e <= Math.floor(hiExp); e++){
+      var yy = py(Math.pow(10, e));
+      trCtx.strokeStyle = cBorder; trCtx.lineWidth = 1;
+      trCtx.globalAlpha = .5;
+      trCtx.beginPath(); trCtx.moveTo(TPAD.l, yy); trCtx.lineTo(TW_-TPAD.r, yy); trCtx.stroke();
+      trCtx.globalAlpha = 1;
+      trCtx.fillStyle = cText3;
+      trCtx.fillText('1e' + e, TPAD.l - 7, yy + 3);
+    }
+
+    // ejes
+    trCtx.strokeStyle = cBorder; trCtx.lineWidth = 1;
+    trCtx.beginPath();
+    trCtx.moveTo(TPAD.l, TPAD.t); trCtx.lineTo(TPAD.l, TH_-TPAD.b); trCtx.lineTo(TW_-TPAD.r, TH_-TPAD.b);
+    trCtx.stroke();
+
+    // etiquetas de época
+    trCtx.fillStyle = cText3;
+    trCtx.textAlign = 'center';
+    trCtx.font = '10px ui-sans-serif, system-ui, sans-serif';
+    for(i=0;i<TEPOCHS;i++){
+      trCtx.fillText(String(i+1), px(i), TH_ - TPAD.b + 15);
+    }
+    trCtx.fillText('época', (TPAD.l + TW_ - TPAD.r)/2, TH_ - 4);
+    trCtx.save();
+    trCtx.translate(14, (TPAD.t + TH_ - TPAD.b)/2);
+    trCtx.rotate(-Math.PI/2);
+    trCtx.fillText('pérdida (log)', 0, 0);
+    trCtx.restore();
+
+    if(histT.length === 0){
+      trCtx.fillStyle = cText3;
+      trCtx.font = '12px ui-sans-serif, system-ui, sans-serif';
+      trCtx.fillText('Pulsa «Entrenar 10 épocas»', TW_/2, TH_/2);
+      return;
+    }
+
+    function series(hist, color){
+      trCtx.strokeStyle = color; trCtx.lineWidth = 2;
+      trCtx.beginPath();
+      for(var j=0;j<hist.length;j++){
+        var x = px(j), y = py(hist[j]);
+        if(j === 0) trCtx.moveTo(x,y); else trCtx.lineTo(x,y);
+      }
+      trCtx.stroke();
+      for(j=0;j<hist.length;j++){
+        trCtx.beginPath();
+        trCtx.arc(px(j), py(hist[j]), 3, 0, Math.PI*2);
+        trCtx.fillStyle = color; trCtx.fill();
+      }
+    }
+    series(histT, cAcc);
+    series(histV, cOk);
+  }
+
+  function tUpdateUI(){
+    var w1 = mw[0], w2 = mw[1], bb = mb;
+    document.getElementById('trW1').textContent = num(w1,3);
+    document.getElementById('trW2').textContent = num(w2,3);
+    document.getElementById('trB').textContent  = num(bb,3);
+
+    function bar(id, est, tgt){
+      var e = document.getElementById(id);
+      var err = Math.abs(est - tgt);
+      var pct = Math.max(0, Math.min(1, 1 - err/Math.abs(tgt))) * 100;
+      if(!isFinite(pct)) pct = 0;
+      e.style.width = pct.toFixed(1) + '%';
+      e.className = (err < 0.05) ? 'near' : '';
+    }
+    bar('trBarW1', w1, TW[0]);
+    bar('trBarW2', w2, TW[1]);
+    bar('trBarB',  bb, TB);
+
+    document.getElementById('trEpoch').textContent = tEpoch + ' / ' + TEPOCHS;
+    document.getElementById('trUpd').textContent = tUpd;
+    document.getElementById('trTl').textContent = histT.length ? histT[histT.length-1].toExponential(2) : '—';
+    document.getElementById('trVl').textContent = histV.length ? histV[histV.length-1].toExponential(2) : '—';
+
+    var st = document.getElementById('trStatus');
+    if(tDead){
+      st.className = 'status bad';
+      st.textContent = 'El entrenamiento divergió: la tasa de aprendizaje es demasiado alta para este batch size.';
+    } else if(tEpoch === 0){
+      st.className = 'status ok';
+      st.textContent = 'Listo para entrenar.';
+    } else if(tEpoch >= TEPOCHS){
+      var e1 = Math.abs(mw[0]-TW[0]), e2 = Math.abs(mw[1]-TW[1]), e3 = Math.abs(mb-TB);
+      var worst = Math.max(e1, e2, e3);
+      st.className = worst < 0.05 ? 'status ok' : 'status bad';
+      st.textContent = worst < 0.05
+        ? 'Convergió: los tres parámetros quedaron a menos de 0.05 de sus valores verdaderos.'
+        : 'Terminó, pero sin converger del todo: el peor error es ' + worst.toFixed(3) + '. Prueba subir la lr o bajar el batch size.';
+    } else {
+      st.className = 'status ok';
+      st.textContent = 'Entrenando… ' + tUpd + ' actualizaciones hasta ahora.';
+    }
+  }
+
+  function tStop(){
+    if(tTimer){ clearInterval(tTimer); tTimer = null; }
+    document.getElementById('trRun').textContent = 'Entrenar 10 épocas';
+  }
+  function tFullReset(){
+    tStop(); tResetModel(); drawTrainer(); tUpdateUI();
+  }
+
+  document.getElementById('trRun').addEventListener('click', function(){
+    if(tTimer){ tStop(); return; }
+    if(tEpoch >= TEPOCHS || tDead) tResetModel();
+    this.textContent = 'Pausar';
+    tTimer = setInterval(function(){
+      if(!tTrainEpoch()){ tStop(); tUpdateUI(); return; }
+      drawTrainer(); tUpdateUI();
+      if(tEpoch >= TEPOCHS || tDead) tStop();
+    }, 190);
+  });
+  document.getElementById('trEpochBtn').addEventListener('click', function(){
+    tStop();
+    if(tEpoch >= TEPOCHS || tDead) tResetModel();
+    tTrainEpoch(); drawTrainer(); tUpdateUI();
+  });
+  document.getElementById('trReset').addEventListener('click', tFullReset);
+
+  var trLr = document.getElementById('trLr');
+  trLr.addEventListener('input', function(){
+    tLR = parseFloat(this.value);
+    document.getElementById('trLrVal').textContent = tLR.toFixed(3);
+    tFullReset();
+  });
+
+  var trBsBtns = document.getElementById('trBs').querySelectorAll('button');
+  for(var q=0;q<trBsBtns.length;q++){
+    (function(btn){
+      btn.addEventListener('click', function(){
+        for(var z=0;z<trBsBtns.length;z++) trBsBtns[z].className = '';
+        btn.className = 'sel';
+        tBS = parseInt(btn.getAttribute('data-v'), 10);
+        tFullReset();
+      });
+    })(trBsBtns[q]);
+  }
+
+  tGenData();
+  tResetModel();
+  drawTrainer();
+  tUpdateUI();
+
+  /* ================================================================
+     Redibujado global al cambiar de tema
+     ================================================================ */
+  function redrawAll(){
+    drawGD();
+    drawTrainer();
+  }
+
+  if(window.matchMedia){
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if(mq.addEventListener) mq.addEventListener('change', redrawAll);
+    else if(mq.addListener) mq.addListener(redrawAll);
+  }
+})();
+</script>
+
+</body>
+</html>
