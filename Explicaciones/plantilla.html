@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plantilla de artefactos</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios del artefacto: solo lo que no exista en estilos.css.
+     Usa siempre los tokens var(--...) para que funcione el tema oscuro. */
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<!-- El índice se genera solo a partir de los h2[id] y h3[id] de <main>.
+     Usa data-toc="texto corto" en un título para acortarlo en el índice,
+     y class="lab" en un h3 para marcarlo con ◆ como laboratorio. -->
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Plantilla</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto XX · Plantilla</div>
+  <h1>Título del artefacto</h1>
+  <p class="lead">Una o dos frases: qué vas a entender al terminar y por qué importa para el examen.</p>
+  <div class="meta">Fuente: <code>slides/Archivo.Rmd</code> · Temario del Examen 1, sección N · Lectura de unos 40 minutos</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+<p>La idea de la clase en una frase, y dónde encaja en la serie.</p>
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Lo que ya sabes de la clase anterior.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">La pregunta central que responde.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Qué problema deja abierto para la siguiente.</div></div>
+</div>
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>Una sola idea que, si la entiendes, ordena todo lo demás.</p>
+</div>
+
+<!-- ============ 2. CONTENIDO DE EJEMPLO ============ -->
+<h2 id="ejemplo"><span class="num">Sección 2</span>Una fórmula traducida</h2>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Qué significa cada letra de la pérdida cuadrática?</div>
+
+<p>Primero un caso con números. Si la entrada es x = 2, el valor real es y = 3 y el modelo predice ŷ = 2.5, el error es −0.5 y la pérdida de ese ejemplo es (−0.5)² = 0.25.</p>
+
+<!-- BLOQUE "FÓRMULA TRADUCIDA": ejemplo → fórmula → se lee → símbolos → qué pasa si… -->
+<div class="formula">
+  <div class="f-head">Pérdida cuadrática de una observación</div>
+  <div class="f-ejemplo">x = 2,  y = 3,  φ₀ = 0.5,  φ₁ = 1  →  ŷ = 0.5 + 1·2 = 2.5  →  ℓ = (2.5 − 3)² = 0.25</div>
+  <div class="eq">
+    <span class="sym" data-s="ell"></span><span class="sub">i</span> = ( <span class="sym r-param" data-s="phi">φ</span><span class="sub r-param">0</span> + <span class="sym r-param" data-s="phi">φ</span><span class="sub r-param">1</span> <span class="sym" data-s="xi">x</span><span class="sub r-dato">i</span> − <span class="sym" data-s="y"></span><span class="sub r-dato">i</span> )<span class="sup">2</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida del ejemplo i es la diferencia entre lo que predice la recta y el valor real, elevada al cuadrado.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">ℓ<sub>i</sub></dt><dd>La pérdida de la observación i: un solo número, nunca negativo.</dd>
+      <dt class="r-param">φ₀, φ₁</dt><dd>Los parámetros: ordenada al origen y pendiente. Es lo que el entrenamiento mueve.</dd>
+      <dt class="r-dato">xᵢ, yᵢ</dt><dd>Los datos de la observación i. Están fijos; nadie los cambia.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el error se duplica: la pérdida se multiplica por 4, porque está al cuadrado.</li>
+      <li>…el modelo se pasa o se queda corto por lo mismo: la pérdida es igual, porque el cuadrado borra el signo.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion">Derivación paso a paso</h3>
+<p>Cada renglón lleva a la derecha el porqué. Con <code>data-revelar</code>, los pasos aparecen de uno en uno.</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">ℓ = (φ₀ + φ₁x − y)²</div><div class="d-por">Partimos de la pérdida de un ejemplo.</div></li>
+  <li><div class="d-ex">∂ℓ/∂φ₁ = 2(φ₀ + φ₁x − y) · ∂(φ₀ + φ₁x − y)/∂φ₁</div><div class="d-por"><b>Regla de la cadena:</b> la derivada de algo al cuadrado es 2·(ese algo)·(la derivada de ese algo).</div></li>
+  <li><div class="d-ex">∂ℓ/∂φ₁ = 2(φ₀ + φ₁x − y) · x</div><div class="d-por">Al derivar respecto a φ₁, φ₀ y y son constantes y su derivada es 0; φ₁x deriva en x.</div></li>
+  <li><div class="d-ex">con los números: 2 · (−0.5) · 2 = −2</div><div class="d-por"><b>Verificación:</b> el gradiente es negativo, así que conviene SUBIR φ₁ para bajar la pérdida.</div></li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>Una confusión típica y cómo evitarla.</p>
+</div>
+
+<!-- ============ 3. LABORATORIOS DE EJEMPLO ============ -->
+<h2 id="labs"><span class="num">Sección 3</span>Laboratorios</h2>
+
+<h3 id="lab-grafica" class="lab" data-toc="Lab: gráfica con control">Laboratorio: gráfica con un control</h3>
+<p>Ejemplo de <code>DL.grafica</code> + <code>DL.control</code> + <code>DL.readout</code>: descenso de gradiente sobre L(w) = (w − 2)².</p>
+<div class="widget" id="labGD">
+  <div class="widget-head"><div class="wt">Descenso de gradiente en una parábola</div><div class="ws">Mueve la tasa de aprendizaje y da pasos.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="gdCanvas"></canvas>
+      <div><div id="gdCtrl"></div><div id="gdRead"></div><div class="status ok" id="gdStatus">Listo.</div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="gdPaso">Un paso</button>
+    <button class="btn" id="gdCorrer">Correr</button>
+    <button class="btn" id="gdReset">Reiniciar</button>
+    <span class="pill">mínimo en w = 2</span>
+  </div>
+</div>
+
+<h3 id="lab-superficie" class="lab" data-toc="Lab: superficie de pérdida">Laboratorio: superficie de pérdida</h3>
+<p>Ejemplo de <code>mapaCalor</code> + <code>contornos</code> + <code>alPuntero</code>: haz clic en el mapa para elegir (φ₀, φ₁).</p>
+<div class="widget">
+  <div class="widget-head"><div class="wt">Pérdida de la recta para cada par (φ₀, φ₁)</div><div class="ws">Más oscuro = pérdida más alta. Las líneas son curvas de nivel.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="supCanvas"></canvas>
+      <div id="supRead"></div>
+    </div>
+  </div>
+</div>
+
+<h3 id="lab-pasos" class="lab" data-toc="Lab: paso a paso declarativo">Laboratorio: paso a paso sin programar</h3>
+<p>Con <code>data-pasos</code> y elementos <code>.paso</code>, los botones se crean solos.</p>
+<div class="widget" data-pasos>
+  <div class="widget-head"><div class="wt">Tres pasos</div></div>
+  <div class="widget-body">
+    <div class="paso"><div class="stepinfo"><div class="sh">Estado inicial</div><div class="sb">Contenido del paso 0.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">Paso 1</div><div class="sb">Contenido del paso 1.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">Paso 2</div><div class="sb">Contenido del paso 2.</div></div></div>
+  </div>
+</div>
+
+<h3 id="lab-matriz" class="lab" data-toc="Lab: matrices paso a paso">Laboratorio: matrices con <span class="mono">DL.pasos</span></h3>
+<div class="widget" id="labMat">
+  <div class="widget-head"><div class="wt">ŷ = X·w, una fila a la vez</div></div>
+  <div class="widget-body">
+    <div class="mat-row" id="matRow"></div>
+    <div class="calcline" id="matCalc"></div>
+  </div>
+</div>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 4</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §1 · gradiente de la regresión lineal</span>
+  <div class="e-enun">Con ℓ = (φ₀ + φ₁x − y)², calcula ∂ℓ/∂φ₀ para x = 2, y = 3, φ₀ = 0.5, φ₁ = 1.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Igual que la derivación de arriba, pero la derivada interna respecto a φ₀ es 1.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p>∂ℓ/∂φ₀ = 2(φ₀ + φ₁x − y) · 1 = 2 · (−0.5) = −1.</p></div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 5</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">pérdida</div><div class="def">Un número que mide qué tan mal predice el modelo.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>.</p>
+
+<nav class="serie" data-actual="00"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Archivo.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- lab: descenso de gradiente ---------- */
+  var w = -2, lr = 0.3, camino = [w];
+  var L = function(v){ return (v-2)*(v-2); }, dL = function(v){ return 2*(v-2); };
+  var g = DL.grafica(document.getElementById("gdCanvas"), {x:[-4, 8], y:[0, 40], alto:300, etiquetaX:"w", etiquetaY:"L(w)"}, function(g){
+    g.funcion(L, {color:"text-3"});
+    g.polilinea(camino.map(function(v){ return [v, L(v)]; }), {color:"accent", ancho:1.5, guiones:true});
+    g.puntos(camino.map(function(v){ return [v, L(v)]; }), {color:"accent", radio:3.5});
+    g.puntos([[w, L(w)]], {color:"r-param", radio:6});
+  });
+  var read = document.getElementById("gdRead"), st = document.getElementById("gdStatus");
+  function actualizar(){
+    DL.readout(read, [["paso", camino.length-1], ["w", DL.fmt(w)], ["∂L/∂w", DL.fmt(dL(w))], ["L(w)", DL.fmt(L(w))]]);
+    var div = Math.abs(w) > 1e3;
+    st.className = "status " + (div ? "bad" : "ok");
+    st.textContent = div ? "Diverge: la tasa es demasiado grande." : (lr > 1 ? "Con lr > 1 cada paso se pasa del mínimo cada vez más." : "Converge.");
+    g.redibujar();
+  }
+  DL.control(document.getElementById("gdCtrl"), {etiqueta:"tasa de aprendizaje η", min:0.02, max:1.2, paso:0.02, valor:lr,
+    alCambiar:function(v){ lr = v; w = -2; camino = [w]; actualizar(); }});
+  function paso(){ if(Math.abs(w) > 1e3) return false; w = w - lr*dL(w); camino.push(w); actualizar(); return camino.length < 60; }
+  var bucle = DL.bucle(paso, 220);
+  document.getElementById("gdPaso").onclick = function(){ bucle.parar(); paso(); };
+  document.getElementById("gdCorrer").onclick = function(){ bucle.corriendo() ? bucle.parar() : bucle.iniciar(); };
+  document.getElementById("gdReset").onclick = function(){ bucle.parar(); w = -2; camino = [w]; actualizar(); };
+  actualizar();
+
+  /* ---------- lab: superficie de pérdida ---------- */
+  var xs = [0, 0.5, 1, 1.5, 2], ys = [0.3, 0.75, 1.25, 1.5, 1.9];
+  function mse(p0, p1){ var s = 0; for(var i=0;i<xs.length;i++){ var e = p0 + p1*xs[i] - ys[i]; s += e*e; } return s/xs.length; }
+  var sel = {x:1.5, y:-0.5};
+  var gs = DL.grafica(document.getElementById("supCanvas"), {x:[-1, 2], y:[-1, 2], alto:300, etiquetaX:"φ₀", etiquetaY:"φ₁"}, function(g){
+    g.mapaCalor(mse, {res:4, log:true, clave:"mse"});
+    g.contornos(mse, [0.02, 0.1, 0.3, 0.8, 1.6, 3], {color:"text-2", ancho:1, clave:"mse"});
+    g.puntos([[sel.x, sel.y]], {color:"r-dato", radio:6, aro:true});
+  });
+  function leer(){ DL.readout(document.getElementById("supRead"), [["φ₀", DL.fmt(sel.x, 2)], ["φ₁", DL.fmt(sel.y, 2)], ["L(φ)", DL.fmt(mse(sel.x, sel.y))]]); }
+  gs.alPuntero(function(e){ if(e.tipo === "down" || (e.tipo === "move" && e.abajo)){ sel = {x:e.x, y:e.y}; leer(); gs.redibujar(); } });
+  leer();
+
+  /* ---------- lab: matrices con DL.pasos ---------- */
+  var X = [[1, 2], [0.5, -1], [3, 0]], wv = [2, -1];
+  DL.pasos(document.getElementById("labMat"), {total: X.length + 1, render: function(i){
+    var f = i - 1;
+    var yh = X.map(function(r, k){ return k < i ? r[0]*wv[0] + r[1]*wv[1] : "·"; });
+    document.getElementById("matRow").innerHTML =
+      DL.matriz(X, {titulo:"X", forma:"(3, 2)", clase:function(r){ return r === f ? "hl" : ""; }}) + '<span class="op">·</span>' +
+      DL.matriz(wv.map(function(v){ return [v]; }), {titulo:"w", forma:"(2, 1)", clase:function(){ return f >= 0 ? "hl2" : ""; }}) + '<span class="op">=</span>' +
+      DL.matriz(yh.map(function(v){ return [v]; }), {titulo:"ŷ", forma:"(3, 1)", clase:function(r){ return r === f ? "ok" : ""; }});
+    document.getElementById("matCalc").innerHTML = f < 0 ? "Pulsa «siguiente»."
+      : "ŷ<sub>" + (f+1) + "</sub> = " + X[f][0] + "·" + wv[0] + " + " + X[f][1] + "·(" + wv[1] + ") = <b>" + DL.fmt(yh[f], 2) + "</b>";
+  }});
+})();
+</script>
+</body>
+</html>
