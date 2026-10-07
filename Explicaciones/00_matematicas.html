@@ -1,0 +1,1425 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Las matemáticas del curso, traducidas</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: piezas del lector de fórmulas, barras y tablas compactas */
+  .pz{display:inline-block; padding:0 4px; border-radius:6px; transition:background .15s, opacity .15s; line-height:1.7}
+  .pz.on{background:var(--accent-soft); box-shadow:0 0 0 2px var(--accent)}
+  .pz.apag{opacity:.3}
+  .lector-eq{font-size:26px; padding:22px 12px; min-height:90px}
+  .rolchip{display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif; font-size:11px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; padding:2px 8px; border-radius:99px; border:1px solid currentColor; margin-right:6px}
+  .frase-final{font-size:16px; line-height:1.6; font-style:italic}
+  .tbl.chica{font-size:13.5px}
+  .tbl.chica td, .tbl.chica th{padding:7px 9px}
+  .tbl td.eqc{font-family:ui-serif,Georgia,serif; font-size:16px; line-height:1.9}
+  .term{display:inline-block; padding:1px 6px; border-radius:6px; margin:2px 0; font-family:ui-serif,Georgia,serif; font-size:15px; border:1.5px solid currentColor}
+  .terms{line-height:2.3; font-size:15px}
+  .dos-col{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media (max-width:620px){ .dos-col{grid-template-columns:1fr} .lector-eq{font-size:20px} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Matemáticas y notación</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 00</div>
+  <h1>Las matemáticas del curso, traducidas</h1>
+  <p class="lead">La notación es un idioma comprimido, no una prueba de inteligencia. Si ya entiendes la intuición, tienes la mitad; aquí aprendes a leer la otra mitad, símbolo por símbolo y con números.</p>
+  <div class="meta">Fuente: <code>slides/Repaso.Rmd</code>, <code>NN.Rmd</code>, <code>Entrenamiento.Rmd</code>, <code>Entrenamiento2.Rmd</code> y <code>Regularizacion.Rmd</code> · Base de consulta del Examen 1 · Lectura de unos 60 minutos</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Cómo usar este artefacto</h2>
+
+<p>Este artefacto no enseña deep learning. Enseña a <strong>leer</strong> las fórmulas con las que se escribe el curso. Tiene dos modos de uso:</p>
+<ul>
+  <li><strong>Lectura de principio a fin</strong> (unos 60 minutos). Cada sección es una herramienta matemática, con un ejemplo del curso que la usa. Hazla antes de leer los otros cinco artefactos.</li>
+  <li><strong>Consulta.</strong> Usa el índice de la izquierda, la <a href="#notacion">tabla de notación</a> o pasa el cursor (o toca) cualquier símbolo subrayado: aparece qué es, cómo se lee y de qué tipo es. Los demás artefactos enlazan aquí.</li>
+</ul>
+
+<p>Cada clase del curso se apoya en una herramienta distinta. Este es el mapa de qué pesa más en cuál:</p>
+<div class="flow">
+  <div class="node"><div class="t">Repaso</div><div class="d">Derivadas y sumas (Σ). La pérdida como promedio y el gradiente que dice hacia dónde mover los parámetros.</div></div>
+  <div class="node"><div class="t">NN</div><div class="d">Funciones y matrices. Cada capa es «matriz por vector, más sesgo, más activación».</div></div>
+  <div class="node"><div class="t">Entrenamiento 1</div><div class="d">Log, exp y probabilidad. Las pérdidas salen de distribuciones.</div></div>
+  <div class="node"><div class="t">Entrenamiento 2</div><div class="d">Regla de la cadena y varianza. Backpropagation e inicialización.</div></div>
+  <div class="node"><div class="t">Regularización</div><div class="d">Norma y prior. Penalizar pesos grandes es un supuesto de probabilidad.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>Casi todas las fórmulas del curso se arman con unas diez piezas que se repiten: una suma Σ, una derivada ∂, una función (exp, log, ReLU, sigmoide), un producto de matrices y una distribución. Cuando reconoces la pieza, la fórmula deja de ser un muro de letras y se vuelve una receta que puedes leer en voz alta.</p>
+</div>
+
+<div class="note good">
+  <span class="tag">Convención de colores</span>
+  <p>En todos los artefactos el color dice qué <em>tipo</em> de cosa es cada símbolo. Lo explico en la <a href="#leer-formulas">sección 2</a>; por ahora quédate con esto:</p>
+  <div class="leyenda-roles"></div>
+</div>
+
+<!-- ============ 2. LEER FÓRMULAS ============ -->
+<h2 id="leer-formulas"><span class="num">Sección 2</span>Cómo leer una fórmula en 5 pasos</h2>
+
+<p>Una fórmula no se lee de izquierda a derecha como una novela. Se lee como un mapa: primero dónde estás, luego qué significa cada marca. Estos cinco pasos funcionan con cualquier fórmula del curso.</p>
+
+<p>Tomemos una que ya conoces, la pérdida de una observación:</p>
+<div class="eq">
+  <span class="sym" data-s="ell"></span> = ( <span class="sym" data-s="yhat"></span> − <span class="sym" data-s="y"></span> )<span class="sup">2</span>
+  <div class="leyenda-roles"></div>
+</div>
+
+<ol>
+  <li><strong>¿Qué se calcula?</strong> Mira el lado izquierdo del «=». Aquí es ℓ, la pérdida: un solo número. Si no sabes qué sale, el resto no tiene dónde apoyarse.</li>
+  <li><strong>Clasifica cada símbolo por rol.</strong> Pregunta de cada letra: ¿es un dato que viene fijo, un parámetro que el entrenamiento mueve, un hiperparámetro que elijo yo, o algo que se calcula a partir de lo demás? Aquí, y es un <span class="r-dato">dato</span> y ŷ es una <span class="r-calc">cantidad calculada</span> (la predicción). Los colores te lo dicen de un vistazo.</li>
+  <li><strong>Lee subíndices y superíndices.</strong> Un subíndice dice «cuál de ellos» (xᵢ es la observación número i). Un superíndice suele ser una potencia (el ² de arriba es «al cuadrado»). Más en la <a href="#griegas">sección 3</a>.</li>
+  <li><strong>Sustituye números pequeños.</strong> Si ŷ = 2.5 y y = 3, entonces ℓ = (2.5 − 3)² = (−0.5)² = 0.25. Una fórmula con números es un cálculo; sin números es un jeroglífico.</li>
+  <li><strong>Pregunta «¿qué pasa si este número sube?».</strong> Si el error se duplica (−1 en vez de −0.5), ℓ pasa de 0.25 a 1: se multiplica por 4. Ya entendiste el comportamiento de la fórmula sin memorizarla.</li>
+</ol>
+
+<h3 id="lab-lector" class="lab" data-toc="Lab: lector de fórmulas">Laboratorio: lector de fórmulas</h3>
+<p>Elige una de cuatro fórmulas reales del curso. El laboratorio la recorre pieza por pieza: resalta un fragmento, te dice qué es, de qué rol y cómo se lee. Al final arma la frase completa en español. Empieza con la pérdida total.</p>
+<div class="widget" id="labLector">
+  <div class="widget-head"><div class="wt">Lector de fórmulas</div><div class="ws">Pulsa «Siguiente» para recorrer la fórmula una pieza a la vez.</div></div>
+  <div class="widget-body">
+    <div id="lecSel"></div>
+    <div class="eq lector-eq" id="lecEq"></div>
+    <div class="stepinfo" id="lecInfo"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>En la pérdida total, fíjate que <em>L(φ)</em> y <em>ℓ</em> son dos cosas distintas: una es la pérdida de todo el conjunto, la otra la de una sola observación.</li>
+    <li>En φₜ₊₁ = φₜ − η∇L(φₜ), el «=» no es una ecuación: es una instrucción («actualiza»). Los dos φ son los mismos parámetros en momentos distintos.</li>
+    <li>En h₁ = a(θ₁₀ + θ₁₁x), el subíndice de θ tiene dos dígitos: primero la neurona, luego la entrada que multiplica.</li>
+    <li>En la última, el signo «−» delante de Σ existe para que «maximizar la verosimilitud» se vuelva «minimizar una pérdida» (sección 9).</li>
+  </ol>
+</div>
+
+<!-- ============ 3. GRIEGAS ============ -->
+<h2 id="griegas"><span class="num">Sección 3</span>Letras griegas y convenciones</h2>
+
+<p>Las letras griegas no son decoración: en este curso cada una tiene un oficio casi fijo. Aprender el oficio de cada una te ahorra leer la definición cada vez. La tabla completa con todos los símbolos está en la <a href="#notacion">sección 10</a>; esta es la versión corta de las griegas, con cómo se pronuncian.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Letra</th><th>Se lee</th><th>Oficio en el curso</th></tr>
+  <tr><td class="s-col r-param">φ</td><td>«fi»</td><td>Los <strong>parámetros</strong> del modelo, todos juntos. φ̂ es el mejor valor que encontró el entrenamiento.</td></tr>
+  <tr><td class="s-col r-param">θ</td><td>«teta» (theta)</td><td>Parámetros de la capa oculta en la red superficial. θ₂₁: neurona 2, peso de x.</td></tr>
+  <tr><td class="s-col r-param">Ω, ω</td><td>«omega» mayúscula / minúscula</td><td>Ω: matriz de pesos de una capa. ω: un peso escalar.</td></tr>
+  <tr><td class="s-col r-param">β</td><td>«beta»</td><td>El <strong>sesgo</strong> (bias) de una capa. Ojo: tiene un segundo significado (ver cuadro abajo).</td></tr>
+  <tr><td class="s-col r-param">γ</td><td>«gamma»</td><td>Parámetro de escala que aprende BatchNorm.</td></tr>
+  <tr><td class="s-col r-hiper">η, α</td><td>«eta», «alfa»</td><td>La <strong>tasa de aprendizaje</strong> (learning rate): cuánto avanzas en cada paso. Algunas slides usan η y otras α para lo mismo.</td></tr>
+  <tr><td class="s-col r-hiper">λ</td><td>«lambda»</td><td>Fuerza de la regularización (hiperparámetro). Otro significado: la probabilidad en Bernoulli y Poisson.</td></tr>
+  <tr><td class="s-col r-calc">δ</td><td>«delta»</td><td>El gradiente que viaja hacia atrás por la capa k en backpropagation: δₖ = ∂ℓ/∂fₖ.</td></tr>
+  <tr><td class="s-col r-calc">μ, σ</td><td>«mu», «sigma»</td><td>Media y desviación estándar de una Normal. σ² es la varianza.</td></tr>
+  <tr><td class="s-col r-hiper">ε</td><td>«épsilon»</td><td>Un número muy pequeño (como 10⁻⁸) que evita dividir entre cero. Con subíndice (εᵢ), es el ruido de la observación i.</td></tr>
+  <tr><td class="s-col">Σ, Π</td><td>«sigma mayúscula», «pi mayúscula»</td><td>Suma y producto de muchos términos (sección 4).</td></tr>
+  <tr><td class="s-col">π</td><td>«pi»</td><td>3.14159…, el de siempre. Aparece en la fórmula de la Normal.</td></tr>
+</table></div>
+
+<h3 id="convenciones" data-toc="Convenciones de escritura">Convenciones de escritura</h3>
+
+<p><strong>El gorrito ^ significa «estimado».</strong> y es el valor real; ŷ (se lee «ye gorro») es lo que predice el modelo. φ es «los parámetros» y φ̂ es «los parámetros que encontró el entrenamiento». x̂ es una versión normalizada de x. Siempre que veas un gorro, pregunta: ¿estimado a partir de qué?</p>
+
+<p><strong>Los subíndices dicen «cuál».</strong> Un subíndice es una dirección, no una operación. Con un vector de tres números x = (5, 7, 9):</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Se escribe</th><th>Se lee</th><th>Qué es</th><th>Con x = (5, 7, 9)</th></tr>
+  <tr><td class="eqc">x<span class="sub">2</span></td><td>«equis sub dos»</td><td>La entrada número 2 del vector</td><td>7</td></tr>
+  <tr><td class="eqc">x<span class="sup">2</span></td><td>«equis al cuadrado»</td><td>Una potencia: x · x</td><td>con x = 7 daría 49</td></tr>
+  <tr><td class="eqc">x<span class="sub">i</span></td><td>«equis sub i»</td><td>La observación i, sea la que sea</td><td>x₁ = 5, x₂ = 7, x₃ = 9</td></tr>
+  <tr><td class="eqc">θ<span class="sub">21</span></td><td>«teta dos uno»</td><td>Neurona 2, peso de la entrada x (no es «veintiuno»)</td><td>—</td></tr>
+  <tr><td class="eqc">φ<span class="sub">t</span></td><td>«fi sub te»</td><td>Los parámetros en el paso t del entrenamiento</td><td>—</td></tr>
+  <tr><td class="eqc">Ω<span class="sub">k</span></td><td>«omega sub ka»</td><td>La matriz de pesos de la capa k</td><td>—</td></tr>
+</table></div>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p><strong>Un subíndice NO es una potencia.</strong> x₂ es «la segunda entrada de x»; x² es «x por x». Y el índice de una suma (la «i» de xᵢ) es un contador, no una cantidad. Cuando el curso quiere una potencia de verdad, la escribe arriba y casi siempre con una base entre paréntesis: (ŷ − y)².</p>
+</div>
+
+<p><strong>Mayúsculas y negritas para vectores y matrices.</strong> Una letra minúscula suele ser un número o un vector (x, w, h); una mayúscula suele ser una matriz (X, Ω). En las slides a veces el vector va en negritas, a veces no; lo importante es que sepas la forma (cuántas filas y columnas) por el contexto.</p>
+
+<p><strong>f(x, φ): lo de antes de la coma es el dato; lo de después, los parámetros.</strong> Se lee «f de x y φ» o «la función f evaluada en x con parámetros φ». La coma separa quién entra de qué configura al modelo. Cuando se quiere subrayar que solo importa φ (porque los datos están fijos), se escribe L(φ) y el x desaparece.</p>
+
+<h3 id="doble-significado" data-toc="Símbolos con doble significado">Símbolos con doble significado</h3>
+<p>El curso reutiliza algunas letras porque la comunidad las reutiliza. El contexto resuelve la ambigüedad casi siempre; esta tabla te enseña a mirar dónde.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Símbolo</th><th>Significado A</th><th>Significado B</th><th>Cómo saber cuál es</th></tr>
+  <tr><td class="s-col">β</td><td><span class="r-param">Sesgo</span> (bias) de una capa: βₖ</td><td><span class="r-hiper">Momentum</span>: β, y en Adam β₁, β₂</td><td>Aparece dentro de «Ωh + β», o en una capa (con subíndice k): sesgo. Aparece en «mₜ = β mₜ₋₁ + …» o en un optimizador: momentum.</td></tr>
+  <tr><td class="s-col">λ</td><td><span class="r-hiper">Regularización</span>: «+ λ‖w‖²»</td><td><span class="r-calc">Probabilidad o tasa</span>: Bernoulli(λ), Poisson(λ)</td><td>Si multiplica a una norma o suma a la pérdida: regularización. Si está dentro de una distribución: es su parámetro.</td></tr>
+  <tr><td class="s-col">σ</td><td><span class="r-calc">Desviación estándar</span> de una Normal: σ², N(μ, σ²)</td><td><span class="r-calc">Sigmoide</span>: σ(z) = 1/(1 + e⁻ᶻ)</td><td>σ con paréntesis y un argumento, σ(z): sigmoide. σ sola o al cuadrado, σ²: desviación estándar o varianza.</td></tr>
+  <tr><td class="s-col">K</td><td><span class="r-hiper">Número de capas</span> de la red profunda</td><td><span class="r-dato">Número de clases</span> en clasificación</td><td>«K capas ocultas» o Ωₖ con k = 1…K: capas. «Categórica de K clases» o softmax: clases. Si hay duda, el texto de al lado lo dice.</td></tr>
+  <tr><td class="s-col">p</td><td><span class="r-hiper">Probabilidad de apagar</span> una neurona en dropout</td><td>Una <strong>probabilidad cualquiera</strong>: p(x, y), P(y | x)</td><td>En la sección de Dropout, con un valor como 0.5: hiperparámetro. Con argumentos entre paréntesis: es una distribución.</td></tr>
+</table></div>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Por qué P (mayúscula) y p (minúscula)? ¿Importan?</div>
+<p>Casi nunca. P(y | x) se usa para probabilidades y p(y) para densidades (variables continuas); en la práctica el curso las intercambia. Lo que sí importa es si lleva argumento entre paréntesis (una distribución) o es un número suelto (el hiperparámetro de dropout).</p>
+
+<!-- ============ 4. SUMAS ============ -->
+<h2 id="sumas"><span class="num">Sección 4</span>Sumas (Σ) y productos (Π)</h2>
+
+<p>Σ es el símbolo más repetido del curso y el que más asusta. Pero es un ciclo <code>for</code> escrito en una letra: «recorre estos valores de i y súmalos». Debajo de la Σ va dónde empieza el contador; arriba, dónde termina; a la derecha, qué se suma en cada vuelta.</p>
+
+<p>Primero con números. Σ con i de 1 a 4 de i² es 1² + 2² + 3² + 4² = 1 + 4 + 9 + 16 = <strong>30</strong>. Eso es todo.</p>
+
+<div class="formula">
+  <div class="f-head">El promedio de las pérdidas (pérdida total)</div>
+  <div class="f-ejemplo">n = 4 observaciones con pérdidas ℓ₁ = 0.2, ℓ₂ = 0.0, ℓ₃ = 0.6, ℓ₄ = 0.2  →  suma = 1.0  →  L = 1.0 / 4 = 0.25</div>
+  <div class="eq">
+    <span class="sym" data-s="L"></span> = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="n"></span></span></span>
+    <span class="big"><span class="lim r-dato">n</span><span class="o sym" data-s="sum">Σ</span><span class="lim">i=1</span></span>
+    <span class="sym" data-s="ell"></span><span class="sub r-calc">i</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida total es el promedio de las pérdidas individuales: suma las pérdidas de la observación 1 a la n y divide entre n.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">L</dt><dd>La pérdida total: un solo número que resume qué tan mal le va al modelo con todos los datos.</dd>
+      <dt class="r-dato">n</dt><dd>Cuántas observaciones hay. Es el número de términos de la suma.</dd>
+      <dt>Σ, i = 1 … n</dt><dd>«Suma, con el contador i yendo de 1 a n.» Es un ciclo.</dd>
+      <dt class="r-calc">ℓᵢ</dt><dd>La pérdida de la observación i. El subíndice i es el contador de la suma.</dd>
+      <dt class="r-calc">1/n</dt><dd>Lo que convierte la suma en promedio.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…una observación tiene una pérdida enorme: sube el promedio completo, dividida entre n. Con n pequeña, una sola observación mala pesa mucho.</li>
+      <li>…duplicas los datos repitiendo cada observación: la suma se duplica, pero n también; el promedio no cambia. Por eso se usa el promedio y no la suma: L no depende de cuántos datos tengas.</li>
+      <li>…quitas el 1/n: el mínimo está en el mismo φ, pero L crece con n. Esto cambia la escala del gradiente y por tanto la tasa de aprendizaje que necesitas.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="props-suma" data-toc="Tres propiedades de Σ">Tres propiedades que se usan en las derivaciones</h3>
+<p>Cuando derives la pérdida cuadrática (clase 1) o la entropía cruzada (clase 3) vas a mover términos dentro y fuera de la suma. Solo hacen falta estas tres reglas:</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Propiedad</th><th>Se escribe</th><th>Con números</th><th>Dónde aparece</th></tr>
+  <tr><td>Una constante sale de la suma</td><td class="eqc"><span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> c·aᵢ = c <span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> aᵢ</td><td>3·1 + 3·2 + 3·3 = 18 = 3 · (1 + 2 + 3)</td><td>Sacar el 1/(2σ²) de la NLL gaussiana (clase 3)</td></tr>
+  <tr><td>La suma de una suma se separa</td><td class="eqc"><span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> (aᵢ + bᵢ) = <span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> aᵢ + <span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> bᵢ</td><td>con a = (1, 2) y b = (4, 5): (1+4) + (2+5) = 12 = (1+2) + (4+5)</td><td>Separar el término constante ½ log(2πσ²) de la parte cuadrática</td></tr>
+  <tr><td>Σ de una constante vale n · constante</td><td class="eqc"><span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> c = n·c</td><td>7 + 7 + 7 + 7 + 7 = 35 = 5 · 7</td><td>Un término que no depende de i se multiplica por n al sumarlo</td></tr>
+</table></div>
+
+<p>Hay una cuarta que usarás sin darte cuenta: <strong>la derivada de una suma es la suma de las derivadas</strong>. Por eso ∇L = <span class="frac"><span class="num">1</span><span class="den">n</span></span> Σ ∇ℓᵢ: el gradiente de la pérdida total es el promedio de los gradientes de cada observación.</p>
+
+<h3 id="producto" data-toc="Productos (Π)">Π: el producto</h3>
+<p>Π es igual que Σ, pero multiplica en lugar de sumar. Π con i de 1 a 3 de aᵢ, con a = (2, 3, 4), es 2 · 3 · 4 = <strong>24</strong>.</p>
+<p>¿Por qué importa? Porque si tus observaciones son <strong>independientes e idénticamente distribuidas</strong> (i.i.d.: ninguna depende de otra y todas vienen del mismo proceso), la probabilidad de ver <em>todos</em> los datos juntos es el producto de la probabilidad de cada uno. Si lanzas tres veces una moneda justa y quieres «cara, cara, cara»: 0.5 · 0.5 · 0.5 = 0.125. Esa es la <strong>verosimilitud</strong> (likelihood), y es un Π. Aparece en la clase 3 y la retomamos en las secciones 5 y 8; el problema práctico de multiplicar muchas probabilidades lo verás en el laboratorio «por qué log».</p>
+
+<h3 id="lab-suma" class="lab" data-toc="Lab: expansor de Σ">Laboratorio: expansor de Σ</h3>
+<p>Cinco puntos fijos (xᵢ, yᵢ) y una recta ŷ = φ₀ + φ₁x. Mueve φ₀ y φ₁ y mira la suma <strong>desplegada</strong>: cada término (ŷᵢ − yᵢ)² con su valor, y el total. Cada color es una observación; el segmento del mismo color en la gráfica es su error.</p>
+<div class="widget" id="labSuma">
+  <div class="widget-head"><div class="wt">Σ desplegada término por término</div><div class="ws">Mueve la recta hasta que la suma sea lo más pequeña posible.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="sumCanvas"></canvas>
+      <div><div id="sumCtrl"></div><div id="sumSel"></div><div id="sumRead"></div></div>
+    </div>
+    <div class="calcline terms" id="sumTerms" style="white-space:normal"></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="sumReset">Reiniciar (φ₀ = 0.4, φ₁ = 0.5)</button>
+    <button class="btn" id="sumMejor">Mostrar la mejor recta</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con φ₀ = 0.4 y φ₁ = 0.5 la suma vale 0.153: los términos 4 y 5 son los que más pesan (la recta se queda corta en las observaciones de la derecha).</li>
+    <li>Sube φ₁ hasta 0.6 y baja φ₀ hasta 0.25: el total baja a unos 0.03. Es lo que hace gradient descent, pero a mano.</li>
+    <li>Alterna entre «suma» y «promedio»: es el mismo número dividido entre n = 5. El mínimo está en los mismos φ₀ y φ₁.</li>
+    <li>Un error de 0.3 aporta 0.09; uno de 0.6 aporta 0.36, cuatro veces más. El cuadrado hace que los errores grandes dominen la suma.</li>
+  </ol>
+</div>
+
+<!-- ============ 5. FUNCIONES ============ -->
+<h2 id="funciones"><span class="num">Sección 5</span>Las funciones que usa el curso</h2>
+
+<p>Una función es una máquina: entra un número z, sale otro. Para cada una importa saber <strong>qué números puede devolver</strong>, porque de eso depende para qué sirve. Si necesitas una probabilidad, necesitas una salida entre 0 y 1; si necesitas una varianza, una salida positiva.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Función</th><th>Fórmula</th><th>¿Qué números devuelve?</th><th>Para qué la usa el curso</th></tr>
+  <tr><td>Recta</td><td class="eqc">φ₀ + φ₁z</td><td>Cualquier real</td><td>Regresión lineal; lo que hace cada neurona antes de activar (<em>z = wᵀx + b</em>).</td></tr>
+  <tr><td>Exponencial</td><td class="eqc">e<span class="sup">z</span></td><td>Solo positivos (0, ∞)</td><td>Garantizar que un valor sea positivo (una varianza o una tasa de Poisson); es la base de softmax.</td></tr>
+  <tr><td>Logaritmo</td><td class="eqc">log z</td><td>Cualquier real, pero <strong>z debe ser positivo</strong></td><td>Convertir productos en sumas; es el «log» de la log-verosimilitud.</td></tr>
+  <tr><td>ReLU</td><td class="eqc">max(0, z)</td><td>[0, ∞): negativos pasan a 0</td><td>La activación principal de las redes del curso: cada ReLU es una «articulación».</td></tr>
+  <tr><td>Sigmoide</td><td class="eqc">σ(z) = <span class="frac"><span class="num">1</span><span class="den">1 + e<span class="sup">−z</span></span></span></td><td>Entre 0 y 1 (sin tocarlos)</td><td>Convertir un score en probabilidad para Bernoulli (clasificación binaria).</td></tr>
+  <tr><td>Tangente hiperbólica</td><td class="eqc">tanh(z)</td><td>Entre −1 y 1</td><td>Activación centrada en cero; aparece al hablar de inicialización (Xavier).</td></tr>
+  <tr><td>Softmax</td><td class="eqc">softmax<span class="sub">k</span>(z)</td><td>K números entre 0 y 1 que <strong>suman 1</strong></td><td>Convertir K scores en K probabilidades para la Categórica (clasificación multiclase).</td></tr>
+</table></div>
+<p>Una nota: en todo el curso «log» es el logaritmo natural (base e), el que en otros libros se escribe «ln».</p>
+
+<h3 id="lab-galeria" class="lab" data-toc="Lab: galería de funciones">Laboratorio: galería de funciones</h3>
+<p>Elige una función y mueve el punto z. La gráfica muestra la curva y el punto (z, salida). Empieza con la sigmoide y lleva z a 3, luego a −3.</p>
+<div class="widget" id="labGaleria">
+  <div class="widget-head"><div class="wt">Entra z, sale f(z)</div><div class="ws">¿Qué números puede devolver cada función?</div></div>
+  <div class="widget-body">
+    <div id="galSel"></div>
+    <div class="lab-grid">
+      <canvas id="galCanvas"></canvas>
+      <div><div id="galCtrl"></div><div id="galRead"></div><div class="status info" id="galStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Sigmoide: con z = 0 devuelve 0.5; con z = 3 devuelve 0.953; con z = −3, 0.047. Nunca llega a 0 ni a 1: por eso sirve como probabilidad.</li>
+    <li>ReLU: todo z negativo da 0. Es la «articulación» que verás en la clase 2.</li>
+    <li>Exponencial: aunque z sea muy negativo, el resultado es positivo (e⁻³ = 0.050). Es la forma de garantizar positividad.</li>
+    <li>Logaritmo: con z ≤ 0 el punto desaparece, porque no está definido. Es la razón por la que las probabilidades deben ser positivas antes de tomar log.</li>
+  </ol>
+</div>
+
+<h3 id="softmax" data-toc="Softmax">Softmax</h3>
+<p>Imagina que un clasificador de textos de política pública le da un score a tres categorías: «salud», «educación» y «seguridad». Los scores son números cualesquiera: 0, 1 y 2. Softmax los convierte en probabilidades que suman 1: primero los pasa por e<sup>z</sup> (para que sean positivos) y luego divide cada uno entre el total.</p>
+
+<div class="formula">
+  <div class="f-head">Softmax</div>
+  <div class="f-ejemplo">z = (0, 1, 2)  →  e⁰ = 1, e¹ = 2.718, e² = 7.389  →  suma = 11.107  →  (1, 2.718, 7.389) / 11.107 = (0.090, 0.245, 0.665)</div>
+  <div class="eq">
+    softmax<span class="sub">k</span>(<span class="sym" data-s="z"></span>) = <span class="frac"><span class="num">e<span class="sup">z<span class="sub">k</span></span></span><span class="den"><span class="big"><span class="lim">K</span><span class="o">Σ</span><span class="lim">j=1</span></span> e<span class="sup">z<span class="sub">j</span></span></span></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de la clase k es e elevado al score de k, entre la suma de e elevado al score de todas las clases.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">z = (z₁, …, z<sub>K</sub>)</dt><dd>Los K scores (también llamados <em>logits</em>) que produce la red. Pueden ser cualquier número.</dd>
+      <dt>k</dt><dd>La clase de la que quiero la probabilidad (el k de la izquierda: una clase fija).</dd>
+      <dt>j</dt><dd>El contador de la suma del denominador: recorre <em>todas</em> las clases, de 1 a K. No es lo mismo que k.</dd>
+      <dt class="r-dato">K</dt><dd>Aquí K es el número de <em>clases</em>, no el de capas (ver «símbolos con doble significado»).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…le sumas la misma constante a todos los scores: <strong>nada cambia</strong>. Solo importan las diferencias entre scores (porque e<sup>a+c</sup> = e<sup>a</sup>·e<sup>c</sup> y e<sup>c</sup> se cancela arriba y abajo).</li>
+      <li>…un score sube mucho respecto a los demás: su probabilidad se acerca a 1 y las demás a 0.</li>
+      <li>…todos los scores son iguales: cada clase recibe 1/K. Con tres clases, 0.333 cada una.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="lab-softmax" class="lab" data-toc="Lab: softmax">Laboratorio: softmax</h3>
+<p>Mueve los tres scores. Las barras son las probabilidades; su suma siempre es 1. Prueba el botón «sumar 5 a todos».</p>
+<div class="widget" id="labSoftmax">
+  <div class="widget-head"><div class="wt">Tres scores, tres probabilidades</div><div class="ws">Parte de z = (0, 1, 2).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="smCanvas"></canvas>
+      <div><div id="smCtrl"></div><div id="smRead"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="smSuma">Sumar 5 a todos</button>
+    <button class="btn" id="smIguales">Todos iguales</button>
+    <button class="btn" id="smReset">Reiniciar</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con (0, 1, 2) las probabilidades son 0.090, 0.245 y 0.665.</li>
+    <li>Pulsa «sumar 5 a todos»: los scores pasan a (5, 6, 7) y las barras no se mueven. Solo importan las diferencias.</li>
+    <li>Lleva z₃ a 6 manteniendo los otros: la barra 3 llega a 0.99 y las demás casi desaparecen.</li>
+    <li>Con «todos iguales», cada barra vale 0.333 sin importar el valor del score.</li>
+  </ol>
+</div>
+
+<h3 id="log-exp" data-toc="Propiedades de log y exp">Propiedades de log y exp</h3>
+<p>El log y la exponencial son inversas: una deshace a la otra. Casi todas las derivaciones de las clases 3 y 4 son una cadena de estas cinco propiedades:</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Propiedad</th><th>Con números</th><th>Dónde aparece en el curso</th></tr>
+  <tr><td class="eqc">log(a · b) = log a + log b</td><td>log(2 · 3) = log 6 = 1.792 = 0.693 + 1.099</td><td>Verosimilitud: el log convierte el producto Π en suma Σ (clase 3).</td></tr>
+  <tr><td class="eqc">log(a / b) = log a − log b</td><td>log(6 / 2) = log 3 = 1.099 = 1.792 − 0.693</td><td>Log-softmax: log de e<sup>zₖ</sup> sobre el total es zₖ − log Σ e<sup>zⱼ</sup> (cross-entropy multiclase).</td></tr>
+  <tr><td class="eqc">log(a<sup>b</sup>) = b · log a</td><td>log(2³) = log 8 = 2.079 = 3 · 0.693</td><td>Bernoulli: log(λ<sup>y</sup>) = y · log λ (entropía cruzada binaria).</td></tr>
+  <tr><td class="eqc">log(e<sup>z</sup>) = z</td><td>log(e<sup>2.5</sup>) = 2.5</td><td>Normal: log de exp(−(y − μ)²/2σ²) es simplemente −(y − μ)²/2σ² (de ahí sale la pérdida cuadrática).</td></tr>
+  <tr><td class="eqc">e<sup>a+b</sup> = e<sup>a</sup> · e<sup>b</sup></td><td>e<sup>1+2</sup> = e³ = 20.086 = 2.718 · 7.389</td><td>Softmax no cambia si sumas una constante a los scores.</td></tr>
+</table></div>
+
+<h3 id="lab-log" class="lab" data-toc="Lab: por qué log">Laboratorio: por qué log</h3>
+<p>Supón n observaciones y que el modelo le da probabilidad 0.5 a cada una. La verosimilitud es el producto 0.5 · 0.5 · … · 0.5 (n veces). La computadora guarda los números con precisión finita, y un producto de muchas probabilidades se vuelve tan pequeño que se redondea a <strong>cero</strong>. Mueve n y compara el producto con la suma de logs.</p>
+<div class="widget" id="labLog">
+  <div class="widget-head"><div class="wt">Producto de n probabilidades de 0.5 contra la suma de sus logs</div><div class="ws">Eje vertical: log₁₀ del valor. La línea punteada es lo que valdría el producto con precisión infinita.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="logCanvas"></canvas>
+      <div><div id="logCtrl"></div><div id="logRead"></div><div class="status ok" id="logStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="logUno">n = 1074</button>
+    <button class="btn" id="logDos">n = 1075</button>
+    <button class="btn" id="logMil">n = 2000</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con n = 100 el producto vale unos 7.9 × 10⁻³¹ y la suma de logs −69.31. Los dos son útiles.</li>
+    <li>Con n = 1074 el producto es 4.9 × 10⁻³²⁴: el número más pequeño que la computadora puede guardar (5 × 10⁻³²⁴, en doble precisión).</li>
+    <li>Con n = 1075 el producto <strong>es exactamente 0</strong> en la computadora. Una verosimilitud cero no sirve: no puedes comparar dos modelos ni calcular gradientes.</li>
+    <li>La suma de logs sigue siendo un número normal (−745.1 con n = 1075; −1386.3 con n = 2000). Por eso el curso trabaja con log-verosimilitud.</li>
+  </ol>
+</div>
+
+<!-- ============ 6. DERIVADAS ============ -->
+<h2 id="derivadas"><span class="num">Sección 6</span>Derivadas: la pendiente</h2>
+
+<p>La derivada responde una sola pregunta: <strong>«si muevo x un poquito, ¿cuánto cambia f?»</strong>. Es la pendiente de la recta que apenas toca la curva en ese punto (la recta <em>tangente</em>). Si la derivada vale 3, subir x una unidad sube f unas 3 unidades; si vale −2, la baja; si vale 0, ahí la curva está plana.</p>
+
+<p>Por qué le importa al curso: entrenar es mover φ para bajar L. La derivada de L respecto a un parámetro dice <em>hacia dónde</em> y <em>qué tan rápido</em> cambia la pérdida si mueves ese parámetro.</p>
+
+<div class="formula">
+  <div class="f-head">La derivada como cambio por unidad</div>
+  <div class="f-ejemplo">f(x) = x² en x = 1, con h = 0.1  →  f(1.1) = 1.21, f(1) = 1  →  (1.21 − 1) / 0.1 = 2.1   (la derivada exacta, 2x, vale 2)</div>
+  <div class="eq">
+    f′(x) ≈ <span class="frac"><span class="num">f(x + <span class="r-hiper">h</span>) − f(x)</span><span class="den"><span class="r-hiper">h</span></span></span> &nbsp;&nbsp; cuando h es muy pequeña
+    <span class="lbl">También se escribe df/dx. Son tres notaciones para lo mismo: f′(x), df/dx y d/dx f(x).</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La derivada de f en x es cuánto sube f cuando avanzo un poquito h, dividido entre ese poquito: la subida entre el avance.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>f′(x)</dt><dd>«f prima de x». La pendiente de f en el punto x.</dd>
+      <dt>df/dx</dt><dd>«de efe entre de equis». No es una fracción de números: es un solo símbolo que significa «cambio de f por cambio de x».</dd>
+      <dt class="r-hiper">h</dt><dd>Un avance pequeño (aquí lo elegimos nosotros; en la derivada exacta se hace tender a cero).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…h es más grande (0.5): la aproximación es peor, porque la curva se dobla en ese tramo.</li>
+      <li>…h es más pequeña (0.01): la aproximación casi coincide con la derivada exacta. El laboratorio de abajo lo muestra.</li>
+      <li>…f′(x) &gt; 0: f sube al subir x. Si f′(x) &lt; 0: baja. Si f′(x) = 0: punto plano, posible mínimo o máximo.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="lab-tangente" class="lab" data-toc="Lab: tangente">Laboratorio: la tangente</h3>
+<p>Elige una función, mueve x y mira la pendiente. Con el selector de abajo cambias entre la tangente exacta y una pendiente aproximada [f(x + h) − f(x)] / h con h = 0.5, 0.1 y 0.01.</p>
+<div class="widget" id="labTan">
+  <div class="widget-head"><div class="wt">Tangente y pendiente aproximada</div><div class="ws">Gris: la función. Acento: la tangente exacta o, punteada, la recta de la aproximación.</div></div>
+  <div class="widget-body">
+    <div id="tanFn"></div>
+    <div class="lab-grid">
+      <canvas id="tanCanvas"></canvas>
+      <div><div id="tanCtrl"></div><div id="tanH"></div><div id="tanRead"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>En x² − 2x + 2, mueve x a 1: la tangente es horizontal (pendiente 0). Ahí está el mínimo.</li>
+    <li>Con x = 2, la pendiente exacta es 2. Con h = 0.5 la aproximada es 2.5, con h = 0.1 es 2.1 y con h = 0.01 es 2.01. Cuanto más chica la h, más se parece la recta punteada a la tangente.</li>
+    <li>A la izquierda del mínimo la pendiente es negativa; a la derecha, positiva. Por eso en gradient descent se <em>resta</em> la derivada: si la pendiente es positiva, hay que ir a la izquierda.</li>
+    <li>En la sigmoide, lejos del centro la pendiente casi desaparece (se «satura»). Esto vuelve en la clase 4 como gradientes que se desvanecen.</li>
+  </ol>
+</div>
+
+<h3 id="tabla-derivadas" data-toc="Tabla de derivadas">Las derivadas que usa el curso</h3>
+<p>No necesitas memorizar cálculo: estas nueve son todas las que aparecen en las clases 1 a 5, y cada una tiene un número para comprobarla.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>f(x)</th><th>f′(x)</th><th>Con un número</th><th>Dónde aparece</th></tr>
+  <tr><td class="eqc">c (constante)</td><td class="eqc">0</td><td>f(x) = 5 → f′ = 0</td><td>Los términos que no dependen de φ «desaparecen» al derivar (clase 1).</td></tr>
+  <tr><td class="eqc">a·x + b</td><td class="eqc">a</td><td>f(x) = 8x + 3 → f′ = 8</td><td>Derivada de la regresión lineal respecto a su pendiente.</td></tr>
+  <tr><td class="eqc">x<sup>n</sup></td><td class="eqc">n · x<sup>n−1</sup></td><td>x³ en x = 2 → 3 · 2² = 12</td><td>La pérdida cuadrática (n = 2): d(x²)/dx = 2x.</td></tr>
+  <tr><td class="eqc">e<sup>x</sup></td><td class="eqc">e<sup>x</sup></td><td>en x = 0 → e⁰ = 1</td><td>Softmax y la Normal; derivar una exp da la misma exp por lo de adentro.</td></tr>
+  <tr><td class="eqc">log x</td><td class="eqc"><span class="frac"><span class="num">1</span><span class="den">x</span></span></td><td>en x = 2 → 0.5</td><td>Gradiente de la log-verosimilitud (clase 3).</td></tr>
+  <tr><td class="eqc">sin x, cos x</td><td class="eqc">cos x, −sin x</td><td>sin en 0 → cos 0 = 1</td><td>En el ejemplo de backprop de la clase 4 (f encadena sin, exp y cos) y en el modelo de Gabor de la clase 3.</td></tr>
+  <tr><td class="eqc">ReLU(z)</td><td class="eqc">𝟙[z &gt; 0]</td><td>z = 3 → 1;  z = −2 → 0</td><td>Backprop: una ReLU apagada bloquea el gradiente (clase 4). En z = 0 se toma 0 por convención.</td></tr>
+  <tr><td class="eqc">σ(z)</td><td class="eqc">σ(z)(1 − σ(z))</td><td>z = 0 → 0.5 · 0.5 = 0.25</td><td>Backprop con sigmoides; explica por qué se saturan.</td></tr>
+  <tr><td class="eqc">(a − y)² respecto de a</td><td class="eqc">2(a − y)</td><td>a = 2.5, y = 3 → 2 · (−0.5) = −1</td><td>El gradiente de la pérdida cuadrática (clases 1 y 4).</td></tr>
+</table></div>
+
+<p>Tres reglas para combinar derivadas (todas se verifican con números):</p>
+<ul>
+  <li><strong>Suma:</strong> la derivada de f + g es f′ + g′.</li>
+  <li><strong>Constante multiplicando:</strong> la derivada de 5·f es 5·f′.</li>
+  <li><strong>Función dentro de función:</strong> la regla de la cadena, abajo, que es la más importante del curso.</li>
+</ul>
+
+<h3 id="regla-cadena" data-toc="Regla de la cadena">La regla de la cadena</h3>
+<p>Imagina tres engranes. El A gira 3 veces más rápido que el B, y el B gira 2 veces más rápido que el C. ¿Cuántas veces más rápido gira A que C? 3 · 2 = <strong>6</strong>. Las razones de cambio se <em>multiplican</em> a lo largo de la cadena. Eso es la regla de la cadena: cuando una cantidad depende de otra y esa de otra, la derivada total es el producto de las derivadas de cada eslabón.</p>
+
+<div class="formula">
+  <div class="f-head">Regla de la cadena</div>
+  <div class="f-ejemplo">y = (3x + 1)², en x = 2  →  u = 3x + 1 = 7,  y = u² = 49  →  dy/du = 2u = 14,  du/dx = 3  →  dy/dx = 14 · 3 = 42</div>
+  <div class="eq">
+    <span class="frac"><span class="num">d<span class="r-calc">y</span></span><span class="den">d<span class="r-dato">x</span></span></span> = <span class="frac"><span class="num">d<span class="r-calc">y</span></span><span class="den">d<span class="r-hiper">u</span></span></span> · <span class="frac"><span class="num">d<span class="r-hiper">u</span></span><span class="den">d<span class="r-dato">x</span></span></span>
+    <span class="lbl">u es el «eslabón intermedio»: y depende de u y u depende de x.</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cuánto cambia y cuando muevo x es igual a cuánto cambia y cuando muevo u, por cuánto cambia u cuando muevo x.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>dy/dx</dt><dd>La derivada que queremos: efecto total de x sobre y.</dd>
+      <dt>u</dt><dd>La variable de en medio. Aquí es lo que hay dentro del paréntesis: u = 3x + 1.</dd>
+      <dt>dy/du, du/dx</dt><dd>Las derivadas de cada eslabón: fáciles porque cada una involucra una sola operación.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un eslabón tiene derivada 0 (una ReLU apagada): todo el producto es 0, y el efecto de x sobre y desaparece. Así se «mueren» las neuronas.</li>
+      <li>…hay muchos eslabones y cada uno vale menos de 1 (sigmoides): el producto se encoge casi a 0. Son los gradientes que se desvanecen.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Derivamos y = (3x + 1)² paso a paso. Pulsa «Siguiente paso» para ver el siguiente renglón:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">y = (3x + 1)²</div><div class="d-por">Partimos de la función compuesta: una recta (3x + 1) dentro de un cuadrado.</div></li>
+  <li><div class="d-ex">u = 3x + 1,&nbsp;&nbsp; y = u²</div><div class="d-por"><b>Nombrar el interior:</b> separamos la composición en dos funciones simples, cada una con una sola operación.</div></li>
+  <li><div class="d-ex">dy/du = 2u</div><div class="d-por"><b>Derivada de una potencia</b> (<a href="#tabla-derivadas">tabla</a>): d(u²)/du = 2·u¹.</div></li>
+  <li><div class="d-ex">du/dx = 3</div><div class="d-por"><b>Derivada de una recta:</b> la constante 1 desaparece (derivada de una constante = 0) y 3x deriva en 3.</div></li>
+  <li><div class="d-ex">dy/dx = (dy/du) · (du/dx) = 2u · 3 = 6u</div><div class="d-por"><b>Regla de la cadena:</b> multiplicamos las derivadas de los dos eslabones.</div></li>
+  <li><div class="d-ex">dy/dx = 6(3x + 1)</div><div class="d-por"><b>Regresar a x:</b> sustituimos u = 3x + 1 para que la respuesta dependa de x y no de la variable auxiliar.</div></li>
+  <li><div class="d-ex">en x = 2:&nbsp; 6 · (3·2 + 1) = 6 · 7 = 42</div><div class="d-por"><b>Verificación con otro camino:</b> expandido, y = 9x² + 6x + 1, cuya derivada es 18x + 6 = 18·2 + 6 = 42. ✔ Coincide.</div></li>
+</ol>
+
+<h3 id="lab-cadena" class="lab" data-toc="Lab: regla de la cadena">Laboratorio: la cadena, hacia adelante y hacia atrás</h3>
+<p>Primero calculamos hacia adelante (de x a y) y guardamos cada valor. Luego vamos hacia atrás multiplicando las derivadas. Al final comprobamos con una h pequeña.</p>
+<div class="widget" id="labCadena">
+  <div class="widget-head"><div class="wt">y = (3x + 1)² con x = 2</div><div class="ws">Siete pasos: tres hacia adelante, tres hacia atrás y una verificación.</div></div>
+  <div class="widget-body">
+    <div class="flow" id="cadFlow"></div>
+    <div class="calcline" id="cadCalc" style="white-space:normal"></div>
+  </div>
+</div>
+<div class="note key">
+  <span class="tag">Esto ES backpropagation</span>
+  <p>Lo que acabas de hacer (guardar los valores intermedios hacia adelante, luego multiplicar derivadas hacia atrás) es exactamente backpropagation. Una red profunda es una cadena más larga de funciones, y el algoritmo es el mismo. Lo verás aplicado a una red completa en la clase 4 (→ clase 4, backprop).</p>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Hacia adelante, cada paso guarda su valor: x = 2, u = 7, y = 49. Hacia atrás los vas a necesitar (2u usa u = 7). Por eso backprop requiere memoria.</li>
+    <li>Las derivadas locales (14 y 3) son sencillas; lo complicado es el producto, y es solo una multiplicación.</li>
+    <li>La verificación numérica con h = 0.001 da 42.009: muy cerca de 42.</li>
+  </ol>
+</div>
+
+<h3 id="parciales" data-toc="Derivada parcial y gradiente">Derivadas parciales y gradiente</h3>
+<p>Cuando una función depende de varias variables (los parámetros φ₀ y φ₁), la <strong>derivada parcial</strong> ∂L/∂φ₁ responde: «si muevo solo φ₁ y dejo φ₀ congelado, ¿cuánto cambia L?». La ∂ (se lee «parcial») es una d redondeada que avisa: hay otras variables, pero las trato como constantes.</p>
+
+<p>Ejemplo: L(φ₀, φ₁) = (φ₀ + 2φ₁ − 3)². Es un modelo de juguete donde L es la pérdida de una sola observación.</p>
+
+<div class="formula">
+  <div class="f-head">Gradiente</div>
+  <div class="f-ejemplo">L(φ₀, φ₁) = (φ₀ + 2φ₁ − 3)² en (φ₀, φ₁) = (0, 0)  →  L = (−3)² = 9  →  ∂L/∂φ₀ = 2(−3) = −6,  ∂L/∂φ₁ = 2(−3)·2 = −12  →  ∇L = (−6, −12)</div>
+  <div class="eq">
+    <span class="sym" data-s="grad"></span> = ( <span class="frac"><span class="num"><span class="sym" data-s="partial"></span>L</span><span class="den"><span class="sym" data-s="partial"></span><span class="r-param">φ</span><span class="sub r-param">0</span></span></span> , <span class="frac"><span class="num">∂L</span><span class="den">∂<span class="r-param">φ</span><span class="sub r-param">1</span></span></span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El gradiente de L es el vector que junta todas las derivadas parciales: una por cada parámetro.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">∇L</dt><dd>«Nabla L» o «gradiente de L». Un vector con una entrada por parámetro.</dd>
+      <dt>∂L/∂φ₀</dt><dd>Cuánto cambia L por cada unidad que muevo φ₀, con φ₁ congelado.</dd>
+      <dt class="r-param">φ₀, φ₁</dt><dd>Los parámetros. L es una función de ellos; los datos están fijos.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…una entrada del gradiente es grande en valor absoluto: L es muy sensible a ese parámetro (ahí la cuesta es empinada).</li>
+      <li>…una entrada es 0: mover ese parámetro un poquito no cambia L (por ahora).</li>
+      <li>…todo el gradiente es 0: estás en un punto plano (mínimo, máximo o punto silla).</li>
+    </ul>
+  </div>
+</div>
+
+<p>Derivamos ∂L/∂φ₁ con la regla de la cadena:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">L = (φ₀ + 2φ₁ − 3)²</div><div class="d-por">Partimos de la pérdida.</div></li>
+  <li><div class="d-ex">u = φ₀ + 2φ₁ − 3,&nbsp;&nbsp; L = u²</div><div class="d-por"><b>Nombrar el interior,</b> como en la <a href="#regla-cadena">regla de la cadena</a>.</div></li>
+  <li><div class="d-ex">∂L/∂u = 2u</div><div class="d-por"><b>Derivada de una potencia.</b></div></li>
+  <li><div class="d-ex">∂u/∂φ₁ = 2</div><div class="d-por"><b>Congelar lo demás:</b> φ₀ y −3 son constantes para esta derivada parcial (su derivada es 0). Solo 2φ₁ cambia, y deriva en 2.</div></li>
+  <li><div class="d-ex">∂L/∂φ₁ = 2u · 2 = 4(φ₀ + 2φ₁ − 3)</div><div class="d-por"><b>Regla de la cadena:</b> multiplicamos.</div></li>
+  <li><div class="d-ex">en (0, 0):&nbsp; 4 · (−3) = −12</div><div class="d-por"><b>Verificación con números:</b> si muevo φ₁ de 0 a 0.001, L pasa de 9 a (0.002 − 3)² = 8.988004, y (8.988004 − 9) / 0.001 = −11.996 ≈ −12. ✔</div></li>
+</ol>
+
+<h3 id="lab-gradiente" class="lab" data-toc="Lab: gradiente">Laboratorio: el gradiente apunta cuesta arriba</h3>
+<p>El mapa muestra L(φ₀, φ₁) = (φ₀ + 2φ₁ − 3)²: cuanto más intenso el color, más alta la pérdida; las líneas son curvas de nivel. Haz clic (o arrastra) para elegir un punto. Se dibuja el gradiente (hacia donde L <em>sube</em> más rápido) y su opuesto (hacia donde <em>baja</em> más rápido).</p>
+<div class="widget" id="labGrad">
+  <div class="widget-head"><div class="wt">Gradiente de L(φ₀, φ₁)</div><div class="ws">Flecha morada: ∇L (cuesta arriba). Flecha verde: −∇L (cuesta abajo). Se dibujan con el mismo largo; las cifras dan la magnitud real.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="gradCanvas"></canvas>
+      <div id="gradRead"></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="gradPaso">Un paso: φ ← φ − 0.05 · ∇L</button>
+    <button class="btn" id="gradReset">Volver a (3, 2)</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>En (3, 2): L = 16, ∇L = (8, 16). La flecha morada apunta hacia arriba y a la derecha; la verde, al valle.</li>
+    <li>La dirección de las flechas es siempre la misma, (1, 2), porque esta L solo depende de φ₀ + 2φ₁. Lo que cambia es la magnitud: lejos del valle el gradiente es grande, cerca es chico.</li>
+    <li>Pulsa «Un paso» varias veces: cada paso resta el gradiente (×0.05), y L baja (16 → 4 → 1 → 0.25…). Esa es la actualización de gradient descent.</li>
+    <li>Haz clic sobre el valle (donde φ₀ + 2φ₁ = 3): el gradiente es (0, 0). Hay una línea entera de mínimos porque con una sola observación solo importa la combinación φ₀ + 2φ₁.</li>
+  </ol>
+</div>
+<div class="note key">
+  <span class="tag">Por qué los optimizadores RESTAN</span>
+  <p>El gradiente apunta hacia donde L sube más rápido. Para bajar L hay que ir en dirección contraria. Por eso la actualización es φₜ₊₁ = φₜ <strong>−</strong> η ∇L(φₜ) (→ clase 1, gradient descent): el menos es el cuesta abajo.</p>
+</div>
+
+<!-- ============ 7. VECTORES ============ -->
+<h2 id="vectores"><span class="num">Sección 7</span>Vectores y matrices</h2>
+
+<p>Un <strong>vector</strong> es una lista ordenada de números: w = (1, 2, 3). Una <strong>matriz</strong> es una tabla de números, con filas y columnas. Se describen por su <em>forma</em> (shape): (3, 2) quiere decir «3 filas y 2 columnas». Un vector columna de 3 números tiene forma (3, 1).</p>
+
+<h3 id="producto-punto" data-toc="Producto punto">El producto punto</h3>
+<p>El producto punto multiplica dos vectores entrada por entrada y suma los resultados. Es el cálculo que hace cada neurona: «pondera» cada entrada con un peso y suma.</p>
+
+<div class="formula">
+  <div class="f-head">Producto punto</div>
+  <div class="f-ejemplo">w = (1, 2, 3),  x = (4, 5, 6)  →  1·4 + 2·5 + 3·6 = 4 + 10 + 18 = 32</div>
+  <div class="eq">
+    <span class="sym" data-s="w"></span><span class="sup"><span class="sym" data-s="transp"></span></span><span class="sym" data-s="x"></span> = <span class="big"><span class="lim r-dato">d</span><span class="o">Σ</span><span class="lim">j=1</span></span> <span class="r-param">w</span><span class="sub">j</span> <span class="r-dato">x</span><span class="sub">j</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«w transpuesta por x: multiplica cada peso por su entrada y suma todo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">w</dt><dd>El vector de pesos: cuánto le importa cada entrada a la neurona.</dd>
+      <dt class="r-dato">x</dt><dd>El vector de entradas (las características).</dd>
+      <dt>ᵀ</dt><dd>Transpuesta: pone el vector en fila para poder «multiplicarlo» con el otro. No cambia los números, solo la forma.</dd>
+      <dt>j, d</dt><dd>El contador j recorre las d entradas.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un peso es 0: esa entrada no influye en nada.</li>
+      <li>…un peso es negativo: esa entrada resta en lugar de sumar.</li>
+      <li>…duplicas todos los pesos: el resultado se duplica.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="matriz-vector" data-toc="Matriz por vector y formas">Matriz por vector y la regla de las formas</h3>
+<p>Una matriz por un vector es <strong>un producto punto por cada fila</strong>. Con A = [[1, 0], [2, 3]] y x = (5, −1): fila 1: 1·5 + 0·(−1) = 5; fila 2: 2·5 + 3·(−1) = 7. Resultado: (5, 7).</p>
+
+<div class="note key">
+  <span class="tag">La regla de las formas</span>
+  <p>(n, <strong>d</strong>) · (<strong>d</strong>, 1) → (n, 1). El número de en medio debe coincidir (cada fila de la matriz tiene d números, igual que el vector) y <em>desaparece</em>. Quedan los de los extremos. Si no coinciden, el producto no existe. Ejemplo: (3, 2) · (2, 1) → (3, 1). Esta regla sirve para revisar las dimensiones de cualquier capa a mano en el examen.</p>
+</div>
+
+<h3 id="otros-operadores" data-toc="Transpuesta, ⊙ y norma">Transpuesta, ⊙ y norma</h3>
+<ul>
+  <li><strong>Transpuesta (ᵀ):</strong> intercambia filas por columnas. Un vector columna (3, 1) se vuelve una fila (1, 3).</li>
+  <li><strong>Producto elemento a elemento (⊙, Hadamard):</strong> multiplica entrada por entrada <em>sin sumar</em>. (1, 2, 3) ⊙ (4, 5, 6) = (4, 10, 18). El producto punto es esa lista sumada: 4 + 10 + 18 = 32. Aparece en backprop: δₖ₋₁ = (Ωₖᵀ δₖ) ⊙ a′(fₖ₋₁).</li>
+  <li><strong>Norma (‖w‖²):</strong> el largo del vector, al cuadrado: la suma de los cuadrados de sus entradas.</li>
+</ul>
+
+<div class="formula">
+  <div class="f-head">Norma al cuadrado</div>
+  <div class="f-ejemplo">w = (1, 2, 3)  →  ‖w‖² = 1² + 2² + 3² = 1 + 4 + 9 = 14</div>
+  <div class="eq">
+    <span class="sym" data-s="norma"></span> = <span class="big"><span class="lim r-dato">d</span><span class="o">Σ</span><span class="lim">j=1</span></span> <span class="r-param">w</span><span class="sub">j</span><span class="sup">2</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La norma al cuadrado de w es la suma de los cuadrados de cada uno de sus pesos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>‖·‖</dt><dd>Las dos barras verticales dicen «tamaño de». Una sola barra, |B|, sería el número de elementos de un conjunto.</dd>
+      <dt class="r-param">wⱼ</dt><dd>El peso número j.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un solo peso es muy grande (10): su cuadrado (100) domina la norma. Por eso penalizar ‖w‖² castiga sobre todo los pesos grandes (→ clase 5, regularización L2).</li>
+      <li>…todos los pesos son 0: la norma es 0.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="lab-capa" class="lab" data-toc="Lab: una capa de red">Laboratorio: una capa de la red</h3>
+<p>Una capa de la red de la clase 2 es h = a(Ωx + β): multiplicar por la matriz, sumar el sesgo, aplicar la activación a cada entrada (aquí, ReLU). Recórrela paso a paso con números enteros pequeños.</p>
+<div class="formula">
+  <div class="f-head">Una capa de la red</div>
+  <div class="f-ejemplo">Ω = [[1, 2], [−1, 1], [2, −1]],  x = (2, 1),  β = (1, 0, −1)  →  Ωx = (4, −1, 3)  →  Ωx + β = (5, −1, 2)  →  ReLU → h = (5, 0, 2)</div>
+  <div class="eq">
+    <span class="sym" data-s="h"></span> = <span class="sym" data-s="a">a</span>( <span class="sym" data-s="Omega"></span> <span class="r-dato">x</span> + <span class="sym" data-s="beta"></span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«h es la activación aplicada a: la matriz Ω por la entrada x, más el sesgo β.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">h</dt><dd>La salida de la capa (la «capa oculta»), un vector con una entrada por neurona. Forma (3, 1).</dd>
+      <dt>a(·)</dt><dd>La función de activación, aplicada <em>elemento a elemento</em> (a cada entrada por separado).</dd>
+      <dt class="r-param">Ω</dt><dd>La matriz de pesos. Cada fila es una neurona. Forma (3, 2): 3 neuronas, 2 entradas.</dd>
+      <dt class="r-dato">x</dt><dd>La entrada de la capa. Forma (2, 1).</dd>
+      <dt class="r-param">β</dt><dd>El vector de sesgos: un número por neurona. Forma (3, 1). (Aquí β es el sesgo, no el momentum.)</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…una fila de Ω es de ceros: esa neurona solo depende de su sesgo.</li>
+      <li>…el resultado de Ωx + β es negativo en una entrada: la ReLU la apaga (se vuelve 0) y esa neurona no aporta nada para este x.</li>
+      <li>…cambias la activación por la identidad: toda la red se vuelve lineal.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="widget" id="labCapa">
+  <div class="widget-head"><div class="wt">h = ReLU(Ωx + β)</div><div class="ws">Seis pasos: tres productos punto, el sesgo, y la ReLU.</div></div>
+  <div class="widget-body">
+    <div class="mat-row" id="capaRow1"></div>
+    <div class="mat-row" id="capaRow2"></div>
+    <div class="calcline" id="capaCalc" style="white-space:normal"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Cada fila de Ω se combina con x en un producto punto: 1·2 + 2·1 = 4; −1·2 + 1·1 = −1; 2·2 + (−1)·1 = 3.</li>
+    <li>Al sumar β cambia cada entrada (5, −1, 2). Fíjate que la segunda sigue siendo negativa: sumar 0 no la rescata.</li>
+    <li>La ReLU apaga la segunda neurona (−1 pasa a 0). Las otras dos pasan sin cambio.</li>
+    <li>Revisa las formas: (3, 2) · (2, 1) → (3, 1); + (3, 1) → (3, 1). La regla del número de en medio.</li>
+  </ol>
+</div>
+
+<!-- ============ 8. PROBABILIDAD ============ -->
+<h2 id="probabilidad"><span class="num">Sección 8</span>Probabilidad y distribuciones</h2>
+
+<p>Una <strong>variable aleatoria</strong> es una cantidad cuyo valor no conoces de antemano: el resultado de un volado, la estatura de la próxima persona que entre a la sala. Una <strong>distribución</strong> dice qué valores puede tomar y qué tan probable es cada uno. Esa es la herramienta de la clase 3: en lugar de predecir un solo número, el modelo predice una distribución.</p>
+
+<p><strong>La barra se lee «dado».</strong> P(y | x) es «la probabilidad de y, dado x». Ejemplo: P(y = 1 | x) = 0.8 significa «dado que el paciente tiene estos síntomas x, hay 80% de probabilidad de que tenga la enfermedad (y = 1)». Lo que va a la derecha de la barra es lo que ya sabes; lo de la izquierda, lo que quieres saber.</p>
+
+<p><strong>La tilde ~ se lee «se distribuye como»</strong>: y ~ N(μ, σ²) es «y sigue una Normal con media μ y varianza σ²». No es una resta ni una aproximación: es una afirmación sobre de dónde sale y.</p>
+
+<h3 id="tabla-distribuciones" data-toc="Las cuatro distribuciones">Las cuatro distribuciones del curso</h3>
+<p>El examen incluye un formulario con estas. No hay que memorizarlas, hay que saber <strong>leerlas</strong> y elegir la correcta según el tipo de salida.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Distribución</th><th>Soporte de y (qué valores puede tomar)</th><th>Parámetros</th><th>P(y) o p(y)</th><th>E[y]</th><th>Cuándo se usa</th></tr>
+  <tr><td>Normal</td><td class="eqc">ℝ (cualquier real)</td><td class="eqc">μ ∈ ℝ, σ² &gt; 0</td><td class="eqc" style="white-space:nowrap"><span class="frac"><span class="num">1</span><span class="den">√(2πσ²)</span></span> exp( −<span class="frac"><span class="num">(y − μ)²</span><span class="den">2σ²</span></span> )</td><td class="eqc">μ</td><td>Regresión: salida continua (estatura, precio).</td></tr>
+  <tr><td>Bernoulli</td><td class="eqc">{0, 1}</td><td class="eqc">λ ∈ [0, 1]</td><td class="eqc">λ<sup>y</sup> (1 − λ)<sup>1−y</sup></td><td class="eqc">λ</td><td>Clasificación binaria (sí/no).</td></tr>
+  <tr><td>Categórica</td><td class="eqc">{1, …, K}</td><td class="eqc">λₖ ≥ 0, Σ λₖ = 1</td><td class="eqc">λ<sub>y</sub></td><td>—</td><td>Clasificación en K clases.</td></tr>
+  <tr><td>Poisson</td><td class="eqc">{0, 1, 2, …}</td><td class="eqc">λ &gt; 0</td><td class="eqc"><span class="frac"><span class="num">λ<sup>y</sup> e<sup>−λ</sup></span><span class="den">y!</span></span></td><td class="eqc">λ</td><td>Conteos (número de llamadas, de casos).</td></tr>
+</table></div>
+
+<p>Con números pequeños para sentirlas:</p>
+<ul>
+  <li><strong>Bernoulli</strong> con λ = 0.7: P(y = 1) = 0.7 y P(y = 0) = 0.3. La fórmula λ<sup>y</sup>(1 − λ)<sup>1−y</sup> es una forma compacta de escribir las dos: si y = 1, el segundo factor se vuelve (1 − λ)⁰ = 1 y queda λ; si y = 0, queda 1 − λ.</li>
+  <li><strong>Categórica</strong> con K = 3 y λ = (0.2, 0.5, 0.3): P(y = 2) = λ₂ = 0.5. Los λ suman 1 (lo que produce softmax).</li>
+  <li><strong>Poisson</strong> con λ = 2: P(y = 0) = e⁻² = 0.135, P(y = 2) = 2² e⁻² / 2! = 0.271.</li>
+  <li><strong>Normal</strong> con μ = 0 y σ = 1: la «campana» más alta en y = 0, donde vale 0.399. Más abajo la verás con detalle.</li>
+</ul>
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>En la Normal, p(y) es una <em>densidad</em>, no una probabilidad: puede ser mayor que 1 (con σ = 0.1, la altura en el centro es 3.99). Lo que sí suma (integra) 1 es el área bajo la curva. En Bernoulli, Categórica y Poisson, P(y) sí es una probabilidad (entre 0 y 1).</p>
+</div>
+
+<h3 id="esperanza" data-toc="E[·] y Var(·)">Valor esperado y varianza</h3>
+<p>El <strong>valor esperado</strong> E[y] es el promedio «a largo plazo»: cada valor posible pesado por su probabilidad. La <strong>varianza</strong> Var(y) mide qué tan dispersos están los valores alrededor de ese promedio.</p>
+
+<div class="formula">
+  <div class="f-head">Valor esperado y varianza</div>
+  <div class="f-ejemplo">Un dado justo: cada cara tiene probabilidad 1/6  →  E[y] = (1 + 2 + 3 + 4 + 5 + 6) / 6 = 3.5   →  Var(y) = E[(y − 3.5)²] = (6.25 + 2.25 + 0.25 + 0.25 + 2.25 + 6.25) / 6 = 2.917</div>
+  <div class="eq">
+    <span class="sym" data-s="E">E[y]</span> = <span class="big"><span class="lim">&nbsp;</span><span class="o">Σ</span><span class="lim">todos los y</span></span> y · P(y) &nbsp;&nbsp;&nbsp; <span class="sym" data-s="Var">Var(y)</span> = E[ ( y − E[y] )<span class="sup">2</span> ]
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La esperanza de y es la suma de cada valor por su probabilidad. La varianza es el promedio de cuánto se aleja y de su esperanza, al cuadrado.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">E[y]</dt><dd>«Esperanza» o valor esperado. Un número (el promedio ponderado).</dd>
+      <dt class="r-calc">Var(y)</dt><dd>La varianza. Siempre ≥ 0. Su raíz cuadrada es la desviación estándar σ.</dd>
+      <dt>P(y)</dt><dd>La probabilidad de cada valor de y (aquí, 1/6 por cara).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el dado está cargado hacia el 6: E[y] sube por encima de 3.5.</li>
+      <li>…todos los valores están muy cerca de la media: la varianza se acerca a 0.</li>
+      <li>…duplicas todos los valores de y: la media se duplica y la varianza se multiplica por 4 (por el cuadrado).</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="iid" data-toc="i.i.d. y el producto">i.i.d.: de muchas probabilidades a un producto</h3>
+<p>Si las observaciones son i.i.d. (independientes e idénticamente distribuidas), la probabilidad de ver todos los datos es el producto de las probabilidades de cada uno.</p>
+
+<div class="formula">
+  <div class="f-head">Verosimilitud de n observaciones i.i.d.</div>
+  <div class="f-ejemplo">Un modelo Bernoulli con λ = 0.7 observa y = (1, 0, 1)  →  0.7 · 0.3 · 0.7 = 0.147</div>
+  <div class="eq">
+    P(<span class="r-dato">y</span><span class="sub">1</span>, …, <span class="r-dato">y</span><span class="sub">n</span> | <span class="r-dato">x</span><span class="sub">1</span>, …, <span class="r-dato">x</span><span class="sub">n</span>, <span class="r-param">φ</span>) = <span class="big"><span class="lim r-dato">n</span><span class="o sym" data-s="prod">Π</span><span class="lim">i=1</span></span> P(<span class="r-dato">y</span><span class="sub">i</span> | <span class="r-dato">x</span><span class="sub">i</span>, <span class="r-param">φ</span>)
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de ver todos los datos juntos, dados los parámetros, es el producto de la probabilidad de cada dato por separado.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">y₁ … yₙ</dt><dd>Todas las salidas observadas.</dd>
+      <dt>| (la barra)</dt><dd>«Dado». A su derecha, lo que el modelo conoce: las entradas y los parámetros φ.</dd>
+      <dt>Π</dt><dd>Producto de i = 1 hasta n. Es la versión multiplicativa de Σ.</dd>
+      <dt class="r-param">φ</dt><dd>Los parámetros del modelo. Se «eligen» para que este número sea lo más alto posible.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el modelo le da probabilidad baja a una sola observación: todo el producto baja, porque se multiplica por un número chico.</li>
+      <li>…agregas más datos: el producto se hace más chico (más factores menores a 1). Por eso se trabaja con el log (laboratorio «por qué log»).</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="normal" data-toc="La Normal y −log">La Normal, su altura y el menos-log</h3>
+<p>En la clase 3, la pérdida de una regresión sale de la Normal. La idea: el modelo propone una campana centrada en su predicción μ = f(x, φ). Si el dato real y cae donde la campana es <strong>alta</strong>, el modelo le dio mucha verosimilitud; si cae en la cola, poca.</p>
+
+<div class="formula">
+  <div class="f-head">Altura de la Normal y su menos-log</div>
+  <div class="f-ejemplo">μ = 0, σ = 1, y = 1.5  →  altura = 0.3989 · e<sup>−1.125</sup> = 0.1295  →  −log(0.1295) = 2.044</div>
+  <div class="eq">
+    p(<span class="r-dato">y</span>) = <span class="frac"><span class="num">1</span><span class="den">√(2π<span class="sym" data-s="sigma"></span><span class="sup">2</span>)</span></span> exp( −<span class="frac"><span class="num">(<span class="r-dato">y</span> − <span class="sym" data-s="mu"></span>)<span class="sup">2</span></span><span class="den">2σ<span class="sup">2</span></span></span> )
+    <span class="lbl">y su menos-log:&nbsp; −log p(y) = ½ log(2πσ²) + (y − μ)² / (2σ²)</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La altura de la campana en y es una constante, uno sobre la raíz de dos pi sigma cuadrada, por e elevado a menos la distancia al cuadrado entre dos sigma cuadrada.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">y</dt><dd>El dato observado, el punto donde evaluamos la campana.</dd>
+      <dt class="r-calc">μ</dt><dd>El centro de la campana: la predicción del modelo, f(x, φ).</dd>
+      <dt class="r-calc">σ</dt><dd>Qué tan ancha es la campana (desviación estándar). Aquí σ es la desviación, no la sigmoide.</dd>
+      <dt>(y − μ)²</dt><dd>Qué tan lejos cae el dato del centro, al cuadrado.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…y está justo en μ: la exponencial vale e⁰ = 1 y la altura es la máxima, 1/√(2πσ²).</li>
+      <li>…y se aleja de μ: la altura cae rápido (como e a la menos distancia²) y el menos-log crece con el cuadrado de la distancia.</li>
+      <li>…σ es chica: la campana es angosta y alta. Premia mucho los aciertos y castiga mucho los errores. Con σ grande: campana ancha y baja, perdona más.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Veamos de dónde sale el menos-log, usando las propiedades de log de la <a href="#log-exp">sección 5</a>:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">p(y) = (2πσ²)<sup>−1/2</sup> · exp( −(y − μ)² / (2σ²) )</div><div class="d-por">Partimos de la altura de la Normal, escrita como un producto de dos factores (la raíz pasa a potencia −1/2).</div></li>
+  <li><div class="d-ex">−log p(y) = −[ log (2πσ²)<sup>−1/2</sup> + log exp( −(y − μ)² / (2σ²) ) ]</div><div class="d-por"><b>Log de un producto:</b> log(a·b) = log a + log b. El menos de afuera se queda delante del corchete.</div></li>
+  <li><div class="d-ex">log (2πσ²)<sup>−1/2</sup> = −½ log(2πσ²)</div><div class="d-por"><b>Log de una potencia:</b> log(aᵇ) = b·log a, con b = −½.</div></li>
+  <li><div class="d-ex">log exp( −(y − μ)² / (2σ²) ) = −(y − μ)² / (2σ²)</div><div class="d-por"><b>Log y exp se deshacen:</b> log(e<sup>z</sup>) = z.</div></li>
+  <li><div class="d-ex">−log p(y) = ½ log(2πσ²) + (y − μ)² / (2σ²)</div><div class="d-por"><b>Repartir el menos:</b> el signo de afuera cambia el signo de cada término de adentro.</div></li>
+  <li><div class="d-ex">y = 1.5, μ = 0, σ = 1:&nbsp; 0.919 + 1.125 = 2.044</div><div class="d-por"><b>Verificación con números:</b> ½ log(2π) = 0.919 y 1.5²/2 = 1.125. Suma 2.044 = −log(0.1295). ✔</div></li>
+  <li><div class="d-ex">si σ está fija, ½ log(2πσ²) es constante</div><div class="d-por"><b>Interpretación:</b> el primer término no depende de μ (ni de φ). Minimizar −log p equivale a minimizar (y − μ)²: la pérdida cuadrática (→ clase 3, Ejemplo 1: Normal ⇒ MSE).</div></li>
+</ol>
+
+<h3 id="lab-campana" class="lab" data-toc="Lab: la campana">Laboratorio: la campana</h3>
+<p>Una Normal con μ y σ ajustables, y un dato observado y. El punto muestra la altura de la curva en y (la verosimilitud de ese dato), y el panel da también su menos-log.</p>
+<div class="widget" id="labCampana">
+  <div class="widget-head"><div class="wt">Altura de la campana en el dato observado</div><div class="ws">Parte de μ = 0, σ = 1 y y = 1.5.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="campCanvas"></canvas>
+      <div><div id="campCtrl"></div><div id="campRead"></div><div class="status info" id="campStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="campReset">Reiniciar</button>
+    <button class="btn" id="campAngosta">σ = 0.5</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con (μ, σ, y) = (0, 1, 1.5): altura 0.1295, menos-log 2.044.</li>
+    <li>Pulsa «σ = 0.5» con y = 1.5: la altura cae a 0.0089 y el menos-log sube a 4.73. Una campana angosta castiga mucho un error de 1.5.</li>
+    <li>Con σ = 0.5 y y = 0 (dato justo en el centro): altura 0.798, menos-log 0.226. La campana angosta premia mucho el acierto.</li>
+    <li>Mueve μ hasta que coincida con y: la altura es máxima y el menos-log mínimo. Entrenar un modelo de regresión es hacer eso con todos los datos.</li>
+  </ol>
+</div>
+
+<!-- ============ 9. OPTIMIZAR ============ -->
+<h2 id="optimizar"><span class="num">Sección 9</span>argmin, argmax y «minimizar»</h2>
+
+<p>Dos preguntas distintas con casi el mismo símbolo. <strong>min L</strong> es «¿cuál es el valor más bajo de L?» (un número). <strong>argmin L</strong> es «¿en qué punto φ se alcanza ese valor más bajo?» (el argumento que lo logra). En entrenamiento nos importa el segundo: queremos los parámetros, no solo la pérdida.</p>
+
+<div class="formula">
+  <div class="f-head">argmin</div>
+  <div class="f-ejemplo">L(φ) = (φ − 3)² + 1  →  el valor más bajo es min L = 1  →  se alcanza en φ = 3, así que argmin L = 3</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat"></span> = <span class="big"><span class="o sym" data-s="argmin">argmin</span><span class="lim r-param">φ</span></span> <span class="sym" data-s="L"></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«φ gorro es el valor de φ que hace mínima la pérdida L.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">φ̂</dt><dd>Los parámetros «estimados»: el resultado del entrenamiento.</dd>
+      <dt>argmin<sub>φ</sub></dt><dd>«El argumento φ que minimiza». El subíndice dice sobre qué variable se busca.</dd>
+      <dt class="r-calc">L</dt><dd>La pérdida total, la función que queremos hacer pequeña.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…cambias la pérdida a L(φ) = (φ − 3)² + 10: min L pasa de 1 a 10, pero argmin L sigue siendo 3. Sumar una constante no mueve el argmin.</li>
+      <li>…multiplicas L por un número positivo: tampoco cambia el argmin (el valle está en el mismo lugar, solo más profundo).</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="max-min" data-toc="Maximizar es minimizar el negativo">Maximizar f es minimizar −f</h3>
+<p>Si f tiene su pico en φ = 3, entonces −f (la misma curva volteada) tiene su valle en φ = 3. Con f(φ) = −(φ − 3)² + 5: el máximo vale 5, en φ = 3; y −f = (φ − 3)² − 5 tiene su mínimo, −5, también en φ = 3. Por eso los dos problemas se resuelven igual, y por eso la verosimilitud (que se maximiza) se convierte en una pérdida (que se minimiza) poniéndole un signo menos.</p>
+
+<h3 id="log-argmax" data-toc="Aplicar log no cambia el argmax">Aplicar log no cambia el argmax</h3>
+<p>El logaritmo es una función <strong>creciente</strong>: si a &gt; b entonces log a &gt; log b. Por eso el modelo con mayor verosimilitud es también el de mayor log-verosimilitud. Ejemplo con dos modelos que dan estas probabilidades a tres datos:</p>
+<ul>
+  <li>Modelo A: 0.5, 0.5, 0.5. Producto: 0.125. Suma de logs: −2.079.</li>
+  <li>Modelo B: 0.8, 0.6, 0.5. Producto: 0.240. Suma de logs: −1.427.</li>
+</ul>
+<p>B gana en las dos formas (0.240 &gt; 0.125 y −1.427 &gt; −2.079). Y en la forma de pérdida, B también gana: tiene menor −Σ log P (1.427 &lt; 2.079).</p>
+
+<p>Con esto armamos el paso «max verosimilitud → min −log» que aparece en tres clases:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">φ̂ = argmax<sub>φ</sub> Π P(yᵢ | xᵢ, φ)</div><div class="d-por">Máxima verosimilitud: queremos los parámetros que dan la probabilidad más alta a todos los datos juntos.</div></li>
+  <li><div class="d-ex">φ̂ = argmax<sub>φ</sub> log [ Π P(yᵢ | xᵢ, φ) ]</div><div class="d-por"><b>El log es creciente:</b> aplicarlo no cambia dónde está el máximo (solo el valor del máximo).</div></li>
+  <li><div class="d-ex">φ̂ = argmax<sub>φ</sub> Σ log P(yᵢ | xᵢ, φ)</div><div class="d-por"><b>Log de un producto:</b> log(a·b) = log a + log b, así que log Π se vuelve Σ log (<a href="#log-exp">sección 5</a>).</div></li>
+  <li><div class="d-ex">φ̂ = argmin<sub>φ</sub> [ −Σ log P(yᵢ | xᵢ, φ) ]</div><div class="d-por"><b>Maximizar f = minimizar −f:</b> ponemos el signo menos y cambiamos argmax por argmin. Lo que queda dentro es la pérdida L(φ).</div></li>
+  <li><div class="d-ex">A: −Σ log P = 2.079;&nbsp; B: −Σ log P = 1.427&nbsp; ⇒&nbsp; gana B</div><div class="d-por"><b>Verificación con números:</b> el modelo con mayor producto es el de menor −Σ log. Coincide con el ejemplo de arriba.</div></li>
+</ol>
+
+<!-- ============ 10. NOTACIÓN ============ -->
+<h2 id="notacion"><span class="num">Sección 10</span>Tabla de notación completa</h2>
+
+<p>Aquí está todo el vocabulario simbólico del curso, agrupado por qué tipo de cosa es. Es la tabla a la que enlazan los otros cinco artefactos: cada fila tiene su ancla (por ejemplo <code>#sym-eta</code>). Dentro de cada grupo, el color de la columna del símbolo es el de su rol: <span class="r-param">parámetros</span>, <span class="r-dato">datos</span>, <span class="r-hiper">hiperparámetros</span>, <span class="r-calc">cantidades calculadas</span>.</p>
+
+<h3 id="not-datos" data-toc="Datos">Datos</h3>
+<p>Lo que viene del mundo y no se modifica. Nadie «aprende» un dato.</p>
+<div data-tabla-notacion data-grupo="datos"></div>
+
+<h3 id="not-parametros" data-toc="Parámetros">Parámetros</h3>
+<p>Los números que el entrenamiento ajusta. Son el resultado del aprendizaje.</p>
+<div data-tabla-notacion data-grupo="parametros"></div>
+
+<h3 id="not-hiper" data-toc="Hiperparámetros">Hiperparámetros</h3>
+<p>Los números que eliges tú <em>antes</em> de entrenar. El entrenamiento no los toca.</p>
+<div data-tabla-notacion data-grupo="hiper"></div>
+
+<h3 id="not-calculadas" data-toc="Cantidades calculadas">Cantidades calculadas</h3>
+<p>Lo que sale de combinar datos y parámetros: predicciones, pérdidas, gradientes, estados de un optimizador.</p>
+<div data-tabla-notacion data-grupo="calculadas"></div>
+
+<h3 id="not-funciones" data-toc="Funciones">Funciones</h3>
+<div data-tabla-notacion data-grupo="funciones"></div>
+
+<h3 id="not-operadores" data-toc="Operadores">Operadores y notación</h3>
+<div data-tabla-notacion data-grupo="operadores"></div>
+
+<h3 id="not-probabilidad" data-toc="Probabilidad">Probabilidad</h3>
+<div data-tabla-notacion data-grupo="probabilidad"></div>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 11</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. En el examen no habrá calculadora de código: los números están elegidos para que se hagan a mano.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §1 · GD vs. SGD con mini-batch</span>
+  <div class="e-enun">Lee en voz alta la actualización de SGD con mini-batch y clasifica cada símbolo como parámetro, dato, hiperparámetro o cantidad calculada:
+    <div class="eq">φ<span class="sub">t+1</span> = φ<span class="sub">t</span> − α · <span class="frac"><span class="num">1</span><span class="den">|B<span class="sub">t</span>|</span></span> <span class="big"><span class="lim">&nbsp;</span><span class="o">Σ</span><span class="lim">i∈B<span class="sub">t</span></span></span> ∇ℓ<span class="sub">i</span>(φ<span class="sub">t</span>)</div>
+  </div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Empieza por el lado izquierdo (qué se calcula). Luego identifica quién es i y quién es Bₜ.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>Se lee:</strong> «Los parámetros del paso t+1 son los del paso t menos α por el promedio, sobre las observaciones i del mini-batch Bₜ, de los gradientes de la pérdida de cada observación, evaluados en φₜ.»</p>
+    <p><strong>Roles:</strong></p>
+    <ul>
+      <li><span class="r-param">φₜ, φₜ₊₁</span>: parámetros (los que se aprenden), antes y después del paso.</li>
+      <li><span class="r-hiper">α</span>: hiperparámetro (tasa de aprendizaje). <span class="r-hiper">|Bₜ|</span>: hiperparámetro (tamaño del batch), elegido por ti.</li>
+      <li><span class="r-dato">Bₜ</span>: el conjunto de índices de las observaciones del mini-batch en el paso t; viene de los datos.</li>
+      <li><span class="r-calc">∇ℓᵢ(φₜ)</span>: cantidad calculada, el gradiente de la pérdida de la observación i.</li>
+      <li>i es un contador (índice) y t es el número de paso (índice); Σ es el operador de suma; 1/|Bₜ| convierte la suma en promedio.</li>
+    </ul>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · lectura de Σ</span>
+  <div class="e-enun">Despliega Σ<sub>i=1</sub><sup>3</sup> (2i − 1) y calcula su valor.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Se sustituye i = 1, 2, 3 en (2i − 1): (2·1 − 1) + (2·2 − 1) + (2·3 − 1) = 1 + 3 + 5 = <strong>9</strong>.</p>
+    <p>Son los tres primeros impares. Con n términos la suma da n²; aquí 3² = 9. ✔</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · una neurona</span>
+  <div class="e-enun">Calcula wᵀx con w = (2, −1, 0.5) y x = (1, 4, 2).</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Multiplica entrada por entrada y suma.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>wᵀx = 2·1 + (−1)·4 + 0.5·2 = 2 − 4 + 1 = <strong>−1</strong>.</p>
+    <p>El resultado es un solo número (un escalar): la forma de (1, 3)·(3, 1) es (1, 1).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · formas en una capa</span>
+  <div class="e-enun">Ω tiene forma (4, 3) y h tiene forma (3, 1). ¿Qué forma tiene Ωh? ¿Cuántos productos punto se hacen y de qué largo es cada uno?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>El número de en medio (3) coincide y desaparece: la forma es <strong>(4, 1)</strong>.</p>
+    <p>Cada fila de Ω se combina con h en un producto punto: son <strong>4 productos punto</strong>, cada uno de largo 3 (3 multiplicaciones y 2 sumas). En total, 12 multiplicaciones. Si Ω tuviera 3 columnas y h 4 filas, el producto no existiría.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §4 · regla de la cadena</span>
+  <div class="e-enun">Con la regla de la cadena, calcula dy/dx de y = e<sup>2x+1</sup> en x = 0.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Nombra u = 2x + 1. Entonces y = e<sup>u</sup>.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>u = 2x + 1, y = e<sup>u</sup>.</li>
+      <li>dy/du = e<sup>u</sup> (la exponencial es su propia derivada) y du/dx = 2.</li>
+      <li>dy/dx = e<sup>u</sup> · 2 = 2e<sup>2x+1</sup>.</li>
+      <li>En x = 0: u = 1, así que dy/dx = 2e¹ = <strong>5.437</strong>.</li>
+    </ol>
+    <p>Verificación: con h = 0.001, (e<sup>1.002</sup> − e<sup>1</sup>) / 0.001 = 5.442 ≈ 5.437. ✔</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §1 · gradiente de la regresión lineal</span>
+  <div class="e-enun">Calcula la derivada parcial ∂/∂φ₁ de (φ₀ + φ₁x − y)². Es la respuesta simbólica, sin números.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Nombra u = φ₀ + φ₁x − y. ¿Qué es constante cuando derivas respecto a φ₁?</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>u = φ₀ + φ₁x − y, de modo que la expresión es u².</li>
+      <li>∂(u²)/∂u = 2u.</li>
+      <li>∂u/∂φ₁ = x, porque φ₀ y y son constantes (derivada 0) y φ₁x deriva en x.</li>
+      <li>Regla de la cadena: <strong>∂/∂φ₁ = 2(φ₀ + φ₁x − y) · x</strong>.</li>
+    </ol>
+    <p>Lectura: el gradiente es el error (ŷ − y) multiplicado por la entrada x, por 2. Si el error es positivo y x también, hay que bajar φ₁.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · softmax</span>
+  <div class="e-enun">Calcula softmax(0, 1, 2) con tres decimales.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>e⁰ = 1,  e¹ = 2.718,  e² = 7.389.</li>
+      <li>Suma = 1 + 2.718 + 7.389 = 11.107.</li>
+      <li>Divide cada una: 1 / 11.107 = <strong>0.090</strong>,  2.718 / 11.107 = <strong>0.245</strong>,  7.389 / 11.107 = <strong>0.665</strong>.</li>
+    </ol>
+    <p>Comprobación: 0.090 + 0.245 + 0.665 = 1.000. ✔ Y softmax(5, 6, 7) daría lo mismo (solo importan las diferencias).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §3 · máxima verosimilitud</span>
+  <div class="e-enun">Explica con palabras por qué argmax<sub>φ</sub> Π P(yᵢ | xᵢ, φ) es igual a argmin<sub>φ</sub> [−Σ log P(yᵢ | xᵢ, φ)].</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Son dos pasos: uno por el log, otro por el signo menos. ¿Qué propiedad del log permite el primero?</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Hay tres razones encadenadas:</p>
+    <ol>
+      <li><strong>El log es creciente.</strong> Si un φ da mayor verosimilitud que otro, también da mayor log-verosimilitud. Aplicar log no mueve el argmax.</li>
+      <li><strong>El log de un producto es la suma de los logs.</strong> Así Π se vuelve Σ, que es más fácil de derivar y no se vuelve 0 en la computadora cuando n es grande.</li>
+      <li><strong>Maximizar f es minimizar −f.</strong> Ponerle el signo menos voltea la curva: el punto más alto pasa a ser el más bajo, y se queda en el mismo φ. Así obtenemos una pérdida que se minimiza.</li>
+    </ol>
+    <p>Ejemplo: modelos con probabilidades (0.5, 0.5, 0.5) y (0.8, 0.6, 0.5). Productos: 0.125 y 0.240. −Σ log: 2.079 y 1.427. El segundo gana en las dos escalas.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 12</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">producto punto</div><div class="def">Multiplicar dos vectores entrada por entrada y sumar los resultados: wᵀx = Σ wⱼxⱼ. Es lo que hace cada neurona.</div></div>
+  <div class="item"><div class="term">derivada</div><div class="def">La pendiente de una función en un punto: cuánto cambia f si muevo x un poquito. df/dx o f′(x).</div></div>
+  <div class="item"><div class="term">derivada parcial</div><div class="def">La derivada respecto a una sola variable, tratando las demás como constantes. Se escribe con ∂.</div></div>
+  <div class="item"><div class="term">gradiente</div><div class="def">El vector que junta todas las derivadas parciales de L. Apunta hacia donde L sube más rápido; por eso el optimizador resta.</div></div>
+  <div class="item"><div class="term">regla de la cadena</div><div class="def">Si y depende de u y u de x, entonces dy/dx = dy/du · du/dx. Es el motor de backpropagation.</div></div>
+  <div class="item"><div class="term">verosimilitud (likelihood)</div><div class="def">La probabilidad de los datos observados según el modelo, vista como función de los parámetros. Con datos i.i.d. es un producto.</div></div>
+  <div class="item"><div class="term">i.i.d.</div><div class="def">Independientes e idénticamente distribuidas: cada observación sale del mismo proceso y no depende de las demás. Permite escribir la verosimilitud como un producto.</div></div>
+  <div class="item"><div class="term">distribución</div><div class="def">La lista de valores que puede tomar una variable aleatoria y la probabilidad (o densidad) de cada uno.</div></div>
+  <div class="item"><div class="term">función de activación</div><div class="def">La función no lineal a(·) que se aplica elemento a elemento a la salida de una capa (ReLU, sigmoide, tanh). Sin ella la red sería lineal.</div></div>
+  <div class="item"><div class="term">argmin / argmax</div><div class="def">El punto donde una función alcanza su mínimo (o su máximo), no el valor mismo. φ̂ = argmin L(φ) son los parámetros que minimizan la pérdida.</div></div>
+  <div class="item"><div class="term">norma</div><div class="def">El tamaño de un vector. ‖w‖² es la suma de los cuadrados de sus entradas; es lo que se penaliza en la regularización L2.</div></div>
+</div>
+<p>Esta misma página es la tabla de notación a la que enlazan los otros artefactos: <a href="#notacion">ver la tabla completa</a>.</p>
+
+<nav class="serie" data-actual="00"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Repaso.Rmd</code>, <code>NN.Rmd</code>, <code>Entrenamiento.Rmd</code>, <code>Entrenamiento2.Rmd</code> y <code>Regularizacion.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+  function sb(s){ return '<span class="sub">' + s + '</span>'; }
+  function fr(n, d){ return '<span class="frac"><span class="num">' + n + '</span><span class="den">' + d + '</span></span>'; }
+  function bg(top, o, bot){ return '<span class="big"><span class="lim">' + top + '</span><span class="o">' + o + '</span><span class="lim">' + bot + '</span></span>'; }
+  function fexp(x){
+    if(x === 0) return "0 (exacto)";
+    var p = x.toExponential(2).split("e"), sup = {"-":"⁻","0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};
+    return p[0] + " × 10" + p[1].replace("+", "").split("").map(function(c){ return sup[c]; }).join("");
+  }
+
+  /* =================================================================
+     Lab 1 · Lector de fórmulas
+     ================================================================= */
+  var ROL = {param:"parámetro aprendible", dato:"dato observado", hiper:"hiperparámetro", calc:"cantidad calculada", op:"operador / notación"};
+  var FORMULAS = {
+    perdida: {nombre:"Pérdida total", queCalcula:"la pérdida total L(φ)", piezas:[
+      {t:"L(φ) =", r:"calc", e:"Lado izquierdo: lo que se calcula. L es la pérdida total, un solo número. Entre paréntesis va de qué depende: de los parámetros φ (los datos están fijos)."},
+      {t:fr("1", "n"), r:"dato", e:"n es el número de observaciones. Multiplicar por 1/n convierte la suma que viene en un promedio."},
+      {t:bg("n", "Σ", "i=1"), r:"op", e:"Sigma: la suma de n términos, con el contador i yendo de 1 a n. Es un ciclo for."},
+      {t:"ℓ(", r:"calc", e:"ℓ es la pérdida de UNA observación: recibe la predicción del modelo y el valor real, y devuelve un número que dice qué tan mal le fue."},
+      {t:"f(x" + sb("i") + ", φ)", r:"calc", e:"La predicción del modelo para la observación i. Antes de la coma va el dato (xᵢ); después, los parámetros (φ)."},
+      {t:", y" + sb("i") + " )", r:"dato", e:"yᵢ es el valor real de la observación i: lo que el modelo debería haber predicho."}
+    ], frase:"La pérdida total de los parámetros φ es el promedio, sobre las n observaciones, de qué tan mal le va al modelo: la pérdida ℓ de comparar su predicción f(xᵢ, φ) con el valor real yᵢ."},
+    gd: {nombre:"Actualización de GD", queCalcula:"los parámetros del paso siguiente", piezas:[
+      {t:"φ" + sb("t+1") + " =", r:"param", e:"Lado izquierdo: los parámetros en el paso siguiente, t + 1. Aquí el «=» funciona como «se actualiza a» (en código, una asignación)."},
+      {t:"φ" + sb("t"), r:"param", e:"Los parámetros actuales, en el paso t. Son el punto de partida de este paso."},
+      {t:" − ", r:"op", e:"Menos: caminamos en dirección contraria al gradiente, que apunta cuesta arriba (sección 6)."},
+      {t:"η", r:"hiper", e:"La tasa de aprendizaje (learning rate): qué tan largo es el paso. La eliges tú antes de entrenar."},
+      {t:"∇L(φ" + sb("t") + ")", r:"calc", e:"El gradiente de la pérdida evaluado en los parámetros actuales: un vector con una derivada parcial por cada parámetro."}
+    ], frase:"Los parámetros nuevos son los parámetros actuales menos η veces el gradiente de la pérdida, calculado en los parámetros actuales."},
+    neurona: {nombre:"Una neurona", queCalcula:"la salida de la neurona 1", piezas:[
+      {t:"h" + sb("1") + " =", r:"calc", e:"Lado izquierdo: la salida de la neurona 1 (una unidad oculta; h viene de hidden). Es una cantidad calculada."},
+      {t:"a(", r:"op", e:"La función de activación (por ejemplo ReLU), que se aplica a todo lo que va dentro del paréntesis."},
+      {t:"θ" + sb("10"), r:"param", e:"Un parámetro de la neurona 1. El primer dígito es la neurona; el segundo, la entrada que multiplica (0 = ninguna: es el sesgo, un término suelto)."},
+      {t:"+ θ" + sb("11"), r:"param", e:"Otro parámetro de la neurona 1: el peso con que pesa la entrada x (neurona 1, entrada 1). El subíndice 11 no es «once»."},
+      {t:"x )", r:"dato", e:"La entrada, que θ₁₁ multiplica. El paréntesis cierra a(…): dentro hay una recta; afuera, la activación la dobla."}
+    ], frase:"La salida de la neurona 1 es la activación aplicada a: su término suelto θ₁₀ más su peso θ₁₁ multiplicado por la entrada x."},
+    nll: {nombre:"Menos log-verosimilitud", queCalcula:"la pérdida total L(φ)", piezas:[
+      {t:"L(φ) =", r:"calc", e:"Lado izquierdo: la pérdida total, un número que depende de los parámetros φ."},
+      {t:"−", r:"op", e:"Menos: voltea la curva. Maximizar la verosimilitud es lo mismo que minimizar su menos-log (sección 9)."},
+      {t:bg("n", "Σ", "i=1"), r:"op", e:"Suma sobre las n observaciones. Viene de que el log convierte el producto Π en suma."},
+      {t:"log", r:"op", e:"Logaritmo natural. Convierte productos en sumas y evita que muchos factores pequeños se redondeen a cero (sección 5)."},
+      {t:"P(y" + sb("i") + " |", r:"dato", e:"P(yᵢ | …) es la probabilidad de que la salida valga yᵢ. La barra se lee «dado»: lo que sigue es lo que el modelo conoce."},
+      {t:"f(x" + sb("i") + ", φ) )", r:"calc", e:"La predicción del modelo, calculada con xᵢ y φ. Aquí sirve para fijar los parámetros de la distribución (por ejemplo, su media)."}
+    ], frase:"La pérdida es menos la suma, sobre todas las observaciones, del logaritmo de la probabilidad que el modelo le da al valor real yᵢ, dado lo que predice f(xᵢ, φ)."}
+  };
+  var lecActual = "perdida";
+  function lectorPasos(){
+    var F = FORMULAS[lecActual], n = F.piezas.length;
+    DL.pasos($("labLector"), {etiqueta:"paso", total:n + 2, render:function(i){
+      var html = F.piezas.map(function(p, k){
+        var cls = "pz r-" + (p.r === "op" ? "op" : p.r);
+        if(i >= 1 && i <= n) cls += (k === i - 1 ? " on" : " apag");
+        return '<span class="' + cls + '">' + p.t + '</span>';
+      }).join(" ");
+      $("lecEq").innerHTML = html;
+      var info;
+      if(i === 0) info = '<div class="sh">' + F.nombre + '</div><div class="sb">Lo primero es saber qué se calcula: <b>' + F.queCalcula + '</b>. Pulsa «Siguiente →» para recorrer la fórmula una pieza a la vez.</div>';
+      else if(i <= n){
+        var p = F.piezas[i - 1];
+        info = '<div class="sh"><span class="rolchip r-' + p.r + '">' + ROL[p.r] + '</span> pieza ' + i + ' de ' + n + '</div><div class="sb">' + p.e + '</div>';
+      } else info = '<div class="sh">La frase completa, en voz alta</div><div class="sb frase-final">«' + F.frase + '»</div>';
+      $("lecInfo").innerHTML = info;
+    }});
+  }
+  DL.selector($("lecSel"), {valor:lecActual, opciones:[
+    {v:"perdida", t:"Pérdida total"}, {v:"gd", t:"Gradient descent"}, {v:"neurona", t:"Una neurona"}, {v:"nll", t:"Menos log-verosimilitud"}],
+    alCambiar:function(v){ lecActual = v; lectorPasos(); }});
+  lectorPasos();
+
+  /* =================================================================
+     Lab 2 · Expansor de Σ
+     ================================================================= */
+  var sx = [0.5, 1, 2, 3, 4], sy = [0.5, 0.9, 1.4, 2.2, 2.6], p0 = 0.4, p1 = 0.5, modoSuma = "suma";
+  var gSuma = DL.grafica($("sumCanvas"), {x:[0, 4.5], y:[0, 3.2], alto:300, etiquetaX:"x", etiquetaY:"y"}, function(g){
+    g.funcion(function(x){ return p0 + p1*x; }, {color:"text-2"});
+    sx.forEach(function(x, i){
+      g.linea(x, sy[i], x, p0 + p1*x, {color:"g" + (i + 1), ancho:3.5});
+      g.puntos([[x, sy[i]]], {color:"g" + (i + 1), radio:5.5, aro:true});
+    });
+  });
+  var cP0 = DL.control($("sumCtrl"), {etiqueta:"φ₀ (ordenada)", min:-1, max:2, paso:0.01, valor:p0, alCambiar:function(v){ p0 = v; renderSuma(); }});
+  var cP1 = DL.control($("sumCtrl"), {etiqueta:"φ₁ (pendiente)", min:-0.5, max:1.5, paso:0.01, valor:p1, alCambiar:function(v){ p1 = v; renderSuma(); }});
+  DL.selector($("sumSel"), {valor:"suma", opciones:[{v:"suma", t:"Suma"}, {v:"prom", t:"Promedio (÷ n)"}], alCambiar:function(v){ modoSuma = v; renderSuma(); }});
+  function renderSuma(){
+    var tot = 0, partes = sx.map(function(x, i){
+      var yh = p0 + p1*x, e = yh - sy[i], t = e*e; tot += t;
+      return '<span class="term" style="color:var(--g' + (i + 1) + ')">(' + DL.fmt(yh, 2) + ' − ' + DL.fmt(sy[i], 2) + ')² = ' + DL.fmt(t, 3) + '</span>';
+    });
+    var n = sx.length, val = modoSuma === "suma" ? tot : tot/n;
+    $("sumTerms").innerHTML = (modoSuma === "suma" ? "Σ = " : "Σ ÷ n = (1/5) · ( ") + partes.join(" + ") + (modoSuma === "suma" ? "" : " )") +
+      '<br><b>' + (modoSuma === "suma" ? "Total" : "Promedio") + ' = ' + DL.fmt(val, 3) + '</b>';
+    DL.readout($("sumRead"), [["φ₀", DL.fmt(p0, 2)], ["φ₁", DL.fmt(p1, 2)], ["Σ (ŷᵢ − yᵢ)²", DL.fmt(tot, 3)], ["promedio (÷ 5)", DL.fmt(tot/n, 3)]]);
+    gSuma.redibujar();
+  }
+  function fijarSuma(a, b){ cP0.fijar(a, true); cP1.fijar(b, true); p0 = cP0.valor(); p1 = cP1.valor(); renderSuma(); }
+  $("sumReset").onclick = function(){ fijarSuma(0.4, 0.5); };
+  $("sumMejor").onclick = function(){ fijarSuma(0.24, 0.61); };
+  renderSuma();
+
+  /* =================================================================
+     Lab 3 · Galería de funciones
+     ================================================================= */
+  var GAL = {
+    recta:{t:"Recta", f:function(z){ return 1 + 2*z; }, y:[-6, 8], rango:"cualquier número real (aquí, la recta 1 + 2z)"},
+    exp:{t:"exp", f:Math.exp, y:[-1, 21], rango:"solo positivos: entre 0 e ∞"},
+    log:{t:"log", f:function(z){ return z > 0 ? Math.log(z) : NaN; }, y:[-4, 2], rango:"cualquier real, pero solo existe para z > 0"},
+    relu:{t:"ReLU", f:function(z){ return z > 0 ? z : 0; }, y:[-0.5, 3.2], rango:"de 0 a ∞: los negativos se vuelven 0"},
+    sig:{t:"Sigmoide", f:DL.sigmoide, y:[-0.1, 1.1], rango:"entre 0 y 1, sin tocarlos"},
+    tanh:{t:"tanh", f:Math.tanh, y:[-1.2, 1.2], rango:"entre −1 y 1"}
+  };
+  var galK = "sig", galZ = 0;
+  var gGal = DL.grafica($("galCanvas"), {x:[-3, 3], y:GAL.sig.y.slice(), alto:300, etiquetaX:"z", etiquetaY:"f(z)"}, function(g){
+    var F = GAL[galK];
+    g.funcion(F.f, {color:"accent", ancho:2.5});
+    var v = F.f(galZ);
+    if(isFinite(v)){
+      g.linea(galZ, 0, galZ, v, {color:"text-3", guiones:true, ancho:1.5});
+      g.puntos([[galZ, v]], {color:"r-calc", radio:6.5, aro:true});
+    } else g.vertical(galZ, {color:"warn", guiones:true, ancho:1.5});
+  });
+  function renderGal(){
+    var F = GAL[galK], v = F.f(galZ);
+    gGal.o.y = F.y.slice();
+    DL.readout($("galRead"), [["función", F.t], ["z (entrada)", DL.fmt(galZ, 2)], ["salida", isFinite(v) ? DL.fmt(v, 3) : "no definido"]]);
+    var st = $("galStatus");
+    st.className = "status " + (isFinite(v) ? "info" : "bad");
+    st.textContent = isFinite(v) ? "Rango: " + F.rango + "." : "El log no existe para z ≤ 0: por eso las probabilidades deben ser positivas.";
+    gGal.redibujar();
+  }
+  DL.selector($("galSel"), {valor:galK, opciones:Object.keys(GAL).map(function(k){ return {v:k, t:GAL[k].t}; }), alCambiar:function(v){ galK = v; renderGal(); }});
+  DL.control($("galCtrl"), {etiqueta:"z", min:-3, max:3, paso:0.05, valor:galZ, alCambiar:function(v){ galZ = v; renderGal(); }});
+  renderGal();
+
+  /* =================================================================
+     Lab 4 · Softmax
+     ================================================================= */
+  var zs = [0, 1, 2], smCtl = [];
+  var gSm = DL.grafica($("smCanvas"), {x:[0, 3], y:[0, 1.1], alto:300, etiquetaY:"probabilidad",
+      opcionesEjes:{ticksX:[0.5, 1.5, 2.5], fmtX:function(v){ return "clase " + Math.round(v + 0.5); }, ticksY:[0, 0.25, 0.5, 0.75, 1], decY:2}}, function(g){
+    var p = DL.softmax(zs);
+    p.forEach(function(v, k){
+      g.rect(k + 0.15, 0, 0.7, v, {color:"g" + (k + 1), relleno:true, alfa:0.85, borde:false});
+      g.texto(k + 0.5, v + 0.05, DL.fmt(v, 3), {alinear:"center", negrita:true, tam:13, color:"text"});
+    });
+  });
+  function renderSm(){
+    var p = DL.softmax(zs);
+    DL.readout($("smRead"), [["z", "(" + zs.map(function(v){ return DL.fmt(v, 1); }).join(", ") + ")"], ["softmax(z)", "(" + p.map(function(v){ return DL.fmt(v, 3); }).join(", ") + ")"], ["suma", DL.fmt(p.reduce(function(a, b){ return a + b; }, 0), 3)]]);
+    gSm.redibujar();
+  }
+  [0, 1, 2].forEach(function(k){
+    smCtl.push(DL.control($("smCtrl"), {etiqueta:"score z" + (k + 1), min:-10, max:15, paso:0.1, valor:zs[k], formato:function(v){ return DL.fmt(v, 1); },
+      alCambiar:function(v){ zs[k] = v; renderSm(); }}));
+  });
+  function fijarZ(a){ a.forEach(function(v, k){ smCtl[k].fijar(v, true); zs[k] = smCtl[k].valor(); }); renderSm(); }
+  $("smSuma").onclick = function(){ fijarZ(zs.map(function(v){ return v + 5; })); };
+  $("smIguales").onclick = function(){ fijarZ([1, 1, 1]); };
+  $("smReset").onclick = function(){ fijarZ([0, 1, 2]); };
+  renderSm();
+
+  /* =================================================================
+     Lab 5 · Por qué log
+     ================================================================= */
+  var NMAX = 2000, prod = [1], pr = 1;
+  for(var q = 1; q <= NMAX; q++){ pr = pr*0.5; prod.push(pr); }
+  var LN10 = Math.log(10), logN = 100;
+  var puntosProd = []; for(var m = 0; m <= NMAX && prod[m] > 0; m++) puntosProd.push([m, Math.log(prod[m])/LN10]);
+  var gLog = DL.grafica($("logCanvas"), {x:[0, NMAX], y:[-640, 10], alto:300, etiquetaX:"n", etiquetaY:"log₁₀"}, function(g){
+    g.linea(0, 0, NMAX, NMAX*Math.log(0.5)/LN10, {color:"text-3", guiones:true, ancho:2});
+    g.polilinea(puntosProd, {color:"accent", ancho:3});
+    g.vertical(1075, {color:"warn", guiones:true, ancho:1.2});
+    g.texto(1075, -40, "n = 1075", {alinear:"left", dx:5, color:"warn", tam:11});
+    g.vertical(logN, {color:"g2", ancho:1.5});
+    g.puntos([[logN, logN*Math.log(0.5)/LN10]], {color:"g2", radio:5.5, aro:true});
+    if(prod[logN] > 0) g.puntos([[logN, Math.log(prod[logN])/LN10]], {color:"accent", radio:5.5, aro:true});
+  });
+  function renderLog(){
+    var p = prod[logN], s = logN*Math.log(0.5);
+    DL.readout($("logRead"), [["n", logN], ["producto 0.5ⁿ", fexp(p)], ["suma de logs", DL.fmt(s, 2)]]);
+    var st = $("logStatus");
+    st.className = "status " + (p > 0 ? "ok" : "bad");
+    st.textContent = p > 0 ? "El producto todavía es un número representable." : "El producto se redondeó a 0: la verosimilitud dejó de servir. La suma de logs sigue siendo un número normal.";
+    gLog.redibujar();
+  }
+  var cLog = DL.control($("logCtrl"), {etiqueta:"n (número de factores)", min:1, max:NMAX, paso:1, valor:logN, formato:function(v){ return String(Math.round(v)); }, alCambiar:function(v){ logN = Math.round(v); renderLog(); }});
+  function irN(v){ cLog.fijar(v, true); logN = v; renderLog(); }
+  $("logUno").onclick = function(){ irN(1074); };
+  $("logDos").onclick = function(){ irN(1075); };
+  $("logMil").onclick = function(){ irN(2000); };
+  renderLog();
+
+  /* =================================================================
+     Lab 6 · Tangente
+     ================================================================= */
+  var TAN = {
+    par:{t:"x² − 2x + 2", f:function(x){ return x*x - 2*x + 2; }, d:function(x){ return 2*x - 2; }, y:[0, 10.5]},
+    sen:{t:"sin x", f:Math.sin, d:Math.cos, y:[-1.6, 1.6]},
+    sig:{t:"σ(x)", f:DL.sigmoide, d:function(x){ var s = DL.sigmoide(x); return s*(1 - s); }, y:[-0.1, 1.1]}
+  };
+  var tanK = "par", tanX = 2, tanH = 0;
+  var gTan = DL.grafica($("tanCanvas"), {x:[-2, 3], y:TAN.par.y.slice(), alto:300, etiquetaX:"x", etiquetaY:"f(x)"}, function(g){
+    var F = TAN[tanK], f0 = F.f(tanX);
+    g.funcion(F.f, {color:"text-2", ancho:2.5});
+    if(tanH === 0){
+      var d = F.d(tanX);
+      g.linea(-2, f0 + d*(-2 - tanX), 3, f0 + d*(3 - tanX), {color:"accent", ancho:2});
+      g.puntos([[tanX, f0]], {color:"r-calc", radio:6, aro:true});
+    } else {
+      var s = (F.f(tanX + tanH) - f0)/tanH;
+      g.linea(-2, f0 + s*(-2 - tanX), 3, f0 + s*(3 - tanX), {color:"accent", ancho:2, guiones:true});
+      g.puntos([[tanX, f0], [tanX + tanH, F.f(tanX + tanH)]], {color:"r-calc", radio:6, aro:true});
+    }
+  });
+  function renderTan(){
+    var F = TAN[tanK], f0 = F.f(tanX), d = F.d(tanX);
+    gTan.o.y = F.y.slice();
+    var filas = [["x", DL.fmt(tanX, 2)], ["f(x)", DL.fmt(f0, 3)], ["f′(x) exacta", DL.fmt(d, 3)]];
+    if(tanH !== 0){
+      var s = (F.f(tanX + tanH) - f0)/tanH;
+      filas.push(["[f(x+h) − f(x)] / h", DL.fmt(s, 3)]); filas.push(["diferencia", DL.fmt(s - d, 3)]);
+    }
+    DL.readout($("tanRead"), filas);
+    gTan.redibujar();
+  }
+  DL.selector($("tanFn"), {valor:tanK, opciones:Object.keys(TAN).map(function(k){ return {v:k, t:TAN[k].t}; }), alCambiar:function(v){ tanK = v; renderTan(); }});
+  DL.control($("tanCtrl"), {etiqueta:"x", min:-2, max:3, paso:0.05, valor:tanX, alCambiar:function(v){ tanX = v; renderTan(); }});
+  DL.selector($("tanH"), {valor:0, opciones:[{v:0, t:"Tangente exacta"}, {v:0.5, t:"h = 0.5"}, {v:0.1, t:"h = 0.1"}, {v:0.01, t:"h = 0.01"}], alCambiar:function(v){ tanH = v; renderTan(); }});
+  renderTan();
+
+  /* =================================================================
+     Lab 7 · Regla de la cadena
+     ================================================================= */
+  var cx = 2, cu = 3*cx + 1, cy = cu*cu, dydu = 2*cu, dudx = 3, dydx = dydu*dudx;
+  var hh = 0.001, num = ((3*(cx + hh) + 1)*(3*(cx + hh) + 1) - cy)/hh;
+  DL.pasos($("labCadena"), {total:7, etiqueta:"paso", render:function(i){
+    function nodo(t, d, ok, aqui){ return '<div class="node' + (aqui ? ' aqui' : '') + '" style="flex:1 1 28%;' + (ok ? '' : 'opacity:.4') + '"><div class="t">' + t + '</div><div class="d" style="font-size:15px;color:var(--text)">' + (ok ? d : '?') + '</div></div>'; }
+    $("cadFlow").innerHTML =
+      nodo("x", cx, true, i === 0) + nodo("u = 3x + 1", cu, i >= 1, i === 1) + nodo("y = u²", cy, i >= 2, i === 2) +
+      nodo("dy/du = 2u", dydu, i >= 3, i === 3) + nodo("du/dx", dudx, i >= 4, i === 4) + nodo("dy/dx", dydx, i >= 5, i === 5);
+    var txt = [
+      "<b>Hacia adelante.</b> Empezamos en x = " + cx + ".",
+      "u = 3x + 1 = 3·" + cx + " + 1 = <b>" + cu + "</b>. Guardamos este valor.",
+      "y = u² = " + cu + "² = <b>" + cy + "</b>. Terminó el paso hacia adelante.",
+      "<b>Hacia atrás.</b> dy/du = 2u = 2·" + cu + " = <b>" + dydu + "</b>. (Usamos el valor guardado u = " + cu + ".)",
+      "du/dx = <b>" + dudx + "</b>, la pendiente de la recta 3x + 1.",
+      "<b>Regla de la cadena:</b> dy/dx = dy/du · du/dx = " + dydu + " · " + dudx + " = <b>" + dydx + "</b>.",
+      "<b>Verificación numérica</b> con h = " + hh + ":  [f(" + (cx + hh) + ") − f(" + cx + ")] / h = [" + DL.fmt((3*(cx + hh) + 1)*(3*(cx + hh) + 1), 6) + " − " + cy + "] / " + hh + " = <b>" + DL.fmt(num, 3) + "</b> ≈ " + dydx + ". ✔"];
+    $("cadCalc").innerHTML = txt[i];
+  }});
+
+  /* =================================================================
+     Lab 8 · Gradiente
+     ================================================================= */
+  function Lg(a, b){ var u = a + 2*b - 3; return u*u; }
+  var gx = 3, gy = 2;
+  var gGrad = DL.grafica($("gradCanvas"), {x:[-2, 6], y:[-2, 4], alto:300, etiquetaX:"φ₀", etiquetaY:"φ₁"}, function(g){
+    g.mapaCalor(function(a, b){ return Lg(a, b) + 0.02; }, {res:4, log:true, clave:"Lg"});
+    g.contornos(Lg, [0.5, 2, 6, 15, 35, 70], {color:"text-2", ancho:1, clave:"Lg"});
+    var u = gx + 2*gy - 3;
+    if(Math.abs(u) > 1e-9){
+      var s = u > 0 ? 1 : -1, dx = s*1/Math.sqrt(5)*1.1, dy = s*2/Math.sqrt(5)*1.1;
+      g.flecha(gx, gy, gx + dx, gy + dy, {color:"r-calc", ancho:3.5, punta:12});
+      g.flecha(gx, gy, gx - dx, gy - dy, {color:"g3", ancho:3.5, punta:12});
+    }
+    g.puntos([[gx, gy]], {color:"r-dato", radio:6, aro:true});
+  });
+  function renderGrad(){
+    var u = gx + 2*gy - 3, g0 = 2*u, g1 = 4*u;
+    DL.readout($("gradRead"), [["φ₀", DL.fmt(gx, 2)], ["φ₁", DL.fmt(gy, 2)], ["L(φ)", DL.fmt(u*u, 3)], ["∂L/∂φ₀ = 2u", DL.fmt(g0, 3)], ["∂L/∂φ₁ = 4u", DL.fmt(g1, 3)], ["con u = φ₀ + 2φ₁ − 3", DL.fmt(u, 2)]]);
+    gGrad.redibujar();
+  }
+  gGrad.alPuntero(function(e){
+    if(e.tipo === "down" || (e.tipo === "move" && e.abajo)){
+      gx = Math.max(-2, Math.min(6, e.x)); gy = Math.max(-2, Math.min(4, e.y)); renderGrad();
+    }
+  });
+  $("gradPaso").onclick = function(){ var u = gx + 2*gy - 3; gx = gx - 0.05*2*u; gy = gy - 0.05*4*u; renderGrad(); };
+  $("gradReset").onclick = function(){ gx = 3; gy = 2; renderGrad(); };
+  renderGrad();
+
+  /* =================================================================
+     Lab 9 · Una capa de la red
+     ================================================================= */
+  var Om = [[1, 2], [-1, 1], [2, -1]], xv = [2, 1], be = [1, 0, -1];
+  var Ox = Om.map(function(r){ return r[0]*xv[0] + r[1]*xv[1]; });
+  var zz = Ox.map(function(v, i){ return v + be[i]; });
+  var hv = zz.map(function(v){ return v > 0 ? v : 0; });
+  function ng(v){ return String(v).replace('-', '−'); }
+  function col(a){ return a.map(function(v){ return [v]; }); }
+  var vacio = ["·", "·", "·"];
+  DL.pasos($("labCapa"), {total:6, etiqueta:"paso", render:function(i){
+    var fila = (i >= 1 && i <= 3) ? i - 1 : -1;
+    var parc = Ox.map(function(v, k){ return (i >= 4 || k < i) ? v : "·"; });
+    $("capaRow1").innerHTML =
+      DL.matriz(Om, {titulo:"Ω", forma:"(3, 2)", dec:0, clase:function(r){ return r === fila ? "hl" : ""; }}) + '<span class="op">·</span>' +
+      DL.matriz(col(xv), {titulo:"x", forma:"(2, 1)", dec:0, clase:function(){ return fila >= 0 ? "hl2" : ""; }}) + '<span class="op">=</span>' +
+      DL.matriz(col(i === 0 ? vacio : parc), {titulo:"Ωx", forma:"(3, 1)", dec:0, clase:function(r){ return r === fila ? "ok" : ""; }});
+    var r2 = "";
+    if(i >= 4){
+      r2 = DL.matriz(col(Ox), {titulo:"Ωx", forma:"(3, 1)", dec:0}) + '<span class="op">+</span>' +
+        DL.matriz(col(be), {titulo:"β", forma:"(3, 1)", dec:0, clase:function(){ return i === 4 ? "hl2" : ""; }}) + '<span class="op">=</span>' +
+        DL.matriz(col(zz), {titulo:"Ωx + β", forma:"(3, 1)", dec:0, clase:function(r){ return i === 4 ? "ok" : (zz[r] <= 0 ? "dim" : ""); }});
+    }
+    if(i === 5){
+      r2 += '<span class="op">→ ReLU →</span>' + DL.matriz(col(hv), {titulo:"h", forma:"(3, 1)", dec:0, clase:function(r){ return zz[r] <= 0 ? "dim" : "ok"; }});
+    }
+    $("capaRow2").innerHTML = r2;
+    var t;
+    if(i === 0) t = "Ω es (3, 2) y x es (2, 1): el 2 de en medio coincide, así que el producto existe y da una forma (3, 1). Pulsa «Siguiente».";
+    else if(i <= 3) t = "Fila " + i + " de Ω por x:  " + ng(Om[fila][0]) + "·" + xv[0] + " + " + ng(Om[fila][1]) + "·" + xv[1] + " = <b>" + ng(Ox[fila]) + "</b>";
+    else if(i === 4) t = "Sumamos el sesgo, entrada por entrada:  (" + Ox.join(", ") + ") + (" + be.join(", ") + ") = <b>(" + zz.join(", ") + ")</b>";
+    else t = "ReLU a cada entrada por separado:  " + zz.map(function(v, k){ return "ReLU(" + ng(v) + ") = " + ng(hv[k]); }).join(",  ") + ".  Resultado <b>h = (" + hv.join(", ") + ")</b>. La neurona 2 (valor " + ng(zz[1]) + ") se apaga.";
+    $("capaCalc").innerHTML = t;
+  }});
+
+  /* =================================================================
+     Lab 10 · La campana
+     ================================================================= */
+  var cm = 0, cs = 1, cyv = 1.5;
+  function pdf(y, m, s){ var z = (y - m)/s; return Math.exp(-0.5*z*z)/Math.sqrt(2*Math.PI*s*s); }
+  var gCamp = DL.grafica($("campCanvas"), {x:[-5, 5], y:[0, 1.45], alto:300, etiquetaX:"y", etiquetaY:"densidad"}, function(g){
+    g.funcion(function(x){ return pdf(x, cm, cs); }, {color:"accent", ancho:2.5});
+    g.vertical(cm, {color:"text-3", guiones:true, ancho:1});
+    var h = pdf(cyv, cm, cs);
+    g.linea(cyv, 0, cyv, h, {color:"r-dato", ancho:2.5});
+    g.horizontal(h, {color:"r-dato", guiones:true, ancho:1});
+    g.puntos([[cyv, h]], {color:"r-dato", radio:6.5, aro:true});
+    g.texto(cyv, -0.07, "y", {alinear:"center", color:"r-dato", negrita:true, italica:true, serif:true, tam:13});
+  });
+  var ccm, ccs, ccy;
+  function renderCamp(){
+    var h = pdf(cyv, cm, cs), z = (cyv - cm)/cs;
+    DL.readout($("campRead"), [["altura p(y)", DL.fmt(h, 4)], ["−log p(y)", DL.fmt(-Math.log(h), 3)], ["distancia (y − μ)/σ", DL.fmt(z, 2)]]);
+    var st = $("campStatus"), a = Math.abs(z);
+    st.className = "status " + (a < 1 ? "ok" : (a < 2 ? "info" : "bad"));
+    st.textContent = a < 1 ? "El dato cae cerca del centro: verosimilitud alta." : (a < 2 ? "El dato se aleja del centro: verosimilitud media." : "El dato cae en la cola: verosimilitud muy baja, menos-log alto.");
+    gCamp.redibujar();
+  }
+  ccm = DL.control($("campCtrl"), {etiqueta:"μ (centro)", min:-3, max:3, paso:0.05, valor:cm, alCambiar:function(v){ cm = v; renderCamp(); }});
+  ccs = DL.control($("campCtrl"), {etiqueta:"σ (ancho)", min:0.3, max:3, paso:0.05, valor:cs, alCambiar:function(v){ cs = v; renderCamp(); }});
+  ccy = DL.control($("campCtrl"), {etiqueta:"y (dato observado)", min:-4, max:4, paso:0.05, valor:cyv, alCambiar:function(v){ cyv = v; renderCamp(); }});
+  $("campReset").onclick = function(){ ccm.fijar(0, true); ccs.fijar(1, true); ccy.fijar(1.5, true); cm = 0; cs = 1; cyv = 1.5; renderCamp(); };
+  $("campAngosta").onclick = function(){ ccs.fijar(0.5, true); cs = 0.5; renderCamp(); };
+  renderCamp();
+})();
+</script>
+</body>
+</html>

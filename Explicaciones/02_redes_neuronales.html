@@ -1,0 +1,1442 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redes neuronales: pedazos de recta</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: columnas de controles, tres paneles, tablas compactas */
+  .ctrl4{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:4px 16px}
+  .ctrl4 .col{border-left:3px solid var(--border); padding-left:10px}
+  .ctrl4 .col .ct{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:650; margin-bottom:6px}
+  .g3{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px}
+  .g3 .gt{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; color:var(--text-2); margin-bottom:4px}
+  .tbl.chica{font-size:13.5px; margin:12px 0}
+  .tbl.chica th{text-transform:none; letter-spacing:0; font-size:12.5px}
+  .tbl.chica td, .tbl.chica th{padding:6px 9px}
+  .tbl td.eqc{font-family:ui-serif,Georgia,serif; font-size:16px; line-height:1.8}
+  .tbl td.nw{white-space:nowrap}
+  .sw{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:baseline}
+  .caja-scroll{max-height:190px; overflow:auto}
+  figure.img{margin:18px 0; text-align:center}
+  figure.img img{max-width:100%; background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px}
+  figure.img figcaption{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px; color:var(--text-3); margin-top:6px}
+  @media (max-width:700px){ .g3{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Redes neuronales</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 02</div>
+  <h1>Redes neuronales: funciones hechas de pedazos de recta</h1>
+  <p class="lead">Una red ReLU es una suma de «codos». Al terminar podrás trazar a mano una red pequeña, ubicar sus articulaciones, calcular pendientes, contar parámetros y regiones, y explicar por qué la profundidad es eficiente sin ser necesaria para aproximar.</p>
+  <div class="meta">Fuente: <code>slides/NN.Rmd</code> · Temario del Examen 1, sección 2 · Lectura de unos 55 minutos, más los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+
+<p>En la regresión lineal el modelo es una sola recta: y = φ₀ + φ₁x. Una red neuronal con activación ReLU hace algo parecido, pero con <strong>muchas rectas pegadas</strong>. Cada neurona aporta un cambio de pendiente (un «codo» o articulación), y la salida de la red es la suma de esos codos. De ahí sale todo lo que pide el examen: dónde están los codos, cuántas regiones hay, cuántos parámetros cuesta cada diseño y qué cambia si en lugar de ensanchar la red la haces más profunda.</p>
+
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Repaso: un modelo f(x, φ), una pérdida L(φ) y gradient descent para ajustarlo. El modelo era una recta. <a href="01_repaso_ml.html">Artefacto 01</a>.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">¿Qué función dibuja una red ReLU? ¿Cuántos parámetros y cuántas regiones tiene? ¿Para qué sirve la profundidad?</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">¿Cómo se encuentran los parámetros de verdad? Pérdidas desde distribuciones y optimizadores. <a href="03_entrenamiento1.html">Artefacto 03</a>.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p><strong>Cada neurona ReLU agrega un codo; la red suma codos.</strong> Dentro de una región donde ninguna neurona cambia de estado, todo es suma de rectas, y una suma de rectas es una recta. Los parámetros solo deciden dónde caen los codos y cuánto cambia la pendiente en cada uno.</p>
+</div>
+
+<p>Qué conviene tener a mano del <a href="00_matematicas.html">artefacto 00</a>: la ReLU y las demás funciones (<a href="00_matematicas.html#funciones">funciones</a>), cómo se suman varios términos (<a href="00_matematicas.html#sumas">sumas</a>), vectores y matrices para la sección de redes profundas (<a href="00_matematicas.html#vectores">vectores y matrices</a>) y el porqué de los subíndices dobles como θ₂₁ (<a href="00_matematicas.html#griegas">letras griegas</a>).</p>
+
+<!-- ============ 2. SUPERFICIAL ============ -->
+<h2 id="superficial"><span class="num">Sección 2</span>La red superficial 1-3-1</h2>
+
+<p>«1-3-1» se lee: <strong>1 entrada, 3 neuronas ocultas, 1 salida</strong>. Se llama <em>superficial</em> (shallow) porque tiene una sola capa de neuronas ocultas. Es la red de la que parte toda la clase.</p>
+
+<figure class="img">
+  <img src="../images/RNshallow.png" alt="Red 1-3-1: x entra a tres neuronas h1, h2, h3, que se suman para dar y" width="520">
+  <figcaption>La red 1-3-1 de la slide. Los círculos con «1» son los sesgos: θ₁₀, θ₂₀, θ₃₀ entran a las neuronas y φ₀ entra a la salida. (Imagen de la slide.)</figcaption>
+</figure>
+
+<h3 id="ecuacion" data-toc="La ecuación y las neuronas">La ecuación, y cómo se reescribe con neuronas</h3>
+
+<p>Un caso con números antes de cualquier letra. Toma la red de la slide, con θ₁ = (−0.2, 0.3), θ₂ = (−0.8, 0.7), θ₃ = (1.0, −0.8) y φ = (0, −0.5, 0.8, 0.6), y evalúa en x = 1:</p>
+<ul>
+  <li>Rectas: −0.2 + 0.3·1 = 0.1; −0.8 + 0.7·1 = −0.1; 1.0 − 0.8·1 = 0.2.</li>
+  <li>ReLU de cada una (los negativos pasan a 0): 0.1; 0; 0.2.</li>
+  <li>Combinación: y = 0 + (−0.5)(0.1) + 0.8·0 + 0.6·0.2 = −0.05 + 0.12 = <strong>0.07</strong>.</li>
+</ul>
+
+<div class="formula">
+  <div class="f-head">Red superficial 1-3-1, forma completa</div>
+  <div class="f-ejemplo">x = 1  →  y = 0 + (−0.5)·ReLU(−0.2 + 0.3·1) + 0.8·ReLU(−0.8 + 0.7·1) + 0.6·ReLU(1.0 − 0.8·1) = −0.05 + 0 + 0.12 = 0.07</div>
+  <div class="eq">
+    <span class="r-calc">y</span> = <span class="sym r-param" data-s="phi">φ</span><span class="sub r-param">0</span> + <span class="r-param">φ</span><span class="sub r-param">1</span> <span class="sym" data-s="a">a</span>( <span class="sym r-param" data-s="theta">θ</span><span class="sub r-param">10</span> + <span class="r-param">θ</span><span class="sub r-param">11</span><span class="sym r-dato" data-s="x">x</span> ) + <span class="r-param">φ</span><span class="sub r-param">2</span> <span class="sym" data-s="a">a</span>( <span class="r-param">θ</span><span class="sub r-param">20</span> + <span class="r-param">θ</span><span class="sub r-param">21</span><span class="r-dato">x</span> ) + <span class="r-param">φ</span><span class="sub r-param">3</span> <span class="sym" data-s="a">a</span>( <span class="r-param">θ</span><span class="sub r-param">30</span> + <span class="r-param">θ</span><span class="sub r-param">31</span><span class="r-dato">x</span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La salida es φ cero, más φ uno por la activación de (θ diez más θ once por x), más φ dos por la activación de (θ veinte más θ veintiuno por x), más φ tres por la activación de (θ treinta más θ treinta y uno por x).» Cada paréntesis es una recta; la activación a la «dobla»; los φ las mezclan.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">y</dt><dd>La salida de la red, un número. En las slides de NN se llama y; en el resto del curso se llama ŷ, para distinguirla de la etiqueta real.</dd>
+      <dt class="r-dato">x</dt><dd>La entrada: un solo número (por eso la red es «1-…»).</dd>
+      <dt class="r-param">θ₁₀, θ₂₀, θ₃₀</dt><dd>La ordenada al origen de cada recta (sesgo de la neurona). El segundo dígito 0 significa «el término que no multiplica a x».</dd>
+      <dt class="r-param">θ₁₁, θ₂₁, θ₃₁</dt><dd>La pendiente de cada recta (el peso que multiplica a x). Se lee «θ dos uno»: neurona 2, peso de x.</dd>
+      <dt>a(·)</dt><dd>La función de activación. Aquí es la ReLU, pero la ecuación vale para cualquier otra.</dd>
+      <dt class="r-param">φ₁, φ₂, φ₃</dt><dd>Cuánto pesa cada neurona en la salida. Pueden ser negativos.</dd>
+      <dt class="r-param">φ₀</dt><dd>El sesgo de salida: sube o baja toda la curva.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…cambias φ₀: toda la curva sube o baja igual; los codos no se mueven.</li>
+      <li>…un φ<sub>d</sub> vale 0: esa neurona desaparece de la salida (y su codo con ella).</li>
+      <li>…cambias un θ<sub>d1</sub>: se mueve la pendiente de esa recta y también la posición de su codo.</li>
+      <li>…la activación fuera la identidad: no hay codos y todo colapsa a una recta (sección 3).</li>
+    </ul>
+  </div>
+</div>
+
+<p>La misma ecuación se puede escribir en dos pasos, y esta forma es la que usan las slides para todo lo demás. Primero se calculan las <strong>neuronas</strong> (unidades ocultas, hidden units) y después se combinan.</p>
+
+<div class="formula">
+  <div class="f-head">Las neuronas h<sub>d</sub> y la salida</div>
+  <div class="f-ejemplo">Neurona 3 en x = 1: pre-activación 1.0 − 0.8·1 = 0.2  →  h₃ = ReLU(0.2) = 0.2.  Salida: y = 0 + (−0.5)(0.1) + 0.8(0) + 0.6(0.2) = 0.07</div>
+  <div class="eq">
+    <span class="sym r-calc" data-s="h">h</span><span class="sub r-calc">d</span> = <span class="sym" data-s="a">a</span>( <span class="r-param">θ</span><span class="sub r-param">d0</span> + <span class="r-param">θ</span><span class="sub r-param">d1</span><span class="r-dato">x</span> ),   d = 1, 2, 3
+    <br><span class="r-calc">y</span> = <span class="r-param">φ</span><span class="sub r-param">0</span> + <span class="r-param">φ</span><span class="sub r-param">1</span><span class="r-calc">h</span><span class="sub r-calc">1</span> + <span class="r-param">φ</span><span class="sub r-param">2</span><span class="r-calc">h</span><span class="sub r-calc">2</span> + <span class="r-param">φ</span><span class="sub r-param">3</span><span class="r-calc">h</span><span class="sub r-calc">3</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La neurona d toma la recta θ d-cero más θ d-uno por x y le aplica la activación. La salida es φ cero más la suma de cada neurona por su peso φ.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">h<sub>d</sub></dt><dd>La salida de la neurona d. A lo que entra a la activación (θ<sub>d0</sub> + θ<sub>d1</sub>x) se le llama <strong>pre-activación</strong>; a lo que sale, <strong>activación</strong>.</dd>
+      <dt class="r-param">θ<sub>d1</sub></dt><dd>Dos subíndices: el primero dice <em>de qué neurona</em> es y el segundo <em>qué entrada multiplica</em> (0 = el sesgo, 1 = x). Ver <a href="00_matematicas.html#griegas">subíndices dobles</a>.</dd>
+      <dt>d</dt><dd>Contador de neuronas, de 1 a 3 (en general, de 1 a D).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…la pre-activación es negativa: h<sub>d</sub> = 0 y esa neurona «está apagada» para ese x.</li>
+      <li>…es positiva: la neurona está «encendida» y deja pasar la recta tal cual.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="relu" data-toc="La ReLU">La ReLU: la activación que dobla</h3>
+<p>La ReLU (rectified linear unit) deja pasar los positivos y apaga los negativos: ReLU(z) = z si z ≥ 0 y ReLU(z) = 0 si z &lt; 0, o más corto, max(0, z). Su gráfica es una recta plana pegada a una diagonal: tiene un solo codo, en z = 0. Más detalle en <a href="00_matematicas.html#funciones">funciones</a>.</p>
+<div class="widget">
+  <div class="widget-head"><div class="wt">ReLU(z) = max(0, z)</div><div class="ws">Mueve z y mira qué sale.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="reluCanvas"></canvas>
+      <div><div id="reluCtrl"></div><div id="reluRead"></div></div>
+    </div>
+  </div>
+</div>
+
+<h3 id="familia" data-toc="10 parámetros, una familia">Diez parámetros, una familia de funciones</h3>
+<p>La red 1-3-1 tiene 10 parámetros: φ = {φ₀, φ₁, φ₂, φ₃, θ₁₀, θ₁₁, θ₂₀, θ₂₁, θ₃₀, θ₃₁}. Cada elección de los 10 números da <em>una</em> función; todas las elecciones juntas forman una <strong>familia de funciones</strong>. Es la misma idea que en la recta y = φ₀ + φ₁x, cuya familia son todas las rectas, solo que aquí la familia es mucho más grande: todas las curvas de hasta 4 tramos rectos.</p>
+<p>El resto del plan de la slide ya lo conoces del repaso: dado un conjunto de entrenamiento {xᵢ, yᵢ}, con i de 1 a I, se define una pérdida L(φ) y se cambian los parámetros para minimizarla. Esa parte (cómo se elige L y cómo se minimiza) es el tema del <a href="03_entrenamiento1.html">artefacto 03</a>. Aquí solo importa <em>qué funciones puede dibujar</em> la red.</p>
+
+<h3 id="lab-4-pasos" class="lab" data-toc="Lab: construye la red en 4 pasos">Laboratorio: construye la red en 4 pasos</h3>
+<p>Este laboratorio recorre los cuatro pasos de la slide con los mismos números: (1) tres rectas, (2) la ReLU de cada una, (3) cada neurona multiplicada por su φ, (4) la suma más φ₀. Empieza en el paso 1 con los parámetros de la slide y pulsa cada pestaña. Después mueve los controles: la tabla de abajo se recalcula con las articulaciones, las neuronas activas y la pendiente de cada región.</p>
+
+<div class="widget" id="lab4">
+  <div class="widget-head"><div class="wt">Construye la red en 4 pasos</div><div class="ws">10 parámetros, x entre 0 y el máximo que indique el preajuste. Cambia la activación para ver qué pasa sin ReLU.</div></div>
+  <div class="widget-body">
+    <div class="mini" style="margin-top:0">Activación a(·)</div>
+    <div id="l4Act"></div>
+    <div class="mini">Paso</div>
+    <div class="modetabs" id="l4Tabs"></div>
+    <div class="lab-grid">
+      <canvas id="l4Canvas"></canvas>
+      <div>
+        <div class="stepinfo" id="l4Info" style="margin-top:0"></div>
+        <div class="legend" id="l4Leyenda"></div>
+        <div class="status info" id="l4Status"></div>
+      </div>
+    </div>
+    <div class="mini">Los 10 parámetros</div>
+    <div class="ctrl4" id="l4Ctrl"></div>
+    <div id="l4Tablas"></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="l4Slide">Parámetros de la slide</button>
+    <button class="btn" id="l4T2">Parámetros de la Tarea 2 (pregunta 2)</button>
+    <button class="btn" id="l4T1">Parámetros de la Tarea 2 (pregunta 1)</button>
+    <span class="pill" id="l4Pill"></span>
+  </div>
+</div>
+
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>Parámetros de la slide, paso 4.</strong> Hay tres articulaciones, en x = 0.667, 1.143 y 1.25, y por tanto 4 regiones con pendientes −0.48, −0.63, −0.07 y 0.41. La curva empieza en y(0) = 0.6. Compara con las pendientes que ves en la tabla.</li>
+    <li><strong>Pon φ₂ = 0.</strong> La neurona 2 sale de la suma: su articulación (x = 1.143) deja de contar y quedan 3 regiones. El codo existe en la neurona, pero ya no se ve en y.</li>
+    <li><strong>Pon θ₂₁ = 0.</strong> La neurona 2 se vuelve constante (ReLU(−0.8) = 0): ya no tiene codo, porque una recta horizontal nunca cruza el cero.</li>
+    <li><strong>Activación «identidad».</strong> Con a(z) = z desaparecen los codos y la red colapsa a una recta: con los números de la slide, y = 0.060 − 0.070x.</li>
+    <li><strong>Parámetros de la Tarea 2 (pregunta 2).</strong> El segundo tramo es plano (pendiente 0) porque en x entre 0.3 y 0.5 las tres neuronas están apagadas. Con «escalón», «tanh» y «rect» (pregunta 1 de la tarea) la curva ya no es de pedazos de recta.</li>
+  </ol>
+</div>
+
+<h3 id="derivacion-regiones" data-toc="Por qué cada región es una recta">¿Por qué cada región es una recta, y por qué hay a lo más D + 1?</h3>
+<p>Es la pregunta de la slide «¿por qué se ven así estas gráficas?». La respuesta cabe en cuatro renglones. Una <strong>región</strong> es un intervalo de x en el que <em>ninguna neurona cambia de estado</em> (ninguna pasa de apagada a encendida).</p>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">Dentro de la región, cada neurona está siempre apagada o siempre encendida.</div><div class="d-por"><b>Definición de región:</b> una neurona cambia de estado solo cuando su pre-activación θ<sub>d0</sub> + θ<sub>d1</sub>x cruza el cero, y en esta región nadie lo hace.</div></li>
+  <li><div class="d-ex">neurona apagada: h<sub>d</sub> = ReLU(negativo) = 0</div><div class="d-por"><b>Definición de ReLU:</b> con pre-activación negativa, la salida es 0, así que esa neurona no aporta nada a y.</div></li>
+  <li><div class="d-ex">neurona encendida: h<sub>d</sub> = θ<sub>d0</sub> + θ<sub>d1</sub>x</div><div class="d-por"><b>Definición de ReLU:</b> con pre-activación positiva, la ReLU la deja pasar sin tocarla. Es una recta en x.</div></li>
+  <li><div class="d-ex">y = φ₀ + <span class="big"><span class="lim">encendidas</span><span class="o">Σ</span><span class="lim">d</span></span> φ<sub>d</sub>(θ<sub>d0</sub> + θ<sub>d1</sub>x) = ( φ₀ + Σ φ<sub>d</sub>θ<sub>d0</sub> ) + ( Σ φ<sub>d</sub>θ<sub>d1</sub> ) x</div><div class="d-por"><b>Una suma de rectas es una recta:</b> agrupo los términos constantes por un lado y los que multiplican a x por el otro. La <b>pendiente de la región</b> es Σ φ<sub>d</sub>θ<sub>d1</sub>, sumada solo sobre las neuronas encendidas.</div></li>
+  <li><div class="d-ex">Slide, región 0.667 &lt; x &lt; 1.143: encendidas {1, 3}.  Pendiente = (−0.5)(0.3) + (0.6)(−0.8) = −0.63.  Ordenada = 0 + (−0.5)(−0.2) + (0.6)(1.0) = 0.7.  Entonces y = 0.7 − 0.63x.</div><div class="d-por"><b>Verificación con números:</b> en x = 0.667 da 0.28 y en x = 1.143 da −0.02, que son los valores de y en los extremos de esa región según el laboratorio.</div></li>
+  <li><div class="d-ex">D neuronas → a lo más D articulaciones → a lo más D + 1 regiones</div><div class="d-por"><b>Contar cortes:</b> la neurona d cambia de estado en un solo punto, x = −θ<sub>d0</sub>/θ<sub>d1</sub>. D puntos cortan la recta numérica en a lo más D + 1 pedazos. Son «a lo más» porque un codo puede caer fuera del rango, coincidir con otro, o tener φ<sub>d</sub> = 0.</div></li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>La slide dice «la cuarta región es cuando todas las neuronas están activas». Eso solo es cierto si todas las θ<sub>d1</sub> son positivas. Una neurona con θ<sub>d1</sub> &lt; 0 (como la 3 en la slide) está encendida a la <em>izquierda</em> de su codo, no a la derecha. Con los números de la slide, el orden de los estados es {3} → {1, 3} → {1, 2, 3} → {1, 2}: «todas encendidas» ocurre en la <em>tercera</em> región, de 1.143 a 1.25. Lo que sí es cierto: en la región con todas encendidas la pendiente es la suma de todos los φ<sub>d</sub>θ<sub>d1</sub> (aquí −0.07).</p>
+</div>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Cómo sé, mirando θ<sub>d0</sub> y θ<sub>d1</sub>, si la neurona está encendida a la izquierda o a la derecha de su codo?</div>
+<p>Por el signo de θ<sub>d1</sub>, la pendiente de la recta de la neurona. Si θ<sub>d1</sub> &gt; 0, la recta sube, así que es positiva a la derecha de x = −θ<sub>d0</sub>/θ<sub>d1</sub>: encendida a la derecha. Si θ<sub>d1</sub> &lt; 0, la recta baja y es positiva a la izquierda. Ejemplo con la neurona 3 de la slide: θ₃₀ = 1.0, θ₃₁ = −0.8, codo en 1.0/0.8 = 1.25; en x = 0 vale 1.0 (encendida) y en x = 2 vale −0.6 (apagada).</p>
+
+<!-- ============ 3. INVARIANZAS ============ -->
+<h2 id="invarianzas"><span class="num">Sección 3</span>Dos propiedades que vienen en el examen</h2>
+
+<p>Las dos son preguntas favoritas del temario porque se contestan con una línea de álgebra y revelan algo importante: <strong>sin no linealidad una red no hace nada nuevo</strong>, y <strong>los parámetros de una red no son únicos</strong>.</p>
+
+<h3 id="lineal-colapsa" data-toc="Activación lineal ⇒ red lineal">(a) Si la activación es lineal, la red entera es lineal</h3>
+<p>Prueba con la identidad, a(z) = z, en la red de la slide. Neurona 1 en x = 1: la «activación» de 0.1 es 0.1. Todas las neuronas dejan pasar sus rectas sin doblarlas, así que lo único que queda es sumar rectas.</p>
+
+<div class="formula">
+  <div class="f-head">Colapso con activación identidad</div>
+  <div class="f-ejemplo">Slide: φ = (0, −0.5, 0.8, 0.6), θ₁ = (−0.2, 0.3), θ₂ = (−0.8, 0.7), θ₃ = (1.0, −0.8)  →  ordenada = 0 + (−0.5)(−0.2) + 0.8(−0.8) + 0.6(1.0) = 0.06;  pendiente = (−0.5)(0.3) + 0.8(0.7) + 0.6(−0.8) = −0.07  →  y = 0.06 − 0.07x</div>
+  <div class="eq">
+    <span class="r-calc">y</span> = ( <span class="r-param">φ</span><span class="sub r-param">0</span> + <span class="big"><span class="lim r-hiper">3</span><span class="o">Σ</span><span class="lim">d=1</span></span> <span class="r-param">φ</span><span class="sub r-param">d</span><span class="r-param">θ</span><span class="sub r-param">d0</span> ) + ( <span class="big"><span class="lim r-hiper">3</span><span class="o">Σ</span><span class="lim">d=1</span></span> <span class="r-param">φ</span><span class="sub r-param">d</span><span class="r-param">θ</span><span class="sub r-param">d1</span> ) <span class="r-dato">x</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Con activación identidad, la salida es una constante más otra constante por x: una recta, aunque la red tenga diez parámetros.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>Primer paréntesis</dt><dd>La ordenada al origen de la recta resultante: φ₀ más cada φ<sub>d</sub> por el sesgo de su neurona.</dd>
+      <dt>Segundo paréntesis</dt><dd>La pendiente de la recta resultante: cada φ<sub>d</sub> por la pendiente de su neurona, sumadas.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…agregas más neuronas: sigue siendo una recta, solo con constantes distintas. De 10 parámetros solo importan 2 combinaciones.</li>
+      <li>…agregas más capas: también. Una capa lineal es «multiplicar por una matriz y sumar un vector», y componer dos de esas es otra de la misma forma.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Los mismos tres pasos, para citarlos en el examen:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">h<sub>d</sub> = a(θ<sub>d0</sub> + θ<sub>d1</sub>x) = θ<sub>d0</sub> + θ<sub>d1</sub>x</div><div class="d-por"><b>Activación identidad:</b> a(z) = z, así que la neurona devuelve su pre-activación sin cambios.</div></li>
+  <li><div class="d-ex">y = φ₀ + φ₁(θ₁₀ + θ₁₁x) + φ₂(θ₂₀ + θ₂₁x) + φ₃(θ₃₀ + θ₃₁x)</div><div class="d-por"><b>Sustituir</b> las tres neuronas en y = φ₀ + φ₁h₁ + φ₂h₂ + φ₃h₃.</div></li>
+  <li><div class="d-ex">y = (φ₀ + φ₁θ₁₀ + φ₂θ₂₀ + φ₃θ₃₀) + (φ₁θ₁₁ + φ₂θ₂₁ + φ₃θ₃₁)x</div><div class="d-por"><b>Propiedad distributiva y agrupar:</b> reparto cada φ<sub>d</sub> dentro de su paréntesis, junto los términos sin x y junto los que lo llevan. Queda constante + constante·x: una recta. La red equivale a una regresión lineal.</div></li>
+</ol>
+
+<div class="note exam">
+  <span class="tag">En el examen</span>
+  <p>«¿Qué pasa si la activación es la identidad?» Respuesta de una línea: la red colapsa a una función lineal, y = c₀ + c₁x; todas las neuronas se funden en dos constantes. Lo que da potencia a una red es la <em>no linealidad</em> de la activación, no el número de neuronas.</p>
+</div>
+
+<h3 id="homogeneidad" data-toc="Homogeneidad y reescalamiento">(b) Homogeneidad de ReLU: distintos parámetros, misma función</h3>
+<p>Una neurona con ReLU tiene una propiedad curiosa: si multiplicas lo que entra por un número positivo c, lo que sale se multiplica por el mismo c. Se llama <strong>homogeneidad no negativa</strong>. Compruébalo con c = 3: ReLU(3·2) = 6 = 3·ReLU(2), y ReLU(3·(−2)) = 0 = 3·ReLU(−2).</p>
+
+<div class="formula">
+  <div class="f-head">Reescalamiento de una neurona ReLU</div>
+  <div class="f-ejemplo">Neurona 2 de la slide: φ₂ = 0.8, θ₂ = (−0.8, 0.7). Con c = 3: θ₂′ = (−2.4, 2.1) y φ₂′ = 0.8/3 ≈ 0.267.  En x = 1.5: 0.8·ReLU(−0.8 + 0.7·1.5) = 0.8·0.25 = 0.2  y  0.267·ReLU(−2.4 + 2.1·1.5) = 0.267·0.75 = 0.2</div>
+  <div class="eq">
+    <span class="sym" data-s="relu">ReLU</span>( c·<span class="sym" data-s="z">z</span> ) = c · ReLU( z )   para c &gt; 0
+    <br><span class="r-param">φ</span><span class="sub r-param">d</span> ReLU( <span class="r-param">θ</span><span class="sub r-param">d0</span> + <span class="r-param">θ</span><span class="sub r-param">d1</span><span class="r-dato">x</span> ) = <span class="frac"><span class="num"><span class="r-param">φ</span><span class="sub r-param">d</span></span><span class="den"><span class="r-hiper">c</span></span></span> ReLU( <span class="r-hiper">c</span><span class="r-param">θ</span><span class="sub r-param">d0</span> + <span class="r-hiper">c</span><span class="r-param">θ</span><span class="sub r-param">d1</span><span class="r-dato">x</span> )
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Puedes multiplicar el sesgo y el peso de una neurona por c, siempre que dividas su φ entre c, y la función completa no cambia. Hacerlo es como medir en centímetros en lugar de metros y compensar a la salida.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-hiper">c</dt><dd>Un número positivo cualquiera que eliges tú. No es un parámetro de la red: es la excusa para reescribirla.</dd>
+      <dt class="r-param">(cθ<sub>d0</sub>, cθ<sub>d1</sub>)</dt><dd>Los parámetros de la neurona d reescalados.</dd>
+      <dt class="r-param">φ<sub>d</sub>/c</dt><dd>El peso de salida de esa neurona, compensado.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…c &gt; 0: la función es <em>exactamente</em> la misma, con parámetros distintos. El codo sigue en x = −θ<sub>d0</sub>/θ<sub>d1</sub> (la c se cancela).</li>
+      <li>…c &lt; 0: ya no. ReLU(−z) no es −ReLU(z): la neurona se enciende del otro lado de su codo, y la función cambia.</li>
+      <li>…c = 0: no se puede, porque habría que dividir entre cero.</li>
+    </ul>
+  </div>
+</div>
+
+<p>La demostración tiene dos casos, según el signo de z:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">Si z ≥ 0:  ReLU(cz) = cz = c·ReLU(z)</div><div class="d-por"><b>c &gt; 0 conserva el signo:</b> cz sigue siendo no negativo, así que ReLU lo deja igual, y z = ReLU(z).</div></li>
+  <li><div class="d-ex">Si z &lt; 0:  ReLU(cz) = 0 = c·0 = c·ReLU(z)</div><div class="d-por"><b>c &gt; 0 conserva el signo:</b> cz sigue siendo negativo, y ReLU lo apaga, igual que a z.</div></li>
+  <li><div class="d-ex">(φ<sub>d</sub>/c)·ReLU(cθ<sub>d0</sub> + cθ<sub>d1</sub>x) = (φ<sub>d</sub>/c)·c·ReLU(θ<sub>d0</sub> + θ<sub>d1</sub>x) = φ<sub>d</sub>·ReLU(θ<sub>d0</sub> + θ<sub>d1</sub>x)</div><div class="d-por"><b>Aplicar la propiedad</b> con z = θ<sub>d0</sub> + θ<sub>d1</sub>x. La c de afuera cancela la c de adentro.</div></li>
+  <li><div class="d-ex">Con c = −1 y z = 2:  ReLU(−2) = 0, pero −1·ReLU(2) = −2</div><div class="d-por"><b>Contraejemplo para c &lt; 0:</b> los dos lados ya no coinciden.</div></li>
+</ol>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Y qué tiene de importante que haya parámetros «de más»?</div>
+<p>Que los parámetros de una red no se leen directamente: dos redes con φ y θ muy distintos pueden dibujar exactamente la misma curva. Para saber si dos redes son «la misma función», compara las curvas (articulaciones, pendientes, valores), no los parámetros. Además, la propiedad es especial de la ReLU: tanh(cz) ≠ c·tanh(z), así que con tanh no hay este reescalamiento.</p>
+
+<h3 id="lab-reescala" class="lab" data-toc="Lab: reescalar una neurona">Laboratorio: reescala la neurona 2</h3>
+<p>Toma la red de la slide y reescala la neurona 2 con el factor c: (θ₂₀, θ₂₁) pasan a (cθ₂₀, cθ₂₁) y φ₂ pasa a φ₂/c. Empieza con c = 3 y baja el control hasta c = −1.</p>
+<div class="widget" id="lab-r">
+  <div class="widget-head"><div class="wt">Reescalamiento de la neurona 2</div><div class="ws">Línea gris gruesa: la red original. Línea de color: la red reescalada.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="rCanvas"></canvas>
+      <div><div id="rCtrl"></div><div id="rRead"></div><div class="status ok" id="rStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>c = 3 (o cualquier c &gt; 0):</strong> los parámetros cambian (φ₂ pasa de 0.8 a 0.267) pero la curva no se mueve. La diferencia máxima es 0.</li>
+    <li><strong>c = −1:</strong> φ₂′ = −0.8 y θ₂′ = (0.8, −0.7). Ahora la neurona 2 está encendida a la izquierda de x = 1.143 y apagada a la derecha. En x = 0 la curva pasa de 0.6 a −0.04 y en x = 2 de 0.28 a −0.2: la función cambió.</li>
+    <li><strong>c cerca de 0:</strong> la curva original no cambia mientras c &gt; 0, pero φ₂′ se dispara (los números de la red se ven absurdos y la función es la misma).</li>
+  </ol>
+</div>
+
+<!-- ============ 4. APROXIMACIÓN ============ -->
+<h2 id="aproximacion"><span class="num">Sección 4</span>Teorema de aproximación universal</h2>
+
+<p>Agregar neuronas agrega codos. Si el número de neuronas D crece, la red tiene hasta D articulaciones y D + 1 regiones, y puede imitar curvas cada vez más complicadas. El número de neuronas de una red superficial mide su <strong>capacidad</strong>. El teorema formaliza la idea.</p>
+
+<div class="note key">
+  <span class="tag">Teorema de aproximación universal (traducido)</span>
+  <p>Elige cualquier función continua en un conjunto acotado y cerrado (un «compacto», por ejemplo el intervalo [0, 2]) y elige qué tan cerca la quieres, tan cerca como sea: existe una red superficial con suficientes neuronas cuya gráfica no se aparta de la función más que esa distancia, en todo el conjunto.</p>
+</div>
+
+<ul>
+  <li><strong>«Cualquier función continua»:</strong> sin saltos. Con saltos hay que tener más cuidado.</li>
+  <li><strong>«Compacto»:</strong> un dominio acotado y cerrado, como [0, 2] o un cubo. Fuera de él, no hay promesa. (En la slide aparece escrito como un subconjunto compacto de ℝ<sup>D</sup>; la dimensión que cuenta es la de la entrada, D<sub>i</sub>, porque D ya es el número de neuronas.)</li>
+  <li><strong>«Suficientes neuronas»:</strong> el teorema dice que existe, no cuántas hacen falta ni cómo encontrarlas con entrenamiento.</li>
+</ul>
+
+<p>Una forma de verlo sin ningún teorema: toma la función, márcale D + 1 puntos equiespaciados y únelos con rectas. Esa línea quebrada se puede escribir exactamente como una red superficial. Lo hace la construcción siguiente.</p>
+
+<div class="formula">
+  <div class="f-head">Red que interpola D + 1 puntos con ReLU</div>
+  <div class="f-ejemplo">f(x) = cos(πx) en [0, 2], D = 2: nodos x = 0, 1, 2 con f = 1, −1, 1. Pendientes m₀ = (−1 − 1)/1 = −2 y m₁ = (1 − (−1))/1 = 2.  Entonces y = 1 + (−2)x + (2 − (−2))·ReLU(x − 1) = 1 − 2x + 4·ReLU(x − 1).  Compruebo: y(0) = 1, y(1) = −1, y(2) = 1 − 4 + 4 = 1.</div>
+  <div class="eq">
+    <span class="r-calc">y</span> = <span class="sym" data-s="f">f(0)</span> + <span class="r-hiper">m</span><span class="sub">0</span><span class="r-dato">x</span> + <span class="big"><span class="lim r-hiper">D−1</span><span class="o sym" data-s="sum">Σ</span><span class="lim">k=1</span></span> ( <span class="r-hiper">m</span><span class="sub">k</span> − <span class="r-hiper">m</span><span class="sub">k−1</span> ) ReLU( <span class="r-dato">x</span> − <span class="r-dato">x</span><span class="sub">k</span> ),     con  <span class="r-hiper">m</span><span class="sub">k</span> = <span class="frac"><span class="num">f(x<span class="sub">k+1</span>) − f(x<span class="sub">k</span>)</span><span class="den">x<span class="sub">k+1</span> − x<span class="sub">k</span></span></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Empieza en el valor de f en cero y sigue con la pendiente del primer tramo. En cada nodo interior x<sub>k</sub> suma un codo ReLU que cambia la pendiente por la diferencia entre la pendiente nueva y la que traías.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">x<sub>k</sub></dt><dd>Los nodos equiespaciados: x<sub>k</sub> = 2k/D en [0, 2], con k de 0 a D.</dd>
+      <dt class="r-hiper">m<sub>k</sub></dt><dd>La pendiente del tramo que va de x<sub>k</sub> a x<sub>k+1</sub>. (Aquí m no es un parámetro de la red: es el dato que usamos para fabricarlos.)</dd>
+      <dt>m<sub>k</sub> − m<sub>k−1</sub></dt><dd>Cuánto cambia la pendiente en el nodo x<sub>k</sub>. Es justo el φ de la neurona con codo en x<sub>k</sub>.</dd>
+      <dt>m₀x</dt><dd>La rampa inicial. Como x ≥ 0, es lo mismo que m₀·ReLU(x): una neurona más, con codo en 0.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…D crece: los tramos se acortan y la línea quebrada se pega a la curva.</li>
+      <li>…la función es una recta: todas las m<sub>k</sub> son iguales, los φ de los codos valen 0 y solo queda la rampa.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Las neuronas de esta red son D: la rampa ReLU(x) y D − 1 codos. Cuentan 3D + 1 parámetros: θ<sub>d0</sub> y θ<sub>d1</sub> por neurona (θ<sub>d1</sub> = 1, θ<sub>d0</sub> = −x<sub>k</sub>) más D + 1 valores φ. En el laboratorio, el número de neuronas es el control D.</p>
+
+<h3 id="lab-aproximacion" class="lab" data-toc="Lab: aproximar cos(πx)">Laboratorio: aproxima cos(πx) con D neuronas</h3>
+<p>La curva punteada es la función real, cos(πx) en [0, 2]. La curva de color es la red que construye la fórmula de arriba con D neuronas. Los puntos son los nodos. Empieza con D = 5 (el primer panel de la slide) y súbelo a 10 y a 20.</p>
+<div class="widget" id="lab-a">
+  <div class="widget-head"><div class="wt">Aproximación universal, en la práctica</div><div class="ws">Los parámetros se calculan con la fórmula (no hay entrenamiento).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="aCanvas"></canvas>
+      <div><div id="aCtrl"></div><div id="aRead"></div></div>
+    </div>
+    <div class="mini">Parámetros de la red (las neuronas con φ = 0 no aportan codo)</div>
+    <div class="caja-scroll" id="aTabla"></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" data-d="5">D = 5</button><button class="btn" data-d="10">D = 10</button><button class="btn" data-d="20">D = 20</button><button class="btn" data-d="30">D = 30</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>D = 5, 10, 20:</strong> el error máximo baja de 0.191 a 0.047 y a 0.012. Cada vez que duplicas las neuronas, el error se divide aproximadamente entre 4.</li>
+    <li><strong>D = 1:</strong> hay una sola neurona (la rampa) y la «aproximación» es la constante 1: el error es 2. D = 2 ya captura el valle (error 0.21).</li>
+    <li><strong>D = 4:</strong> da exactamente la misma curva que D = 2 (error 0.21). Los nodos nuevos, x = 0.5 y 1.5, caen justo sobre las rectas anteriores (cos(π/2) = 0), así que sus φ valen 0: más neuronas no siempre agregan codos útiles. Con D = 5 sí mejora (0.19).</li>
+    <li><strong>Los parámetros:</strong> el número 3D + 1 sube con D, pero la forma de la tabla es siempre la misma (θ<sub>d1</sub> = 1; el codo y φ cambian).</li>
+  </ol>
+</div>
+
+<details>
+  <summary>Para profundizar: ¿de dónde sale que el error baja como 1/D²?</summary>
+  <div class="dbody">
+    <p>Si interpolas una función dos veces derivable con rectas sobre tramos de ancho h, el error máximo es a lo más (h²/8)·máx|f″|. Aquí h = 2/D y f″(x) = −π²cos(πx), con valor absoluto máximo π². La cota queda π²/(2D²) ≈ 4.93/D². Para D = 10 da 0.049, y el error real medido es 0.047: la cota es casi exacta. Es un resultado del análisis numérico, no de la slide, y se incluye solo para explicar por qué el error se divide entre 4 al duplicar D.</p>
+  </div>
+</details>
+
+<!-- ============ 5. DIMENSIONES ============ -->
+<h2 id="dimensiones"><span class="num">Sección 5</span>Más entradas y más salidas</h2>
+
+<p>Todo lo anterior se generaliza sin cambiar de idea: una neurona sigue siendo «una combinación lineal de las entradas, y luego la activación», y cada salida sigue siendo «una combinación lineal de las neuronas». Cambia solo cuántos números entran y cuántos salen.</p>
+
+<h3 id="salidas" data-toc="Salidas múltiples">Varias salidas: una capa oculta, dos combinaciones</h3>
+<p>La red de la figura tiene 1 entrada, 4 neuronas y 2 salidas. Las neuronas se calculan <em>una sola vez</em>; cada salida las combina con sus propios pesos.</p>
+
+<figure class="img">
+  <img src="../images/dos_outputs.png" alt="Red con una entrada x, cuatro neuronas h1 a h4 y dos salidas y1 y y2" width="460">
+  <figcaption>Red 1-4-2 de la slide. Cada neurona está conectada a las dos salidas. (Imagen de la slide.)</figcaption>
+</figure>
+
+<div class="formula">
+  <div class="f-head">Red 1-4-2: neuronas y dos salidas</div>
+  <div class="f-ejemplo">Con h = (0.5, 0, 1.2, 0.3), φ₁ = (0.2; 1, −1, 0.5, 2) y φ₂ = (−0.1; 0.5, 2, −1, 0):  y₁ = 0.2 + 0.5 + 0 + 0.6 + 0.6 = 1.9;  y₂ = −0.1 + 0.25 + 0 − 1.2 + 0 = −1.05</div>
+  <div class="eq">
+    <span class="r-calc">h</span><span class="sub r-calc">d</span> = <span class="sym" data-s="a">a</span>( <span class="r-param">θ</span><span class="sub r-param">d0</span> + <span class="r-param">θ</span><span class="sub r-param">d1</span><span class="r-dato">x</span> ),   d = 1, …, 4
+    <br><span class="r-calc">y</span><span class="sub r-calc">1</span> = <span class="r-param">φ</span><span class="sub r-param">10</span> + <span class="r-param">φ</span><span class="sub r-param">11</span><span class="r-calc">h</span><span class="sub r-calc">1</span> + <span class="r-param">φ</span><span class="sub r-param">12</span><span class="r-calc">h</span><span class="sub r-calc">2</span> + <span class="r-param">φ</span><span class="sub r-param">13</span><span class="r-calc">h</span><span class="sub r-calc">3</span> + <span class="r-param">φ</span><span class="sub r-param">14</span><span class="r-calc">h</span><span class="sub r-calc">4</span>
+    <br><span class="r-calc">y</span><span class="sub r-calc">2</span> = <span class="r-param">φ</span><span class="sub r-param">20</span> + <span class="r-param">φ</span><span class="sub r-param">21</span><span class="r-calc">h</span><span class="sub r-calc">1</span> + <span class="r-param">φ</span><span class="sub r-param">22</span><span class="r-calc">h</span><span class="sub r-calc">2</span> + <span class="r-param">φ</span><span class="sub r-param">23</span><span class="r-calc">h</span><span class="sub r-calc">3</span> + <span class="r-param">φ</span><span class="sub r-param">24</span><span class="r-calc">h</span><span class="sub r-calc">4</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La salida j es φ j-cero más cada neurona h d por su peso φ j-d. Las dos salidas usan las mismas cuatro neuronas, pero con pesos distintos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">φ<sub>jd</sub></dt><dd>Dos subíndices otra vez: <em>j</em> es la salida (1 o 2) y <em>d</em> la neurona (1 a 4). φ₂₃ se lee «salida 2, neurona 3». El 0 en φ<sub>j0</sub> es el sesgo de la salida j.</dd>
+      <dt class="r-calc">y₁, y₂</dt><dd>Las dos salidas de la red. Son dos funciones distintas de x.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…cambias φ₂₃: solo cambia y₂; y₁ no se entera.</li>
+      <li>…cambias θ₃₀: se mueve el codo de la neurona 3, y se mueve en <em>las dos salidas</em>.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Eso explica la figura de la slide con dos curvas por partes: las <strong>articulaciones caen en los mismos lugares</strong> (porque pertenecen a las neuronas, y las neuronas son compartidas), pero las pendientes entre ellas son distintas, porque cada salida mezcla las neuronas a su manera. En la slide, los cortes verticales punteados atraviesan las dos curvas.</p>
+
+<h3 id="entradas-2d" data-toc="Dos entradas">Dos entradas: cada neurona es un plano recortado</h3>
+<p>Con dos entradas, x₁ y x₂, la pre-activación de una neurona ya no es una recta, sino un <strong>plano</strong>: θ<sub>d0</sub> + θ<sub>d1</sub>x₁ + θ<sub>d2</sub>x₂. Si miras el plano desde arriba, sus curvas de nivel (los puntos con el mismo valor) son rectas paralelas. La ReLU recorta ese plano: lo deja plano en el cero donde la pre-activación es negativa y lo deja inclinado donde es positiva. El borde entre las dos zonas es la recta θ<sub>d0</sub> + θ<sub>d1</sub>x₁ + θ<sub>d2</sub>x₂ = 0, que es la «articulación» en 2D.</p>
+
+<p>La red de la slide tiene 2 entradas, 3 neuronas y 1 salida:</p>
+<ul>
+  <li>h₁ = a(θ₁₀ + θ₁₁x₁ + θ₁₂x₂)</li>
+  <li>h₂ = a(θ₂₀ + θ₂₁x₁ + θ₂₂x₂)</li>
+  <li>h₃ = a(θ₃₀ + θ₃₁x₁ + θ₃₂x₂)</li>
+  <li>y = φ₀ + φ₁h₁ + φ₂h₂ + φ₃h₃</li>
+</ul>
+<p>(La slide escribe θ₂₃ en la última línea de h₃; es un error de imprenta, el coeficiente de x₂ en la neurona 3 es θ₃₂.)</p>
+
+<p>Dos cosas que dice la slide y que el laboratorio permite ver. Primera: cada neurona recorta su plano a lo largo de <em>una recta</em>, y tres rectas parten el plano en regiones poligonales. Segunda: φ<sub>d</sub> <strong>escala qué tan empinado</strong> es el plano (cuán juntas se ven las curvas de nivel), pero no cambia la dirección de las curvas de nivel ni la posición de la recta. Solo el <em>signo</em> de φ<sub>d</sub> voltea el plano hacia arriba o hacia abajo.</p>
+
+<h3 id="lab-2d" class="lab" data-toc="Lab: red 2-3-1 en 2D">Laboratorio: red 2-3-1 con mapa de calor</h3>
+<p>El color es y(x₁, x₂): más oscuro y anaranjado, más alto. Las tres rectas son los puntos donde cada neurona cambia de estado. Elige una neurona y mueve sus controles: la recta se mueve con θ<sub>d0</sub>, θ<sub>d1</sub> y θ<sub>d2</sub>, pero no con φ<sub>d</sub>. El contador cuenta cuántos patrones distintos de neuronas encendidas hay en una malla fina de 300 × 300 puntos, es decir, cuántas regiones lineales se ven en la ventana [−2, 2] × [−2, 2].</p>
+<div class="widget" id="lab-2dw">
+  <div class="widget-head"><div class="wt">Red 2-3-1 con activación ReLU</div><div class="ws">Rectas de colores: θ<sub>d0</sub> + θ<sub>d1</sub>x₁ + θ<sub>d2</sub>x₂ = 0 (la recta gruesa es la neurona elegida).</div></div>
+  <div class="widget-body">
+    <div class="mini" style="margin-top:0">Neurona a editar</div>
+    <div id="d2Sel"></div>
+    <div class="lab-grid">
+      <canvas id="d2Canvas"></canvas>
+      <div><div id="d2Ctrl"></div><div id="d2Read"></div><div class="status info" id="d2Status"></div></div>
+    </div>
+    <div class="legend" id="d2Leyenda"></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="d2Ini">Preajuste inicial</button>
+    <button class="btn" id="d2Par">Tres rectas paralelas</button>
+    <button class="btn" id="d2Con">Tres rectas que se cruzan en un punto</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>Preajuste inicial:</strong> las tres rectas se cortan por pares dentro de la ventana y forman un triángulo en el centro: <strong>7 regiones</strong>. Es el «7 polígonos» de la slide; con 3 rectas en el plano, 7 es el máximo.</li>
+    <li><strong>Mueve φ<sub>d</sub> de la neurona elegida:</strong> el color cambia (el plano se inclina más o menos, o se voltea con φ<sub>d</sub> &lt; 0), pero la recta y el contador no se mueven.</li>
+    <li><strong>Tres rectas paralelas:</strong> solo 4 regiones. Rectas paralelas no se cortan, y sin cortes hay menos pedazos.</li>
+    <li><strong>Tres rectas que se cruzan en un punto:</strong> 6 regiones, no 7. El máximo exige que las rectas estén «en posición general».</li>
+    <li><strong>Saca una recta de la ventana</strong> (por ejemplo, θ<sub>d0</sub> muy grande): el contador baja, porque esa neurona ya no parte nada de lo que se ve.</li>
+  </ol>
+</div>
+
+<h3 id="caso-general" data-toc="Caso general">El caso general: D<sub>i</sub> entradas, D neuronas, D<sub>o</sub> salidas</h3>
+<p>Las dos fórmulas de abajo contienen todas las redes de una capa oculta. Si D<sub>i</sub> = 1 y D<sub>o</sub> = 1 recuperas la red 1-3-1; con D<sub>i</sub> = 2, D = 3 y D<sub>o</sub> = 1 recuperas la de dos entradas.</p>
+
+<div class="formula">
+  <div class="f-head">Red superficial general</div>
+  <div class="f-ejemplo">Red 2-3-1 del laboratorio: θ₁ = (0.5, 1, 0.4), θ₂ = (0.2, −0.6, 1), θ₃ = (−0.4, 0.5, 0.8), φ = (0, 1, −0.8, 0.7), x = (1, 0.5):  h₁ = ReLU(0.5 + 1·1 + 0.4·0.5) = 1.7;  h₂ = ReLU(0.2 − 0.6·1 + 1·0.5) = 0.1;  h₃ = ReLU(−0.4 + 0.5·1 + 0.8·0.5) = 0.5;  y = 0 + 1.7 − 0.8·0.1 + 0.7·0.5 = 1.97</div>
+  <div class="eq">
+    <span class="r-calc">h</span><span class="sub r-calc">d</span> = <span class="sym" data-s="a">a</span>( <span class="r-param">θ</span><span class="sub r-param">d0</span> + <span class="big"><span class="lim r-dato"><span class="sym" data-s="Di">D<sub>i</sub></span></span><span class="o sym" data-s="sum">Σ</span><span class="lim">i=1</span></span> <span class="r-param">θ</span><span class="sub r-param">di</span><span class="r-dato">x</span><span class="sub r-dato">i</span> )
+    <br><span class="r-calc">y</span><span class="sub r-calc">j</span> = <span class="r-param">φ</span><span class="sub r-param">j0</span> + <span class="big"><span class="lim r-hiper"><span class="sym" data-s="D">D</span></span><span class="o sym" data-s="sum">Σ</span><span class="lim">d=1</span></span> <span class="r-param">φ</span><span class="sub r-param">jd</span><span class="r-calc">h</span><span class="sub r-calc">d</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La neurona d suma su sesgo más cada entrada x i por su peso θ d-i, y aplica la activación. La salida j suma su sesgo más cada neurona por su peso φ j-d.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">D<sub>i</sub></dt><dd>Cuántas entradas tiene cada dato. Lo fija el problema (2 en el laboratorio, 100 en el ejemplo de la slide).</dd>
+      <dt class="r-hiper">D</dt><dd>Cuántas neuronas ocultas hay. Lo eliges tú al diseñar la red.</dd>
+      <dt class="r-dato">D<sub>o</sub></dt><dd>Cuántas salidas produce la red.</dd>
+      <dt class="r-param">θ<sub>di</sub></dt><dd>Peso de la entrada i en la neurona d. θ<sub>d0</sub> es el sesgo (es como si hubiera una «entrada» x₀ = 1).</dd>
+      <dt class="r-param">φ<sub>jd</sub></dt><dd>Peso de la neurona d en la salida j; φ<sub>j0</sub> es el sesgo de la salida.</dd>
+      <dt>i, d, j</dt><dd>Contadores: i recorre entradas, d neuronas y j salidas. No se mezclan.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…D<sub>i</sub> crece: cada neurona gana un peso por cada entrada nueva; el plano pasa a ser un hiperplano y la «recta» de cada neurona, un hiperplano también.</li>
+      <li>…D crece: hay más hiperplanos y más regiones.</li>
+      <li>…D<sub>o</sub> crece: se agregan combinaciones de las mismas neuronas; las regiones no cambian, los parámetros sí.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ 6. CONTAR ============ -->
+<h2 id="contar"><span class="num">Sección 6</span>Contar parámetros y regiones</h2>
+
+<p>En el examen se pide contar de memoria y con justificación. Ambas fórmulas salen de un solo hábito: <strong>cada neurona u salida tiene un peso por cada entrada que recibe, más un sesgo</strong>.</p>
+
+<h3 id="contar-parametros" data-toc="Contar parámetros">Parámetros de una red superficial</h3>
+<div class="formula">
+  <div class="f-head">Parámetros de una red superficial</div>
+  <div class="f-ejemplo">Red 3-3-2 (la de la slide, con 3 entradas, 3 neuronas y 2 salidas): capa oculta (3 + 1)·3 = 12; capa de salida (3 + 1)·2 = 8; total 12 + 8 = 20.  Otra, 3-4-2: (3 + 1)·4 + (4 + 1)·2 = 16 + 10 = 26.</div>
+  <div class="eq">
+    número de parámetros = ( <span class="sym r-dato" data-s="Di">D<sub>i</sub></span> + 1 )·<span class="sym r-hiper" data-s="D">D</span> + ( <span class="r-hiper">D</span> + 1 )·<span class="r-dato">D</span><span class="sub r-dato">o</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cada una de las D neuronas tiene D i pesos más un sesgo; cada una de las D o salidas tiene D pesos más un sesgo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>(D<sub>i</sub> + 1)·D</dt><dd>La capa oculta. D neuronas, cada una con D<sub>i</sub> pesos (uno por entrada) y 1 sesgo.</dd>
+      <dt>(D + 1)·D<sub>o</sub></dt><dd>La capa de salida. D<sub>o</sub> salidas, cada una con D pesos (uno por neurona) y 1 sesgo.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…D<sub>i</sub> = D<sub>o</sub> = 1: queda 2D + (D + 1) = 3D + 1. Con D = 3, 10 parámetros: la red de la slide.</li>
+      <li>…duplicas D: los parámetros casi se duplican (la fórmula es lineal en D).</li>
+      <li>…D<sub>i</sub> = 100 y D = 500: (100 + 1)·500 + (500 + 1)·1 = 50 500 + 501 = <strong>51 001</strong> parámetros, el número que cita la slide.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Trampa común: «pesos» no es «parámetros»</span>
+  <p>En la slide, el comentario sobre la figura de la red 3-3-2 dice «3·4 + 4·2 = 12 + 8 = 20». Los 4 son (D<sub>i</sub> + 1) y (D + 1): <strong>incluyen los sesgos</strong>, así que 20 son <em>parámetros</em>. Contando solo <em>pesos</em> (sin sesgos) serían 3·3 + 3·2 = 15. Cuando te pidan «parámetros», cuenta siempre los sesgos; si te piden «pesos», no.</p>
+</div>
+
+<figure class="img">
+  <img src="../images/parametros_graph.png" alt="Red con 3 entradas, 3 neuronas ocultas y 2 salidas" width="460">
+  <figcaption>La red de la slide para contar: 3 entradas, 3 neuronas, 2 salidas. (Imagen de la slide.)</figcaption>
+</figure>
+
+<h3 id="contar-profunda" data-toc="Parámetros de una red profunda">Parámetros de una red profunda</h3>
+<p>Para una red con 1 entrada, K capas ocultas de D neuronas cada una y 1 salida, la fórmula es 3D + 1 + (K − 1)·D·(D + 1). No hay que memorizarla: sale de contar capa por capa.</p>
+
+<div class="formula">
+  <div class="f-head">Parámetros de una red profunda (1 entrada, 1 salida)</div>
+  <div class="f-ejemplo">K = 3 capas de D = 4:  capa 1: 2·4 = 8;  capas 2 y 3: 4·5 = 20 cada una, 40;  salida: 4 + 1 = 5;  total 8 + 40 + 5 = 53.  Con la fórmula: 3·4 + 1 + (3 − 1)·4·(4 + 1) = 13 + 40 = 53.</div>
+  <div class="eq">
+    número de parámetros = 3<span class="r-hiper">D</span> + 1 + ( <span class="sym r-hiper" data-s="Kcapas">K</span> − 1 )·<span class="r-hiper">D</span>·( <span class="r-hiper">D</span> + 1 )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Tres D más uno, más K menos uno bloques de D por D más uno.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>3D + 1</dt><dd>La primera capa (2D: un peso y un sesgo por neurona) más la salida (D + 1: un peso por neurona y un sesgo).</dd>
+      <dt>(K − 1)·D·(D + 1)</dt><dd>Las capas intermedias entre la primera y la última. Cada neurona recibe D entradas (las de la capa anterior) más un sesgo, y hay D neuronas, y hay K − 1 capas así.</dd>
+      <dt class="r-hiper">K, D</dt><dd>Hiperparámetros: cuántas capas ocultas y cuántas neuronas por capa. Aquí K no es el número de clases.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…K = 1: el término (K − 1)D(D + 1) desaparece y queda 3D + 1, la superficial.</li>
+      <li>…subes K en uno: sumas D(D + 1) parámetros. Crece <em>linealmente</em> con K.</li>
+      <li>…subes D en uno: el término D(D + 1) crece como D², así que ensanchar sale caro cuando hay muchas capas.</li>
+    </ul>
+  </div>
+</div>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">capa 1: D neuronas × (1 peso + 1 sesgo) = 2D</div><div class="d-por"><b>Contar por capa:</b> la entrada es un solo número, así que cada neurona de la capa 1 tiene un peso y un sesgo.</div></li>
+  <li><div class="d-ex">capas 2, …, K: (K − 1) capas × D neuronas × (D pesos + 1 sesgo) = (K − 1)·D·(D + 1)</div><div class="d-por"><b>Contar por capa:</b> cada neurona recibe las D salidas de la capa anterior, un peso por cada una, y un sesgo.</div></li>
+  <li><div class="d-ex">salida: 1 × (D pesos + 1 sesgo) = D + 1</div><div class="d-por"><b>Contar por capa:</b> una sola salida que combina las D neuronas de la última capa.</div></li>
+  <li><div class="d-ex">2D + (K − 1)D(D + 1) + (D + 1) = 3D + 1 + (K − 1)D(D + 1)</div><div class="d-por"><b>Sumar y agrupar:</b> 2D + D + 1 = 3D + 1.</div></li>
+  <li><div class="d-ex">K = 2, D = 3: 3·3 + 1 + 1·3·4 = 22</div><div class="d-por"><b>Verificación:</b> es el conteo de una red 1-3-3-1 general: (1+1)·3 + (3+1)·3 + (3+1)·1 = 6 + 12 + 4 = 22.</div></li>
+</ol>
+
+<h3 id="contar-regiones" data-toc="Contar regiones">Regiones lineales</h3>
+<p>Aquí solo vale para <strong>1 entrada y 1 salida</strong>, que es el caso del temario. Una red superficial con D neuronas ReLU tiene a lo más <strong>D + 1</strong> regiones (sección 2). Una red profunda con K capas ocultas de D neuronas puede tener hasta <strong>(D + 1)<sup>K</sup></strong>. La intuición:</p>
+<ul>
+  <li>La capa 1 corta la recta en a lo más D + 1 pedazos.</li>
+  <li>En cada pedazo, la función que entra a la capa 2 es una recta. La capa 2 la corta, otra vez, en a lo más D + 1 sub-pedazos.</li>
+  <li>Entonces hay a lo más (D + 1)·(D + 1) pedazos después de dos capas, y (D + 1)<sup>K</sup> después de K.</li>
+</ul>
+<p>Mira cómo se separan parámetros y regiones cuando D = 4:</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>K (capas)</th><th>Parámetros 3D + 1 + (K − 1)D(D + 1)</th><th>Regiones máximas (D + 1)<sup>K</sup></th></tr>
+  <tr><td class="nw">1</td><td class="nw">13</td><td class="nw">5</td></tr>
+  <tr><td class="nw">2</td><td class="nw">33</td><td class="nw">25</td></tr>
+  <tr><td class="nw">3</td><td class="nw">53</td><td class="nw">125</td></tr>
+  <tr><td class="nw">4</td><td class="nw">73</td><td class="nw">625</td></tr>
+  <tr><td class="nw">5</td><td class="nw">93</td><td class="nw">3 125</td></tr>
+</table></div>
+<p>Los parámetros suben de 20 en 20 (lineal en K) y las regiones se multiplican por 5 en cada capa (exponencial en K). Esa es la <em>eficiencia representacional</em> de la profundidad; la volverás a ver en la sección 7 y en la 8. Es una <strong>cota superior</strong>: para llegar a ella los parámetros hay que escogerlos con cuidado (el laboratorio «Doblar» de la sección 7 llega a 16 = 4² con D = 3, K = 2).</p>
+
+<p>Con muchas entradas las regiones crecen todavía más rápido: con D = 500 neuronas y D<sub>i</sub> = 100 entradas, la slide dice que puede haber más de 10<sup>107</sup> regiones, con solo 51 001 parámetros. Esa cuenta sale de la fórmula de Zaslavsky, que está en el recuadro de abajo.</p>
+
+<details>
+  <summary>Para profundizar: Zaslavsky y por qué (D + 1)<sup>K</sup> es una cota</summary>
+  <div class="dbody">
+    <p><strong>Zaslavsky (1975).</strong> D hiperplanos «en posición general» en un espacio de dimensión D<sub>i</sub> ≤ D lo parten en</p>
+    <div class="eq">
+      <span class="big"><span class="lim r-dato">D<sub>i</sub></span><span class="o">Σ</span><span class="lim">j=0</span></span> <span class="sym" data-s="binom">C(D, j)</span> regiones, y se cumple 2<span class="sup">D<sub>i</sub></span> ≤ <span class="big"><span class="lim r-dato">D<sub>i</sub></span><span class="o">Σ</span><span class="lim">j=0</span></span> C(D, j) ≤ 2<span class="sup">D</span>.
+    </div>
+    <p>C(D, j) es «de cuántas formas se eligen j cosas de D». Prueba con casos pequeños: D<sub>i</sub> = 1 y D neuronas: C(D, 0) + C(D, 1) = 1 + D, las D + 1 regiones de siempre. D<sub>i</sub> = 2 y 3 rectas: 1 + 3 + 3 = 7, los 7 polígonos de la slide. D<sub>i</sub> = 3 y 3 planos: 1 + 3 + 3 + 1 = 8. Para D = 500 y D<sub>i</sub> = 100, el cálculo da unos 2.7 × 10<sup>107</sup>, que es el «más de 10<sup>107</sup>» de la slide.</p>
+    <p>La slide también da los casos pequeños: 1D con una neurona, 2 regiones; 2D con dos neuronas, 4; 3D con tres, 8. Son D<sub>i</sub> = D, donde la suma vale 2<sup>D</sup>.</p>
+    <p><strong>Por qué (D + 1)<sup>K</sup> es cota.</strong> Dentro de un pedazo de la capa anterior, cada neurona de la capa nueva es una recta en x, y una recta cruza el cero a lo más una vez. D neuronas agregan a lo más D cortes dentro de ese pedazo, así que lo parten en a lo más D + 1. Cada capa multiplica el número de pedazos por a lo más D + 1.</p>
+  </div>
+</details>
+
+<h3 id="lab-calculadora" class="lab" data-toc="Lab: calculadora de parámetros">Laboratorio: calculadora de parámetros y regiones</h3>
+<p>Elige D<sub>i</sub>, D, D<sub>o</sub> y K. La calculadora cuenta capa por capa y calcula las regiones máximas cuando la fórmula del curso aplica. Prueba primero con el botón «Caso de la slide».</p>
+<div class="widget" id="lab-c">
+  <div class="widget-head"><div class="wt">Calculadora</div><div class="ws">K capas ocultas de D neuronas; entradas D<sub>i</sub>, salidas D<sub>o</sub>.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div id="cOut"></div>
+      <div><div id="cCtrl"></div><div class="status info" id="cStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="cSlide">Caso de la slide (D = 500, D<sub>i</sub> = 100)</button>
+    <button class="btn" id="c342">Red 3-4-2</button>
+    <button class="btn" id="cProf">1 → 3 capas de 4 → 1</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>Caso de la slide:</strong> 50 500 + 501 = 51 001 parámetros, y unos 2.7 × 10<sup>107</sup> de regiones máximas (más de 10<sup>107</sup>, como dice la slide). Con muy pocos parámetros, una cantidad astronómica de regiones.</li>
+    <li><strong>1 → 3 capas de 4 → 1:</strong> 53 parámetros y hasta 125 regiones. La calculadora te dice cuántas neuronas necesitaría una superficial con parámetros parecidos (D = 17: 52 parámetros y 18 regiones).</li>
+    <li><strong>Sube K manteniendo D:</strong> los parámetros crecen en pasos iguales; las regiones máximas se multiplican por D + 1 en cada paso.</li>
+    <li><strong>Sube D<sub>o</sub>:</strong> solo cambia la capa de salida; las regiones no cambian.</li>
+  </ol>
+</div>
+
+<!-- ============ 7. PROFUNDAS ============ -->
+<h2 id="profundas"><span class="num">Sección 7</span>Redes profundas: componer es doblar</h2>
+
+<p>Una <strong>red profunda</strong> es una red con más de una capa oculta. El problema que resuelve: para ciertas funciones, el número de neuronas que necesitarías en <em>una sola</em> capa es prohibitivamente grande. Una red profunda puede crear muchísimas más regiones lineales con el mismo número de parámetros. A cambio, es menos intuitiva. Esta sección la hace intuitiva con un solo truco: <strong>la segunda red se aplica sobre el doblez que hizo la primera</strong>.</p>
+
+<h3 id="pegando" data-toc="Pegar dos redes">Pegar dos redes 1-3-1</h3>
+<p>Se toma una red 1-3-1 y su salida y se usa como entrada de una segunda red 1-3-1.</p>
+<ul>
+  <li><strong>Red 1</strong> (entra x, sale y): h₁ = a(θ₁₀ + θ₁₁x), h₂ = a(θ₂₀ + θ₂₁x), h₃ = a(θ₃₀ + θ₃₁x), y = φ₀ + φ₁h₁ + φ₂h₂ + φ₃h₃.</li>
+  <li><strong>Red 2</strong> (entra y, sale y′): h′₁ = a(θ′₁₀ + θ′₁₁y), h′₂ = a(θ′₂₀ + θ′₂₁y), h′₃ = a(θ′₃₀ + θ′₃₁y), y′ = φ′₀ + φ′₁h′₁ + φ′₂h′₂ + φ′₃h′₃.</li>
+</ul>
+<p>(La slide escribe h₁, h₂, h₃ en la última línea de la red 2; deben ser h′₁, h′₂, h′₃, porque son las neuronas de la segunda red.)</p>
+
+<figure class="img">
+  <img src="../images/dos_redes.png" alt="Dos redes 1-3-1 pegadas: x entra a la primera, su salida y entra a la segunda, que produce y prima" width="620">
+  <figcaption>Las dos redes pegadas. Son 10 + 10 = 20 parámetros. (Imagen de la slide.)</figcaption>
+</figure>
+
+<p>La slide cuenta que, con esos 20 parámetros, se obtienen <strong>9 regiones lineales</strong>, contra a lo más 7 de una red superficial de 6 neuronas (que tiene (1 + 1)·6 + (6 + 1) = 19 parámetros). La máxima posible para la composición es (3 + 1)(3 + 1) = 16.</p>
+
+<p>La razón es geométrica. La red 1 dibuja una función de x con 3 tramos. Esa función <em>dobla</em> el eje: varios valores de x distintos terminan en el mismo y. La red 2 es otra función con 3 tramos, y se aplica sobre el eje y. Cada tramo de la red 1 recorre una parte del eje y; en cada recorrido, la red 2 deja sus codos. El resultado: cada tramo de la red 1 se convierte en 3 tramos de la composición.</p>
+
+<h3 id="lab-doblar" class="lab" data-toc="Lab: doblar">Laboratorio: doblar</h3>
+<p>Tres paneles: y = red 1(x), y′ = red 2(y) y la composición y′(x). Mueve el punto x: verás a qué y va y a qué y′. Los puntos grises son <em>todos los demás x que terminan en el mismo y′</em>. Empieza con el preajuste «9 regiones».</p>
+<div class="widget" id="lab-d">
+  <div class="widget-head"><div class="wt">Composición de dos redes 1-3-1</div><div class="ws">Parámetros con números sencillos, inspirados en la figura de la slide. El contador de regiones es numérico.</div></div>
+  <div class="widget-body">
+    <div class="mini" style="margin-top:0">Preajuste</div>
+    <div id="dSel"></div>
+    <div class="g3">
+      <div><div class="gt">Red 1: y = red₁(x)</div><canvas id="dC1"></canvas></div>
+      <div><div class="gt">Red 2: y′ = red₂(y)</div><canvas id="dC2"></canvas></div>
+      <div><div class="gt">Composición: y′ = red₂(red₁(x))</div><canvas id="dC3"></canvas></div>
+    </div>
+    <div class="lab-grid" style="margin-top:14px">
+      <div><div id="dCtrl"></div></div>
+      <div><div id="dRead"></div></div>
+    </div>
+    <div class="status info" id="dStatus"></div>
+    <details style="margin-top:12px">
+      <summary>Ver los 20 parámetros de este preajuste</summary>
+      <div class="dbody" id="dParams"></div>
+    </details>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>9 regiones:</strong> cada una de las 3 regiones de la red 1 se parte en 3, porque en los tres recorridos y pasa por las dos articulaciones de la red 2. Con x = −0.4 (y = 0.2, y′ = 0.2), <strong>9 valores distintos de x</strong> dan el mismo y′. Esa es la huella del doblez.</li>
+    <li><strong>Desplaza las articulaciones de la red 2</strong> (control «desplazar»): cuando una de ellas sale del rango de y que produce la red 1, deja de producir un codo en la composición, y las regiones bajan.</li>
+    <li><strong>Preajuste «16 regiones»:</strong> con los mismos 20 parámetros y distinta forma, la red 1 hace 4 tramos que recorren todos el intervalo [0, 1] y la red 2 pone 3 articulaciones adentro de [0, 1]: 4 × 4 = 16, el máximo. Lleva el control de desplazamiento a 0.3, 0.5 y 0.8 y verás 16 → 12 → 8 → 4 regiones: las articulaciones que salen de [0, 1] ya no «ven» al doblez.</li>
+    <li><strong>Para llegar a la cota hay que ajustar parámetros:</strong> el preajuste de 9 no es el máximo (16); la cota es un techo, no una garantía.</li>
+  </ol>
+</div>
+
+<div class="note fix">
+  <span class="tag">20 parámetros, no 22</span>
+  <p>La red «pegada» tiene 10 + 10 = 20 parámetros. Una red profunda 1-3-3-1 general, con la fórmula de la sección 6, tiene 3·3 + 1 + 1·3·4 = <strong>22</strong>. La diferencia: en la composición, las neuronas de la segunda capa solo ven la salida y de la primera, que es un único número; en la general, ven las tres neuronas h₁, h₂, h₃ por separado y cada una tiene 3 pesos. En el lenguaje de la siguiente sección, los pesos de la segunda capa de la red pegada forman una matriz «de rango 1». La composición es un caso particular de 1-3-3-1, y el máximo de regiones (4 × 4 = 16) es el mismo.</p>
+</div>
+
+<h3 id="una-ecuacion" data-toc="Las dos redes en una ecuación">Las dos redes en una sola ecuación: ψ</h3>
+<p>Para ver que la composición es una sola red de dos capas ocultas, sustituye la salida y de la red 1 dentro de las neuronas de la red 2. Con números: si y = 1 + 2h₁ − h₂ + 0.5h₃ y la primera neurona de la red 2 es h′₁ = a(0.5 + 2y), entonces su pre-activación es 0.5 + 2(1 + 2h₁ − h₂ + 0.5h₃) = 2.5 + 4h₁ − 2h₂ + h₃.</p>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">h′₁ = a(θ′₁₀ + θ′₁₁y)</div><div class="d-por">Neurona 1 de la red 2, que recibe la salida de la red 1.</div></li>
+  <li><div class="d-ex">h′₁ = a(θ′₁₀ + θ′₁₁(φ₀ + φ₁h₁ + φ₂h₂ + φ₃h₃))</div><div class="d-por"><b>Sustituir</b> y = φ₀ + φ₁h₁ + φ₂h₂ + φ₃h₃.</div></li>
+  <li><div class="d-ex">h′₁ = a(θ′₁₀ + θ′₁₁φ₀ + θ′₁₁φ₁h₁ + θ′₁₁φ₂h₂ + θ′₁₁φ₃h₃)</div><div class="d-por"><b>Propiedad distributiva:</b> reparto θ′₁₁ dentro del paréntesis.</div></li>
+  <li><div class="d-ex">ψ₁₀ = θ′₁₀ + θ′₁₁φ₀,   ψ₁₁ = θ′₁₁φ₁,   ψ₁₂ = θ′₁₁φ₂,   ψ₁₃ = θ′₁₁φ₃  ⇒  h′₁ = a(ψ₁₀ + ψ₁₁h₁ + ψ₁₂h₂ + ψ₁₃h₃)</div><div class="d-por"><b>Renombrar:</b> cada combinación de números conocidos es un parámetro nuevo, ψ (psi). Es lo que dice la slide.</div></li>
+  <li><div class="d-ex">Con θ′₁₀ = 0.5, θ′₁₁ = 2 y φ = (1, 2, −1, 0.5): ψ₁₀ = 0.5 + 2·1 = 2.5, ψ₁₁ = 4, ψ₁₂ = −2, ψ₁₃ = 1</div><div class="d-por"><b>Verificación con números:</b> con h = (1, 2, 0), y = 1 + 2 − 2 + 0 = 1 y la pre-activación es 0.5 + 2·1 = 2.5; con los ψ: 2.5 + 4·1 − 2·2 + 1·0 = 2.5. Coinciden.</div></li>
+</ol>
+
+<p>Lo mismo vale para h′₂ y h′₃ y para la salida: y′ queda escrita con las x, las neuronas de la capa 1 y las neuronas de la capa 2. Las neuronas h′ ya no reciben «un número y», sino una <em>combinación de las tres neuronas de la capa anterior</em>. Eso, con tres neuronas por capa, es una red profunda.</p>
+
+<p>La slide describe en cuatro pasos qué hace la red profunda. Sin fórmulas: (1) las neuronas h₁, h₂, h₃ son rectas con ReLU; (2) la capa 2 calcula tres funciones lineales nuevas de h₁, h₂, h₃ (hasta aquí es una superficial con 3 salidas, con articulaciones en los mismos lugares); (3) la ReLU de la capa 2 agrega articulaciones nuevas; (4) la salida es una combinación lineal de esas neuronas.</p>
+
+<h3 id="forma-matricial" data-toc="Forma matricial">Forma matricial: Ω y β</h3>
+<p>Para escribir una red de cualquier ancho, cada capa se resume en una matriz de pesos Ω y un vector de sesgos β. La primera forma que da la slide, con tres neuronas, es la de un vector de neuronas = a(un vector de sesgos + un vector de pesos por x). Cambiando los nombres, cada capa es lo mismo: «multiplica por Ω, suma β y aplica a».</p>
+
+<div class="formula">
+  <div class="f-head">Red profunda en forma matricial (dos capas ocultas)</div>
+  <div class="f-ejemplo">x = 2, Ω₀ = (1, −1, 2)ᵀ y β₀ = (0, 1, −2)ᵀ: pre-activación (2, −1, 2) → h₁ = (2, 0, 2).  Ω₁ = [1 0 −1; 0.5 1 0; −1 2 1], β₁ = (0, 0, 1)ᵀ: Ω₁h₁ = (0, 1, 0), más β₁ da (0, 1, 1) → h₂ = (0, 1, 1).  Ω₂ = (1, 2, −1), β₂ = 0.5:  y = 0.5 + 0 + 2 − 1 = 1.5</div>
+  <div class="eq">
+    <b>h</b><span class="sub">1</span> = <span class="sym" data-s="a">a</span>( <b class="r-param">β</b><span class="sub r-param">0</span> + <b class="r-param">Ω</b><span class="sub r-param">0</span><b class="r-dato">x</b> )
+    <br><b>h</b><span class="sub">2</span> = <span class="sym" data-s="a">a</span>( <b class="r-param">β</b><span class="sub r-param">1</span> + <b class="r-param">Ω</b><span class="sub r-param">1</span><b>h</b><span class="sub">1</span> )
+    <br><span class="r-calc">y</span> = <b class="r-param">β</b><span class="sub r-param">2</span> + <b class="r-param">Ω</b><span class="sub r-param">2</span><b>h</b><span class="sub">2</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Las neuronas de la primera capa son la activación de beta cero más omega cero por x. Las de la segunda, la activación de beta uno más omega uno por las de la primera. La salida es beta dos más omega dos por las de la segunda.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param"><span class="sym" data-s="Omega">Ω</span><sub>k</sub></dt><dd>La matriz de pesos que lleva la capa k a la siguiente: una fila por neurona de destino y una columna por neurona de origen. Aquí, Ω₀ es 3×1, Ω₁ es 3×3 y Ω₂ es 1×3.</dd>
+      <dt class="r-param"><span class="sym" data-s="beta">β</span><sub>k</sub></dt><dd>El vector de sesgos de esa transición: β₀ y β₁ tienen 3 entradas y β₂ tiene 1. (No es el β de momentum: aquí es el sesgo.)</dd>
+      <dt class="r-calc"><b>h</b><sub>1</sub>, <b>h</b><sub>2</sub></dt><dd>Los vectores con las 3 neuronas de la capa 1 y de la capa 2.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…agregas una capa: aparece un par nuevo (Ω, β) y una activación más.</li>
+      <li>…las capas tienen ancho distinto: cambian las formas de las matrices (D<sub>k+1</sub> × D<sub>k</sub>), pero la fórmula no.</li>
+      <li>…Ω₁ = 0 (todas ceros): la capa 2 ya no ve a x; la salida es una constante.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Para la red de dos capas con 3 neuronas cada una, las formas son: Ω₀ (3 × 1), β₀ (3 × 1), Ω₁ (3 × 3), β₁ (3 × 1), Ω₂ (1 × 3) y β₂ (1 × 1). Los conteos 3 + 3 + 9 + 3 + 3 + 1 suman 22, los mismos de la sección 6. Si necesitas repasar «matriz por vector», mira <a href="00_matematicas.html#vectores">vectores y matrices</a>.</p>
+
+<h3 id="hiperparametros" data-toc="Hiperparámetros vs parámetros">Hiperparámetros contra parámetros</h3>
+<p>Un <strong>hiperparámetro</strong> es algo que se define <em>antes</em> de entrenar y no se aprende con backpropagation. En una red profunda, los clásicos son K (cuántas capas, la profundidad) y D<sub>k</sub> (cuántas neuronas tiene la capa k, el ancho). Cada combinación de hiperparámetros define una <em>familia</em> de funciones; los parámetros escogen una función concreta de esa familia.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th></th><th>Hiperparámetros</th><th>Parámetros</th></tr>
+  <tr><td><strong>Ejemplos</strong></td><td class="eqc">K, D<sub>k</sub> (también: tasa de aprendizaje, etc.)</td><td class="eqc">φ, θ, Ω<sub>k</sub>, β<sub>k</sub></td></tr>
+  <tr><td><strong>¿Quién los decide?</strong></td><td>Tú, el modelador (o una búsqueda de hiperparámetros).</td><td>El algoritmo de entrenamiento (gradient descent).</td></tr>
+  <tr><td><strong>¿Cuándo?</strong></td><td>Antes de entrenar. Si no te gustan, entrenas de nuevo con otros.</td><td>Durante el entrenamiento, paso a paso.</td></tr>
+  <tr><td><strong>¿Con qué se evalúa?</strong></td><td>Con datos de validación.</td><td>Con la pérdida en el conjunto de entrenamiento.</td></tr>
+</table></div>
+<p>Las dimensiones de entrada y salida, D<sub>i</sub> y D<sub>o</sub>, tampoco se aprenden, pero no las eliges tú: las fija el problema (cuántas características hay y cuántas cosas quieres predecir).</p>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿La profundidad K es un parámetro, porque «está dentro» del modelo?</div>
+<p>No: es un hiperparámetro. La prueba es sencilla: ¿el gradient descent la puede ajustar con un paso? Los φ y θ sí (tienen derivada). K es un entero que cambia la arquitectura, y se decide fuera del entrenamiento. Por eso la slide dice que, con los hiperparámetros, la red representa «una familia de familias».</p>
+
+<!-- ============ 8. COMPARACIÓN ============ -->
+<h2 id="superficial-vs-profunda"><span class="num">Sección 8</span>Redes superficiales contra profundas</h2>
+
+<p>La slide cierra con una tabla y tres advertencias. Las tres advertencias son preguntas de examen; cada una se contesta con una sola línea.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Propiedad</th><th>Superficial</th><th>Profunda</th></tr>
+  <tr><td><strong>Aproximación universal</strong></td><td>Sí</td><td>Sí</td></tr>
+  <tr><td><strong>Regiones lineales (1 entrada)</strong></td><td class="eqc">D + 1</td><td class="eqc">hasta (D + 1)<sup>K</sup></td></tr>
+  <tr><td><strong>Facilidad de entrenamiento</strong></td><td>«Difícil»</td><td>«Fácil»</td></tr>
+  <tr><td><strong>Generalización</strong></td><td>Depende</td><td>Depende</td></tr>
+</table></div>
+<p>Las comillas de la tabla importan: la fila de entrenamiento no es una verdad general, sino una tendencia observada. La segunda advertencia, más abajo, la matiza.</p>
+
+<figure class="img">
+  <img src="../images/crecimiento_parametros.png" alt="Número de regiones contra número de parámetros para K de 1 a 5 capas, con entradas de dimensión 1 y 10" width="680">
+  <figcaption>La figura de la slide: con el mismo número de parámetros, más capas dan muchas más regiones (eje vertical en escala logarítmica). (Imagen de la slide.)</figcaption>
+</figure>
+
+<div class="note exam">
+  <span class="tag">1 · Aproximación universal ≠ eficiencia representacional</span>
+  <p>Una red superficial con una sola capa oculta y suficiente ancho ya aproxima cualquier función continua en un compacto, así que <strong>la profundidad no es necesaria para aproximar</strong>. Las profundas también son aproximadores universales. La ventaja de la profundidad es otra: ciertas funciones se representan con muchísimas menos neuronas y parámetros, porque la composición multiplica regiones (D + 1 contra hasta (D + 1)<sup>K</sup>). Ejemplo: 53 parámetros dan hasta 125 regiones en una red 4 + 4 + 4, y con 52 una superficial da 18.</p>
+</div>
+
+<div class="note exam">
+  <span class="tag">2 · Más profundidad ⇏ entrenamiento más fácil</span>
+  <p>Una red más profunda es más expresiva, pero también puede ser más difícil de optimizar: en redes muy profundas pueden aparecer gradientes que desaparecen o explotan. Aun así, las redes sobreparametrizadas suelen optimizarse sorprendentemente bien con métodos de gradiente, y técnicas como buena inicialización, ReLU, normalización y conexiones residuales permiten entrenar redes de decenas o cientos de capas (en el artefacto <a href="04_entrenamiento2.html">04</a>, «próximamente» en la slide). Moraleja: la profundidad no hace la optimización «automáticamente» más fácil ni más difícil.</p>
+</div>
+
+<div class="note exam">
+  <span class="tag">3 · Buena optimización ≠ buena generalización</span>
+  <p>Que una red llegue a error de entrenamiento casi cero no dice cómo se portará con datos nuevos. Las redes muy sobreparametrizadas pueden incluso memorizar etiquetas aleatorias y, aun así, en datos reales generalizar bien. La generalización depende de los datos, la arquitectura, la optimización, la regularización y los sesgos inductivos; entender por qué las profundas sobreparametrizadas generalizan tan bien sigue siendo un problema abierto de investigación. Más en el <a href="05_regularizacion.html">artefacto 05</a>.</p>
+</div>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 9</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. En el examen se califica el procedimiento: escribe la ecuación, sustituye y luego calcula. Los ejercicios 1 y 2 piden trazar a mano; el 3 y el 9, predecir; el 4, el 5 y el 8, explicar; el 6 y el 7, contar; el 10, diagnosticar.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Trazar</span><span class="e-tem">Temario §2 · trazar a mano el forward pass de una red 1-3-1</span>
+  <div class="e-enun"><strong>1.</strong> Una red 1-3-1 con ReLU tiene φ = (φ₀, φ₁, φ₂, φ₃) = (−0.3, 2.0, −1.0, 7.0), θ₁ = (0.3, −1.0), θ₂ = (−1.0, 2.0), θ₃ = (−0.5, 0.65), con x ∈ [0, 1]. (a) Calcula h₁, h₂, h₃ y y en x = 0, 0.25, 0.5, 0.75 y 1. (b) Ubica las articulaciones. (c) Da la pendiente de cada región.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Para cada neurona, calcula primero la pre-activación θ<sub>d0</sub> + θ<sub>d1</sub>x, y solo después aplica la ReLU. La articulación de la neurona d está donde la pre-activación vale 0.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> Pre-activaciones y neuronas:</p>
+    <div class="scroll"><table class="tbl chica">
+      <tr><th>x</th><th>pre-activaciones</th><th>h₁, h₂, h₃</th><th>y = −0.3 + 2h₁ − h₂ + 7h₃</th></tr>
+      <tr><td class="nw">0</td><td class="nw">0.3, −1, −0.5</td><td class="nw">0.3, 0, 0</td><td class="nw">−0.3 + 0.6 = 0.3</td></tr>
+      <tr><td class="nw">0.25</td><td class="nw">0.05, −0.5, −0.3375</td><td class="nw">0.05, 0, 0</td><td class="nw">−0.3 + 0.1 = −0.2</td></tr>
+      <tr><td class="nw">0.5</td><td class="nw">−0.2, 0, −0.175</td><td class="nw">0, 0, 0</td><td class="nw">−0.3</td></tr>
+      <tr><td class="nw">0.75</td><td class="nw">−0.45, 0.5, −0.0125</td><td class="nw">0, 0.5, 0</td><td class="nw">−0.3 − 0.5 = −0.8</td></tr>
+      <tr><td class="nw">1</td><td class="nw">−0.7, 1, 0.15</td><td class="nw">0, 1, 0.15</td><td class="nw">−0.3 − 1 + 1.05 = −0.25</td></tr>
+    </table></div>
+    <p><strong>(b)</strong> Articulación de la neurona d: x = −θ<sub>d0</sub>/θ<sub>d1</sub>. Neurona 1: 0.3/1.0 = 0.3 (encendida a la izquierda, porque θ₁₁ &lt; 0). Neurona 2: 1.0/2.0 = 0.5 (encendida a la derecha). Neurona 3: 0.5/0.65 ≈ 0.769 (encendida a la derecha). Las tres caen dentro de [0, 1].</p>
+    <p><strong>(c)</strong> La pendiente de cada región es la suma de φ<sub>d</sub>θ<sub>d1</sub> sobre las neuronas encendidas: de 0 a 0.3, {1}: 2·(−1) = −2. De 0.3 a 0.5, ninguna: 0 (el segundo tramo es plano). De 0.5 a 0.769, {2}: (−1)·2 = −2. De 0.769 a 1, {2, 3}: −2 + 7·0.65 = −2 + 4.55 = 2.55. Cuatro regiones, 3 articulaciones.</p>
+    <p><strong>Comprobación:</strong> de x = 0.769 a 1 la curva sube 2.55·0.231 ≈ 0.59, de −0.84 a −0.25, que es el valor de la tabla.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Trazar</span><span class="e-tem">Temario §2 · articulaciones, regiones y pendientes</span>
+  <div class="e-enun"><strong>2.</strong> Una red 1-2-1 con ReLU: h₁ = ReLU(−1 + 2x), h₂ = ReLU(3 − 2x), y = 1 + 2h₁ − h₂. (a) Calcula y en x = 0, 1 y 2. (b) ¿Dónde están las articulaciones, cuántas regiones hay en toda la recta real y cuál es la pendiente de cada una?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>La neurona 2 tiene pendiente negativa (−2): está encendida a la <em>izquierda</em> de su articulación.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> x = 0: h₁ = ReLU(−1) = 0, h₂ = ReLU(3) = 3, y = 1 + 0 − 3 = −2. x = 1: h₁ = 1, h₂ = 1, y = 1 + 2 − 1 = 2. x = 2: h₁ = 3, h₂ = ReLU(−1) = 0, y = 1 + 6 − 0 = 7.</p>
+    <p><strong>(b)</strong> Articulaciones: h₁, en −1 + 2x = 0, x = 0.5; h₂, en 3 − 2x = 0, x = 1.5. Dos articulaciones, 3 regiones (D + 1 = 3). Pendientes: para x &lt; 0.5 está encendida solo la 2: (−1)(−2) = <strong>2</strong>. Para 0.5 &lt; x &lt; 1.5 están las dos: 2·2 + (−1)(−2) = 4 + 2 = <strong>6</strong>. Para x &gt; 1.5 solo la 1: 2·2 = <strong>4</strong>.</p>
+    <p><strong>Comprobación:</strong> y(0.5) = −2 + 2·0.5 = −1; sumando 6 durante 1 unidad, y(1.5) = 5; sumando 4 durante 0.5, y(2) = 7. Coincide con (a).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §2 · efecto de φ₀ y de los φ<sub>d</sub> (Tarea 2, preguntas 3a y 3b)</span>
+  <div class="e-enun"><strong>3.</strong> Con la red del ejercicio 1: (a) ¿Qué le pasa a la función si sumas 0.5 a φ₀? (b) ¿Y si multiplicas φ₁, φ₂ y φ₃ por 0.5 (sin tocar φ₀)? Describe qué pasa con las articulaciones, las pendientes y los valores, y confirma en x = 0 y x = 1.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Las articulaciones solo dependen de los θ. Pregúntate si φ₀ o φ<sub>d</sub> aparecen en x = −θ<sub>d0</sub>/θ<sub>d1</sub>.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> Toda la curva sube 0.5. Las articulaciones y las pendientes no cambian, porque φ₀ no aparece en ninguna de las dos. Valores: y(0) pasa de 0.3 a 0.8 y y(1) de −0.25 a 0.25.</p>
+    <p><strong>(b)</strong> Las articulaciones <em>no se mueven</em> (siguen en 0.3, 0.5 y 0.769, porque solo dependen de θ). Todas las pendientes se reducen a la mitad: −1, 0, −1 y 1.275. La curva se encoge hacia el nivel φ₀ = −0.3, porque φ₀ no se escala: y − φ₀ se divide entre 2. Valores: y(0) = −0.3 + 0.5·0.6 = 0 (antes 0.3) y y(1) = −0.3 + 0.5·(−1 + 1.05) = −0.275 (antes −0.25).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §2 · activación identidad ⇒ red lineal</span>
+  <div class="e-enun"><strong>4.</strong> Con la red del ejercicio 2, reemplaza la ReLU por la identidad a(z) = z. Demuestra que la red colapsa a una recta y da su ecuación. ¿Por qué esto significa que la no linealidad es indispensable?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Con a(z) = z, h₁ = −1 + 2x y h₂ = 3 − 2x. Sustituyendo: y = 1 + 2(−1 + 2x) − (3 − 2x) = 1 − 2 + 4x − 3 + 2x = <strong>−4 + 6x</strong>. Una sola recta, de pendiente 6, sin articulaciones.</p>
+    <p>En general, y = (φ₀ + Σφ<sub>d</sub>θ<sub>d0</sub>) + (Σφ<sub>d</sub>θ<sub>d1</sub>)x: cada neurona deja pasar su recta, y una suma de rectas es una recta. Con la ReLU la red tenía 3 regiones y pendientes 2, 6 y 4; con la identidad solo conserva la pendiente de la región donde las dos neuronas estaban encendidas (6). La red de 7 parámetros equivale a una regresión lineal de 2. Sin una activación no lineal, apilar neuronas (o capas) no agrega capacidad.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §2 · homogeneidad no negativa y reescalamiento</span>
+  <div class="e-enun"><strong>5.</strong> En la red de la slide (θ₂ = (−0.8, 0.7), φ₂ = 0.8), reescala la neurona 2 con c = 3: θ₂′ = (3·(−0.8), 3·0.7) y φ₂′ = φ₂/3. ¿Cambia y(x)? ¿Y con c = −1? Justifica con la propiedad de ReLU y con un valor de x.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>La propiedad es ReLU(cz) = c·ReLU(z), y solo se garantiza para c &gt; 0.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>c = 3: no cambia.</strong> θ₂′ = (−2.4, 2.1), φ₂′ = 0.267. Por homogeneidad, ReLU(−2.4 + 2.1x) = 3·ReLU(−0.8 + 0.7x), y el 3 se cancela con φ₂′ = φ₂/3. Con x = 1.5: la neurona original da 0.8·ReLU(0.25) = 0.2, y la reescalada, 0.267·ReLU(0.75) = 0.2. Distintos parámetros, misma función; la articulación sigue en x = 0.8/0.7 = 1.143.</p>
+    <p><strong>c = −1: sí cambia.</strong> θ₂′ = (0.8, −0.7), φ₂′ = −0.8. Ahora ReLU(−z) no es −ReLU(z): la neurona se enciende para x &lt; 1.143 (antes, para x &gt; 1.143). Con x = 0: antes aportaba 0 y ahora −0.8·ReLU(0.8) = −0.64, así que y(0) pasa de 0.6 a −0.04. Con x = 2: antes aportaba 0.8·0.6 = 0.48 y ahora 0, así que y(2) pasa de 0.28 a −0.2.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · contar parámetros de una red superficial</span>
+  <div class="e-enun"><strong>6.</strong> Una red superficial tiene D<sub>i</sub> = 3 entradas, D = 4 neuronas y D<sub>o</sub> = 2 salidas. (a) ¿Cuántos <em>parámetros</em> tiene? (b) ¿Cuántos <em>pesos</em> (sin sesgos)?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> Capa oculta: 4 neuronas × (3 pesos + 1 sesgo) = (3 + 1)·4 = 16. Capa de salida: 2 salidas × (4 pesos + 1 sesgo) = (4 + 1)·2 = 10. Total: <strong>26 parámetros</strong>.</p>
+    <p><strong>(b)</strong> Sin sesgos: 3·4 + 4·2 = 12 + 8 = <strong>20 pesos</strong>. Los otros 6 son sesgos: 4 en la capa oculta y 2 en la de salida.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · parámetros y regiones, profunda contra superficial</span>
+  <div class="e-enun"><strong>7.</strong> Una red profunda con 1 entrada, K = 3 capas ocultas de D = 4 neuronas y 1 salida. (a) ¿Cuántos parámetros tiene? (b) ¿Cuál es su máximo de regiones lineales? (c) Una red superficial 1-D-1 con un número de parámetros parecido, ¿cuántas neuronas tiene y cuántas regiones como máximo?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Para (c), la superficial cuesta 3D + 1 parámetros. Despeja D para que se parezca a lo que obtuviste en (a).</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> 3D + 1 + (K − 1)·D·(D + 1) = 3·4 + 1 + 2·4·5 = 13 + 40 = <strong>53</strong>. Capa por capa: 8 + 20 + 20 + 5 = 53.</p>
+    <p><strong>(b)</strong> (D + 1)<sup>K</sup> = 5³ = <strong>125</strong> regiones como máximo.</p>
+    <p><strong>(c)</strong> 3D + 1 ≈ 53 da D ≈ 17.3, así que D = 17 (52 parámetros). Tendría a lo más D + 1 = <strong>18 regiones</strong>. Con la misma cantidad de parámetros, la profunda llega hasta 125 y la superficial hasta 18: casi 7 veces más. (El máximo de la profunda es una cota que exige parámetros bien escogidos.)</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §2 · aproximación universal ≠ eficiencia representacional</span>
+  <div class="e-enun"><strong>8.</strong> «Si una red superficial ya es un aproximador universal, ¿para qué sirve la profundidad?» Responde con un párrafo corto y un dato numérico.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>La aproximación universal dice que <em>existe</em> una red superficial suficientemente ancha que aproxima cualquier función continua en un compacto; no dice cuán ancha. La profundidad no es necesaria para aproximar, pero sí es <strong>eficiente</strong>: componer capas multiplica el número de regiones (hasta (D + 1)<sup>K</sup>) mientras que los parámetros crecen solo linealmente en K, y una superficial solo suma regiones (D + 1). Algunas funciones que una profunda representa con pocos parámetros necesitarían, en una sola capa, una cantidad prohibitiva de neuronas. Dato: con D = 4, K = 3, la profunda usa 53 parámetros y llega hasta 125 regiones; una superficial de 52 parámetros llega a 18. En una frase: aproximación universal ≠ eficiencia representacional.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §2 · distintos φ, misma función</span>
+  <div class="e-enun"><strong>9.</strong> Dos redes ReLU 1-1-1 tienen la misma articulación y, por tanto, las mismas regiones. A: y = 1 + 2·ReLU(x − 1). B: y = 1 + 1·ReLU(2x − 2). C: y = 1 + 3·ReLU(x − 1). (a) ¿A y B son la misma función? (b) ¿A y C? (c) En general, si dos redes tienen las mismas regiones y parámetros distintos, ¿son la misma función?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Reescribe B como en el reescalamiento con c = 2.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a) Sí.</strong> B tiene θ = (−2, 2) y φ = 1; es A con c = 2: (−1·2, 1·2) y 2/2 = 1. Por homogeneidad, 1·ReLU(2x − 2) = 2·ReLU(x − 1). Comprobación en x = 3: A da 1 + 2·2 = 5 y B da 1 + ReLU(4) = 5.</p>
+    <p><strong>(b) No.</strong> C tiene la misma articulación (x = 1), pero la pendiente a la derecha es 3 en vez de 2. En x = 3: C da 1 + 3·2 = 7, no 5.</p>
+    <p><strong>(c) No necesariamente.</strong> Tener las mismas regiones solo fija <em>dónde</em> están los codos; la función depende también de las pendientes y los valores. Dos redes son la misma función si las articulaciones, las pendientes y los valores coinciden, aunque los parámetros se vean distintos (reescalamiento) y no si solo coinciden las regiones.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §2 · contar regiones: D + 1, (D + 1)<sup>K</sup> y rectas en 2D</span>
+  <div class="e-enun"><strong>10.</strong> Tres compañeros afirman: (a) «Mi red 1-3-1 con ReLU tiene 5 regiones lineales.» (b) «Mi red 1-3-3-1 con ReLU llega a 16 regiones lineales.» (c) «Mi red 2-3-1 con ReLU tiene 8 regiones lineales.» ¿Quién se equivoca y por qué?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Compara cada afirmación con la cota que corresponde: D + 1, (D + 1)<sup>K</sup> y el máximo de regiones que producen 3 rectas en el plano.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a) Se equivoca.</strong> Una red 1-3-1 tiene 3 neuronas, luego a lo más 3 articulaciones y D + 1 = 4 regiones. Cinco es imposible.</p>
+    <p><strong>(b) Puede ser verdad.</strong> Con K = 2 capas de D = 3, la cota es (3 + 1)² = 16, así que 16 es posible (es el máximo), aunque exige parámetros muy bien escogidos: el laboratorio «Doblar» lo logra. Con parámetros cualesquiera lo normal es obtener menos (por ejemplo 9).</p>
+    <p><strong>(c) Se equivoca.</strong> Con 2 entradas, cada neurona crea una recta, y 3 rectas dividen el plano en a lo más 1 + 3 + 3 = 7 regiones (Zaslavsky). Ocho solo cabe en 3 dimensiones con 3 planos.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 10</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">neurona (unidad oculta, hidden unit)</div><div class="def">Una función h<sub>d</sub> = a(θ<sub>d0</sub> + θ<sub>d1</sub>x): una recta seguida de la activación. La red superficial 1-3-1 tiene tres.</div></div>
+  <div class="item"><div class="term">pre-activación</div><div class="def">Lo que entra a la activación de una neurona: θ<sub>d0</sub> + θ<sub>d1</sub>x (o la combinación lineal de sus entradas).</div></div>
+  <div class="item"><div class="term">activación</div><div class="def">Dos usos: la función a(·) que se aplica a la pre-activación, y el valor que sale, h<sub>d</sub>. Si la función es lineal, la red colapsa a una recta.</div></div>
+  <div class="item"><div class="term">ReLU</div><div class="def">max(0, z): deja pasar los positivos y apaga los negativos. Tiene un codo en z = 0.</div></div>
+  <div class="item"><div class="term">articulación (codo)</div><div class="def">Punto donde una neurona ReLU pasa de apagada a encendida: x = −θ<sub>d0</sub>/θ<sub>d1</sub> en 1D. En 2D es una recta; en general, un hiperplano.</div></div>
+  <div class="item"><div class="term">región lineal</div><div class="def">Intervalo (o polígono) donde ninguna neurona cambia de estado; ahí la red es una recta (o un plano). Con D neuronas en 1D hay a lo más D + 1.</div></div>
+  <div class="item"><div class="term">red superficial (shallow)</div><div class="def">Una sola capa oculta. Número de parámetros: (D<sub>i</sub> + 1)·D + (D + 1)·D<sub>o</sub>.</div></div>
+  <div class="item"><div class="term">red profunda (deep)</div><div class="def">Más de una capa oculta. Con 1 entrada, 1 salida, K capas de D neuronas: 3D + 1 + (K − 1)D(D + 1) parámetros y hasta (D + 1)<sup>K</sup> regiones.</div></div>
+  <div class="item"><div class="term">capa</div><div class="def">Un grupo de neuronas que reciben las mismas entradas. Se describe con una matriz de pesos Ω y un vector de sesgos β.</div></div>
+  <div class="item"><div class="term">ancho</div><div class="def">Cuántas neuronas tiene una capa (D, o D<sub>k</sub> para la capa k).</div></div>
+  <div class="item"><div class="term">profundidad</div><div class="def">Cuántas capas ocultas tiene la red (K).</div></div>
+  <div class="item"><div class="term">hiperparámetro</div><div class="def">Una elección que se hace antes de entrenar y no se aprende con backpropagation: K, D<sub>k</sub>, la tasa de aprendizaje.</div></div>
+  <div class="item"><div class="term">aproximación universal</div><div class="def">Con suficientes neuronas, una red superficial aproxima cualquier función continua en un compacto con la precisión que se pida. No dice cuántas hacen falta.</div></div>
+  <div class="item"><div class="term">eficiencia representacional</div><div class="def">Qué tan pocas neuronas o parámetros necesita una red para representar cierta función. La profundidad la mejora; no es lo mismo que la aproximación universal.</div></div>
+  <div class="item"><div class="term">homogeneidad no negativa</div><div class="def">ReLU(cz) = c·ReLU(z) para c &gt; 0. Permite reescalar los parámetros de una neurona (c·θ, φ/c) sin cambiar la función.</div></div>
+  <div class="item"><div class="term">composición (pegar redes)</div><div class="def">Usar la salida de una red como entrada de otra. La primera «dobla» el eje y la segunda se aplica sobre el doblez, así que los codos se multiplican.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>.</p>
+
+<nav class="serie" data-actual="02"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/NN.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026). Imágenes tomadas de las slides.</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var F = DL.fmt;
+  var SUB = ["₀","₁","₂","₃","₄"];
+  var NC = ["g2","g3","g5"];   /* colores de las tres neuronas */
+
+  /* ---------- utilidades comunes ---------- */
+  function A(tipo, z){
+    if(tipo === "relu") return z > 0 ? z : 0;
+    if(tipo === "id") return z;
+    if(tipo === "esc") return z >= 0 ? 1 : 0;
+    if(tipo === "tanh") return Math.tanh(z);
+    return (z >= 0 && z <= 1) ? 1 : 0;           /* rect */
+  }
+  /* red 1-D: P = {t:[[θ_d0,θ_d1],...], f:[φ0, φ1, ...]} */
+  function red1(P, x, tipo){
+    var y = P.f[0];
+    for(var d = 0; d < P.t.length; d++) y += P.f[d+1] * A(tipo || "relu", P.t[d][0] + P.t[d][1]*x);
+    return y;
+  }
+  function rango(fns, a, b, forzar){
+    var lo = Infinity, hi = -Infinity;
+    fns.forEach(function(f){ for(var i = 0; i <= 160; i++){ var v = f(a + (b-a)*i/160); if(v < lo) lo = v; if(v > hi) hi = v; } });
+    if(forzar){ lo = Math.min(lo, forzar[0]); hi = Math.max(hi, forzar[1]); }
+    var m = 0.05*(hi - lo || 1);
+    lo = Math.floor((lo - m)*4)/4; hi = Math.ceil((hi + m)*4)/4;
+    if(hi - lo < 1) hi = lo + 1;
+    return [lo, hi];
+  }
+  function copiar(P){ return {t: P.t.map(function(r){ return r.slice(); }), f: P.f.slice()}; }
+  function limpio(v){ return Math.abs(v) < 1e-9 ? 0 : v; }
+  function grupos(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  /* cuenta regiones lineales de una función continua por partes mirando cambios de pendiente */
+  function contarRegiones(fn, a, b){
+    var n = 8000, h = (b - a)/n, s = [], prev = fn(a), i;
+    for(i = 0; i < n; i++){ var cur = fn(a + h*(i+1)); s.push((cur - prev)/h); prev = cur; }
+    var cambios = 0, enCambio = false;
+    for(i = 0; i < n - 1; i++){
+      var dif = Math.abs(s[i+1] - s[i]) > 1e-6*(1 + Math.abs(s[i]));
+      if(dif && !enCambio) cambios++;
+      enCambio = dif;
+    }
+    return cambios + 1;
+  }
+
+  /* ---------- ReLU pequeña ---------- */
+  (function(){
+    var z = 1.5;
+    var g = DL.grafica($("reluCanvas"), {x:[-3, 3], y:[-1, 3], alto:230, etiquetaX:"z", etiquetaY:"ReLU(z)"}, function(g){
+      g.funcion(DL.relu, {color:"accent", ancho:2.5});
+      g.puntos([[z, DL.relu(z)]], {color:"r-calc", radio:6, aro:true});
+    });
+    function leer(){ DL.readout($("reluRead"), [["z", F(z, 1)], ["ReLU(z)", F(DL.relu(z), 1)], ["neurona", z > 0 ? "encendida" : "apagada"]]); }
+    DL.control($("reluCtrl"), {etiqueta:"z", min:-3, max:3, paso:0.1, valor:z, alCambiar:function(v){ z = v; leer(); g.redibujar(); }});
+    leer();
+  })();
+
+  /* ---------- LABORATORIO PRINCIPAL: construye la red en 4 pasos ---------- */
+  (function(){
+    var PRE = {
+      slide: {t:[[-0.2, 0.3], [-0.8, 0.7], [1.0, -0.8]], f:[0, -0.5, 0.8, 0.6], xm:2},
+      t2:    {t:[[0.3, -1.0], [-1.0, 2.0], [-0.5, 0.65]], f:[-0.3, 2.0, -1.0, 7.0], xm:1},
+      t1:    {t:[[-0.2, 0.4], [-0.9, 0.9], [1.1, -0.7]], f:[-0.23, -1.3, 1.3, 0.66], xm:2}
+    };
+    var S = copiar(PRE.slide); S.xm = 2; S.tipo = "relu"; S.paso = 1;
+    var ctrlT = [[], [], []], ctrlF = [], ctrlF0;
+    var NOMBRES = {relu:"ReLU", id:"identidad", esc:"escalón", tanh:"tanh", rect:"rect"};
+
+    function pre(d, x){ return S.t[d][0] + S.t[d][1]*x; }
+    function hh(d, x){ return A(S.tipo, pre(d, x)); }
+    function ww(d, x){ return S.f[d+1]*hh(d, x); }
+    function yy(x){ return S.f[0] + ww(0, x) + ww(1, x) + ww(2, x); }
+    function mk(fn, d){ return function(x){ return fn(d, x); }; }
+
+    /* articulaciones que sí cambian la pendiente (ReLU) o saltan (escalón) */
+    function efectivas(){
+      var out = [];
+      for(var d = 0; d < 3; d++){
+        if(S.f[d+1] === 0 || S.t[d][1] === 0) continue;
+        var x0 = -S.t[d][0]/S.t[d][1];
+        if(x0 > 1e-9 && x0 < S.xm - 1e-9) out.push(x0);
+      }
+      return out.sort(function(a, b){ return a - b; });
+    }
+    function regiones(){
+      var b = [0].concat(efectivas(), [S.xm]), out = [];
+      for(var i = 0; i < b.length - 1; i++){
+        var a = b[i], c = b[i+1];
+        if(c - a < 1e-9) continue;
+        var m = (a + c)/2, act = [], sl = 0;
+        for(var d = 0; d < 3; d++) if(pre(d, m) > 0){ act.push(d + 1); sl += S.f[d+1]*S.t[d][1]; }
+        out.push({a:a, b:c, act:act, m:sl, y0:yy(a), ym:yy(m)});
+      }
+      return out;
+    }
+    function ec(d){ return "ℓ" + SUB[d+1] + " = " + F(S.t[d][0], 2) + " + " + F(S.t[d][1], 2) + "·x"; }
+    function coloreado(d, txt){ return '<div style="color:var(--' + NC[d] + ');font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.7">' + txt + '</div>'; }
+
+    var o4 = {x:[0, 2], y:[-1, 1.25], alto:350, etiquetaX:"x", etiquetaY:"y"};
+    var g4 = DL.grafica($("l4Canvas"), o4, function(g){
+      var d, xm = S.xm, rel = S.tipo === "relu";
+      function juntaVert(x, col, alfa){ g.vertical(x, {color:col, guiones:true, ancho:1.2, alfa:alfa}); }
+      if(S.paso === 1){
+        for(d = 0; d < 3; d++) g.funcion(mk(pre, d), {color:NC[d], ancho:2.6});
+      } else if(S.paso === 2){
+        for(d = 0; d < 3; d++) g.funcion(mk(pre, d), {color:NC[d], ancho:1.2, guiones:true, alfa:0.45});
+        for(d = 0; d < 3; d++) g.funcion(mk(hh, d), {color:NC[d], ancho:2.8, muestras:800});
+        if(S.tipo === "relu" || S.tipo === "esc") for(d = 0; d < 3; d++) if(S.t[d][1] !== 0){ var x0 = -S.t[d][0]/S.t[d][1]; if(x0 > 0 && x0 < xm) juntaVert(x0, NC[d], 0.5); }
+      } else if(S.paso === 3){
+        for(d = 0; d < 3; d++) g.funcion(mk(hh, d), {color:NC[d], ancho:1.2, guiones:true, alfa:0.45, muestras:800});
+        for(d = 0; d < 3; d++) g.funcion(mk(ww, d), {color:NC[d], ancho:2.8, muestras:800});
+      } else {
+        for(d = 0; d < 3; d++) g.funcion(mk(ww, d), {color:NC[d], ancho:1.4, alfa:0.5, muestras:800});
+        if(rel || S.tipo === "esc") efectivas().forEach(function(x0){ juntaVert(x0, "text-3", 0.8); });
+        g.funcion(yy, {color:"accent", ancho:3.6, muestras:800});
+        if(rel) regiones().forEach(function(r){
+          if(r.b - r.a < 0.09*xm) return;
+          var m = (r.a + r.b)/2;
+          g.texto(m, yy(m), "pend. " + F(r.m, 2), {color:"text-2", tam:11, alinear:"center", dy:-13});
+        });
+      }
+    });
+
+    function textoPaso(){
+      var d, h = "", t = "", cab = "";
+      if(S.paso === 1){
+        cab = "Paso 1 · Tres rectas";
+        for(d = 0; d < 3; d++) h += coloreado(d, ec(d));
+        t = "Cada neurona empieza calculando una recta, su <b>pre-activación</b> ℓ<sub>d</sub> = θ<sub>d0</sub> + θ<sub>d1</sub>x. θ<sub>d0</sub> es dónde corta el eje vertical; θ<sub>d1</sub>, su pendiente.";
+      } else if(S.paso === 2){
+        cab = "Paso 2 · Activación de cada recta";
+        for(d = 0; d < 3; d++) h += coloreado(d, "h" + SUB[d+1] + " = " + NOMBRES[S.tipo] + "(ℓ" + SUB[d+1] + ")");
+        t = S.tipo === "relu" ? "La ReLU aplasta en 0 los tramos negativos: queda un <b>codo</b> donde la recta cruza el cero (línea vertical punteada). La recta original se ve punteada y tenue." : "Misma construcción, otra activación: la forma de cada h<sub>d</sub> cambia. La recta original se ve punteada y tenue.";
+      } else if(S.paso === 3){
+        cab = "Paso 3 · Cada neurona por su peso φ";
+        for(d = 0; d < 3; d++) h += coloreado(d, "φ" + SUB[d+1] + "·h" + SUB[d+1] + " = " + F(S.f[d+1], 2) + "·h" + SUB[d+1]);
+        t = "φ<sub>d</sub> estira o encoge la neurona; si es negativo, la voltea. La neurona sin multiplicar se ve punteada.";
+      } else {
+        cab = "Paso 4 · Suma más φ₀";
+        h = coloreado(0, "y = " + F(S.f[0], 2) + " + (" + F(S.f[1], 2) + ")h₁ + (" + F(S.f[2], 2) + ")h₂ + (" + F(S.f[3], 2) + ")h₃").replace("var(--g2)", "var(--accent)");
+        t = S.tipo === "relu" ? "La salida y (color fuerte) es φ₀ más las tres neuronas ponderadas (tenues). Las líneas punteadas son las articulaciones; arriba de cada región va su pendiente." : "La salida y es φ₀ más las tres neuronas ponderadas (tenues).";
+      }
+      $("l4Info").innerHTML = '<div class="sh">' + cab + '</div>' + h + '<div class="sb" style="margin-top:6px">' + t + '</div>';
+      var lg = "";
+      if(S.paso < 4) for(d = 0; d < 3; d++) lg += '<span><i style="background:var(--' + NC[d] + ')"></i>neurona ' + (d+1) + '</span>';
+      else lg = '<span><i style="background:var(--accent)"></i>y (la suma)</span><span><i style="background:var(--g2);opacity:.5"></i>φ<sub>d</sub>h<sub>d</sub></span>';
+      $("l4Leyenda").innerHTML = lg;
+    }
+
+    function tablas(){
+      var el = $("l4Tablas"), st = $("l4Status"), h = "", d, c0, c1;
+      if(S.tipo === "id"){
+        c0 = S.f[0]; c1 = 0;
+        for(d = 0; d < 3; d++){ c0 += S.f[d+1]*S.t[d][0]; c1 += S.f[d+1]*S.t[d][1]; }
+        st.className = "status ok";
+        st.innerHTML = "<b>Colapsa a una recta:</b> y = " + F(c0, 3) + " + (" + F(c1, 3) + ")·x. Con a(z) = z no hay codos: c₀ = φ₀ + Σφ<sub>d</sub>θ<sub>d0</sub> y c₁ = Σφ<sub>d</sub>θ<sub>d1</sub>.";
+        el.innerHTML = ""; return;
+      }
+      if(S.tipo === "tanh"){
+        st.className = "status info"; st.innerHTML = "<b>tanh:</b> cada neurona es una curva suave entre −1 y 1, sin codos. La red ya no es lineal por partes: no hay «regiones lineales» que contar.";
+        el.innerHTML = ""; return;
+      }
+      if(S.tipo === "rect"){
+        st.className = "status info"; st.innerHTML = "<b>rect:</b> cada neurona vale 1 solo mientras 0 ≤ ℓ<sub>d</sub> ≤ 1 (un pulso) y 0 fuera. La red es una suma de pulsos escalonados, sin pendientes.";
+        el.innerHTML = ""; return;
+      }
+      if(S.tipo === "esc"){
+        var rs = regiones(), ex = efectivas();
+        st.className = "status info"; st.innerHTML = "<b>escalón:</b> cada neurona salta de 0 a 1 donde su recta cruza el cero. La red es una función escalonada: " + (ex.length ? "saltos en x = " + ex.map(function(x){ return F(x, 3); }).join(", ") + "." : "sin saltos dentro del rango.");
+        h = '<div class="scroll"><table class="tbl chica"><tr><th>Región</th><th>de x</th><th>a x</th><th>valor de y (constante)</th></tr>';
+        rs.forEach(function(r, i){ h += '<tr><td class="nw">' + (i+1) + '</td><td class="nw">' + F(r.a, 3) + '</td><td class="nw">' + F(r.b, 3) + '</td><td class="nw">' + F(r.ym, 3) + '</td></tr>'; });
+        el.innerHTML = h + "</table></div>"; return;
+      }
+      /* ReLU */
+      var regs = regiones();
+      st.className = "status ok";
+      st.innerHTML = "<b>ReLU:</b> " + (regs.length - 1) + " articulación" + (regs.length - 1 === 1 ? "" : "es") + " visible" + (regs.length - 1 === 1 ? "" : "s") + " en y → <b>" + regs.length + " región" + (regs.length === 1 ? "" : "es") + " lineal" + (regs.length === 1 ? "" : "es") + "</b> (máximo posible con 3 neuronas: 4).";
+      h = '<div class="mini">Articulaciones de cada neurona</div><div class="scroll"><table class="tbl chica"><tr><th>Neurona</th><th>Recta ℓ<sub>d</sub></th><th>Articulación x = −θ<sub>d0</sub>/θ<sub>d1</sub></th><th>Encendida</th><th>¿Se ve en y?</th></tr>';
+      for(d = 0; d < 3; d++){
+        var t0 = S.t[d][0], t1 = S.t[d][1], xa = t1 !== 0 ? -t0/t1 : null, enc, vis;
+        enc = t1 > 0 ? "a la derecha" : (t1 < 0 ? "a la izquierda" : (t0 > 0 ? "siempre" : "nunca"));
+        if(xa === null) vis = "no hay codo (recta horizontal)";
+        else if(xa <= 0 || xa >= S.xm) vis = "no: cae fuera de [0, " + F(S.xm, 1) + "]";
+        else if(S.f[d+1] === 0) vis = "no: φ" + SUB[d+1] + " = 0";
+        else vis = "sí";
+        h += '<tr><td class="nw"><span class="sw" style="background:var(--' + NC[d] + ')"></span>' + (d+1) + '</td><td class="nw">' + F(t0, 2) + ' + ' + F(t1, 2) + '·x</td><td class="nw">' + (xa === null ? "—" : F(xa, 3)) + '</td><td>' + enc + '</td><td>' + vis + '</td></tr>';
+      }
+      h += '</table></div><div class="mini">Regiones lineales</div><div class="scroll"><table class="tbl chica"><tr><th>Región</th><th>de x</th><th>a x</th><th>Neuronas encendidas</th><th>Pendiente = Σ φ<sub>d</sub>θ<sub>d1</sub></th><th>y al inicio</th></tr>';
+      regs.forEach(function(r, i){
+        h += '<tr><td class="nw">' + (i+1) + '</td><td class="nw">' + F(r.a, 3) + '</td><td class="nw">' + F(r.b, 3) + '</td><td class="nw">' + (r.act.length ? "{" + r.act.join(", ") + "}" : "ninguna") + '</td><td class="nw">' + F(r.m, 3) + '</td><td class="nw">' + F(r.y0, 3) + '</td></tr>';
+      });
+      el.innerHTML = h + "</table></div>";
+    }
+
+    function actualizar(){
+      var fns = [], d;
+      o4.x = [0, S.xm];
+      for(d = 0; d < 3; d++){ fns.push(mk(pre, d)); fns.push(mk(hh, d)); fns.push(mk(ww, d)); }
+      fns.push(yy);
+      o4.y = rango(fns, 0, S.xm, [-1, 1]);
+      textoPaso(); tablas();
+      $("l4Pill").textContent = "x ∈ [0, " + F(S.xm, 1) + "] · activación: " + NOMBRES[S.tipo];
+      g4.redibujar();
+    }
+
+    /* controles */
+    var host = $("l4Ctrl");
+    function cambiar(d, k){ return function(v){ S.t[d][k] = v; actualizar(); }; }
+    for(var d = 0; d < 3; d++){
+      var col = document.createElement("div"); col.className = "col"; col.style.borderLeftColor = "var(--" + NC[d] + ")";
+      col.innerHTML = '<div class="ct" style="color:var(--' + NC[d] + ')">Neurona ' + (d+1) + '</div>';
+      host.appendChild(col);
+      ctrlT[d][0] = DL.control(col, {etiqueta:"θ" + SUB[d+1] + SUB[0] + " (sesgo)", min:-3, max:3, paso:0.05, valor:S.t[d][0], alCambiar:cambiar(d, 0)});
+      ctrlT[d][1] = DL.control(col, {etiqueta:"θ" + SUB[d+1] + SUB[1] + " (pendiente)", min:-3, max:3, paso:0.05, valor:S.t[d][1], alCambiar:cambiar(d, 1)});
+      ctrlF[d] = DL.control(col, {etiqueta:"φ" + (d+1), min:-8, max:8, paso:0.05, valor:S.f[d+1], alCambiar:(function(dd){ return function(v){ S.f[dd+1] = v; actualizar(); }; })(d)});
+    }
+    var colS = document.createElement("div"); colS.className = "col"; colS.innerHTML = '<div class="ct">Salida</div>'; host.appendChild(colS);
+    ctrlF0 = DL.control(colS, {etiqueta:"φ₀ (sesgo)", min:-3, max:3, paso:0.05, valor:S.f[0], alCambiar:function(v){ S.f[0] = v; actualizar(); }});
+
+    DL.selector($("l4Act"), {opciones:[{v:"relu", t:"ReLU"}, {v:"id", t:"identidad"}, {v:"esc", t:"escalón (heaviside)"}, {v:"tanh", t:"tanh"}, {v:"rect", t:"rect"}], valor:"relu", alCambiar:function(v){ S.tipo = v; actualizar(); }});
+    var tabs = $("l4Tabs"), nombres = ["1 · Rectas", "2 · Activación", "3 · Pesos φ", "4 · Suma"], btns = [];
+    nombres.forEach(function(n, i){
+      var b = document.createElement("button"); b.type = "button"; b.textContent = n;
+      if(i + 1 === S.paso) b.className = "sel";
+      b.addEventListener("click", function(){ S.paso = i + 1; btns.forEach(function(x, j){ x.className = j === i ? "sel" : ""; }); actualizar(); });
+      tabs.appendChild(b); btns.push(b);
+    });
+
+    function aplicar(P){
+      var d;
+      S.t = P.t.map(function(r){ return r.slice(); }); S.f = P.f.slice(); S.xm = P.xm;
+      for(d = 0; d < 3; d++){ ctrlT[d][0].fijar(S.t[d][0], true); ctrlT[d][1].fijar(S.t[d][1], true); ctrlF[d].fijar(S.f[d+1], true); }
+      ctrlF0.fijar(S.f[0], true);
+      actualizar();
+    }
+    $("l4Slide").onclick = function(){ aplicar(PRE.slide); };
+    $("l4T2").onclick = function(){ aplicar(PRE.t2); };
+    $("l4T1").onclick = function(){ aplicar(PRE.t1); };
+    actualizar();
+  })();
+
+  /* ---------- reescalar la neurona 2 ---------- */
+  (function(){
+    var base = {t:[[-0.2, 0.3], [-0.8, 0.7], [1.0, -0.8]], f:[0, -0.5, 0.8, 0.6]};
+    var c = 3;
+    function resc(c){ return {t:[base.t[0], [c*base.t[1][0], c*base.t[1][1]], base.t[2]], f:[0, -0.5, 0.8/c, 0.6]}; }
+    var g = DL.grafica($("rCanvas"), {x:[0, 2], y:[-1, 1], alto:300, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.funcion(function(x){ return red1(base, x); }, {color:"text-3", ancho:5, alfa:0.8});
+      if(Math.abs(c) > 1e-6){ var R = resc(c); g.funcion(function(x){ return red1(R, x); }, {color:"accent", ancho:2, guiones:Math.abs(c) < 1e-6}); }
+    });
+    function leer(){
+      var st = $("rStatus");
+      if(Math.abs(c) < 1e-6){
+        DL.readout($("rRead"), [["c", "0"], ["θ₂′", "—"], ["φ₂′ = φ₂/c", "∞"], ["diferencia máx.", "—"]]);
+        st.className = "status bad"; st.textContent = "c = 0 no vale: habría que dividir φ₂ entre 0."; g.redibujar(); return;
+      }
+      var R = resc(c), mx = 0;
+      for(var i = 0; i <= 400; i++){ var x = 2*i/400, dd = Math.abs(red1(base, x) - red1(R, x)); if(dd > mx) mx = dd; }
+      DL.readout($("rRead"), [["c", F(c, 1)], ["θ₂₀′ = c·θ₂₀", F(c*base.t[1][0], 2)], ["θ₂₁′ = c·θ₂₁", F(c*base.t[1][1], 2)], ["φ₂′ = φ₂/c", F(0.8/c, 3)], ["diferencia máx.", F(mx < 1e-9 ? 0 : mx, 3)]]);
+      if(mx < 1e-9){ st.className = "status ok"; st.textContent = "Misma función: con c > 0 la homogeneidad de ReLU cancela el cambio."; }
+      else { st.className = "status bad"; st.textContent = "La función cambió (diferencia máxima " + F(mx, 3) + "). Con c < 0, ReLU(c·z) ≠ c·ReLU(z): la neurona se enciende del otro lado."; }
+      g.redibujar();
+    }
+    DL.control($("rCtrl"), {etiqueta:"factor c", min:-3, max:3, paso:0.1, valor:c, alCambiar:function(v){ c = v; leer(); }});
+    leer();
+  })();
+
+  /* ---------- aproximar cos(πx) ---------- */
+  (function(){
+    var f = function(x){ return Math.cos(Math.PI*x); };
+    var D = 5, N, errMax = 0;
+    function construir(D){
+      var xs = [], m = [], k;
+      for(k = 0; k <= D; k++) xs.push(2*k/D);
+      for(k = 0; k < D; k++) m.push((f(xs[k+1]) - f(xs[k]))/(xs[k+1] - xs[k]));
+      var phi = [f(0), m[0]], th = [[0, 1]];
+      for(k = 1; k < D; k++){ phi.push(m[k] - m[k-1]); th.push([-xs[k], 1]); }
+      return {P:{t:th, f:phi}, xs:xs};
+    }
+    N = construir(D);
+    var g = DL.grafica($("aCanvas"), {x:[0, 2], y:[-1.25, 1.25], alto:300, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.funcion(f, {color:"text-3", guiones:true, ancho:2});
+      g.funcion(function(x){ return red1(N.P, x); }, {color:"accent", ancho:2.6, muestras:800});
+      g.puntos(N.xs.map(function(x){ return [x, f(x)]; }), {color:"r-calc", radio:3.5});
+    });
+    function recalcular(){
+      N = construir(D);
+      errMax = 0;
+      for(var i = 0; i <= 4000; i++){ var x = 2*i/4000, e = Math.abs(red1(N.P, x) - f(x)); if(e > errMax) errMax = e; }
+      DL.readout($("aRead"), [["neuronas D", D], ["parámetros 3D + 1", 3*D + 1], ["tramos lineales", D], ["error máximo", F(errMax, 4)], ["cota π²/(2D²)", F(Math.PI*Math.PI/(2*D*D), 4)]]);
+      var h = '<table class="tbl chica"><tr><th>d</th><th>θ<sub>d0</sub></th><th>θ<sub>d1</sub></th><th>φ<sub>d</sub></th><th>codo en x</th></tr><tr><td class="nw">0</td><td colspan="3" class="nw">φ₀ = ' + F(N.P.f[0], 3) + '</td><td>—</td></tr>';
+      N.P.t.forEach(function(t, d){
+        var ph = limpio(N.P.f[d+1]);
+        h += '<tr><td class="nw">' + (d+1) + '</td><td class="nw">' + F(limpio(t[0]), 3) + '</td><td class="nw">' + F(t[1], 1) + '</td><td class="nw">' + F(ph, 3) + (ph === 0 ? " (sin efecto)" : "") + '</td><td class="nw">' + F(-t[0]/t[1], 3) + '</td></tr>';
+      });
+      $("aTabla").innerHTML = h + "</table>";
+      g.redibujar();
+    }
+    var ctl = DL.control($("aCtrl"), {etiqueta:"neuronas D", min:1, max:30, paso:1, valor:D, formato:function(v){ return String(Math.round(v)); }, alCambiar:function(v){ D = Math.round(v); recalcular(); }});
+    document.querySelectorAll("#lab-a .widget-foot button").forEach(function(b){
+      b.addEventListener("click", function(){ ctl.fijar(parseInt(b.getAttribute("data-d"), 10)); });
+    });
+    recalcular();
+  })();
+
+  /* ---------- red 2-3-1 en 2D ---------- */
+  (function(){
+    var INI = {t:[[0.5, 1, 0.4], [0.2, -0.6, 1], [-0.4, 0.5, 0.8]], f:[0, 1, -0.8, 0.7]};
+    var T = INI.t.map(function(r){ return r.slice(); }), Fv = INI.f.slice(), sel = 0, L = 2;
+    function y2(x1, x2){ var s = Fv[0]; for(var d = 0; d < 3; d++) s += Fv[d+1]*DL.relu(T[d][0] + T[d][1]*x1 + T[d][2]*x2); return s; }
+    var g = DL.grafica($("d2Canvas"), {x:[-L, L], y:[-L, L], alto:380, etiquetaX:"x₁", etiquetaY:"x₂"}, function(g){
+      g.mapaCalor(y2, {res:4});
+      g.ejes();
+      for(var d = 0; d < 3; d++){
+        var t = T[d], e = {color:NC[d], ancho:d === sel ? 4 : 2}, M = 3*L;
+        if(Math.abs(t[2]) >= Math.abs(t[1]) && t[2] !== 0) g.linea(-M, -(t[0] - t[1]*M)/t[2], M, -(t[0] + t[1]*M)/t[2], e);
+        else if(t[1] !== 0) g.linea(-(t[0] - t[2]*M)/t[1], -M, -(t[0] + t[2]*M)/t[1], M, e);
+      }
+    });
+    function contar(){
+      var n = 300, vistos = {}, tot = 0;
+      for(var i = 0; i < n; i++) for(var j = 0; j < n; j++){
+        var x1 = -L + 2*L*(i + 0.5)/n, x2 = -L + 2*L*(j + 0.5)/n, k = 0;
+        for(var d = 0; d < 3; d++) if(T[d][0] + T[d][1]*x1 + T[d][2]*x2 > 0) k |= (1 << d);
+        if(!vistos[k]){ vistos[k] = 1; tot++; }
+      }
+      return tot;
+    }
+    var cT = [], cF, cF0;
+    var host = $("d2Ctrl");
+    function actualizar(){
+      var n = contar();
+      DL.readout($("d2Read"), [["regiones en la ventana", n], ["máximo con 3 rectas", 7]]);
+      var st = $("d2Status");
+      st.className = "status " + (n === 7 ? "ok" : "bad");
+      st.textContent = n === 7 ? "7 regiones: las tres rectas se cortan por pares dentro de la ventana (posición general)." : "Solo " + n + ": hay rectas paralelas, que se cruzan en un mismo punto o que salen de la ventana.";
+      g.redibujar();
+    }
+    function sincronizar(){
+      cT[0].fijar(T[sel][0], true); cT[1].fijar(T[sel][1], true); cT[2].fijar(T[sel][2], true); cF.fijar(Fv[sel+1], true);
+      $("d2Ctrl").querySelectorAll(".ctrl label span:first-child").forEach(function(s, i){
+        var nn = SUB[sel + 1], nm = ["θ" + nn + SUB[0], "θ" + nn + SUB[1], "θ" + nn + SUB[2], "φ" + nn, "φ₀"][i];
+        if(nm) s.textContent = nm;
+      });
+    }
+    cT[0] = DL.control(host, {etiqueta:"θ₁₀", min:-2, max:2, paso:0.05, valor:T[0][0], alCambiar:function(v){ T[sel][0] = v; actualizar(); }});
+    cT[1] = DL.control(host, {etiqueta:"θ₁₁", min:-2, max:2, paso:0.05, valor:T[0][1], alCambiar:function(v){ T[sel][1] = v; actualizar(); }});
+    cT[2] = DL.control(host, {etiqueta:"θ₁₂", min:-2, max:2, paso:0.05, valor:T[0][2], alCambiar:function(v){ T[sel][2] = v; actualizar(); }});
+    cF = DL.control(host, {etiqueta:"φ₁", min:-2, max:2, paso:0.05, valor:Fv[1], alCambiar:function(v){ Fv[sel+1] = v; actualizar(); }});
+    cF0 = DL.control(host, {etiqueta:"φ₀", min:-2, max:2, paso:0.05, valor:Fv[0], alCambiar:function(v){ Fv[0] = v; actualizar(); }});
+    DL.selector($("d2Sel"), {opciones:[{v:0, t:"Neurona 1"}, {v:1, t:"Neurona 2"}, {v:2, t:"Neurona 3"}], valor:0, alCambiar:function(v){ sel = v; sincronizar(); g.redibujar(); }});
+    $("d2Leyenda").innerHTML = [0, 1, 2].map(function(d){ return '<span><i style="background:var(--' + NC[d] + ')"></i>recta de la neurona ' + (d+1) + '</span>'; }).join("");
+    function preajuste(t){
+      T = t.map(function(r){ return r.slice(); }); Fv = INI.f.slice();
+      cF0.fijar(Fv[0], true); sincronizar(); actualizar();
+    }
+    $("d2Ini").onclick = function(){ preajuste(INI.t); };
+    $("d2Par").onclick = function(){ preajuste([[0.2, 1, 0], [-0.3, 1, 0], [0.5, 1, 0]]); };
+    $("d2Con").onclick = function(){ preajuste([[0, 1, 0], [0, 0, 1], [0, 1, 1]]); };
+    sincronizar(); actualizar();
+  })();
+
+  /* ---------- calculadora de parámetros y regiones ---------- */
+  (function(){
+    var Di = 1, D = 3, Do = 1, K = 1;
+    function comb(n, j){ var r = 1n, i; for(i = 0; i < j; i++) r = r*BigInt(n - i)/BigInt(i + 1); return r; }
+    function zas(n, di){ var s = 0n, tope = Math.min(di, n); for(var j = 0; j <= tope; j++) s += comb(n, j); return s; }
+    function grande(b){
+      var s = b.toString();
+      if(s.length <= 9) return grupos(s);
+      return s[0] + "." + s.slice(1, 3) + " × 10<sup>" + (s.length - 1) + "</sup>";
+    }
+    function fila(a, b, c){ return '<tr><td>' + a + '</td><td class="nw">' + b + '</td><td class="nw"><b>' + c + '</b></td></tr>'; }
+    function calcular(){
+      var capa1 = (Di + 1)*D, medias = (K - 1)*D*(D + 1), salida = (D + 1)*Do, total = capa1 + medias + salida;
+      var h = '<div class="scroll"><table class="tbl chica"><tr><th>Capa</th><th>Cuenta</th><th>Parámetros</th></tr>';
+      h += fila("Oculta 1 (D<sub>i</sub> → D)", "(" + Di + " + 1)·" + D, grupos(capa1));
+      if(K >= 2) h += fila("Ocultas 2 a K (D → D), " + (K - 1) + " capa" + (K - 1 > 1 ? "s" : ""), (K - 1) + "·" + D + "·(" + D + " + 1)", grupos(medias));
+      h += fila("Salida (D → D<sub>o</sub>)", "(" + D + " + 1)·" + Do, grupos(salida));
+      h += '<tr><td><b>Total</b></td><td></td><td class="nw"><b>' + grupos(total) + '</b></td></tr></table></div>';
+      h += '<div class="mini">Regiones lineales máximas</div><div class="scroll"><table class="tbl chica"><tr><th>Caso</th><th>Fórmula</th><th>Regiones</th></tr>';
+      var msg = "";
+      if(Di === 1){
+        if(K === 1) h += fila("Superficial, 1 entrada", "D + 1", grande(BigInt(D + 1)));
+        else h += fila("Profunda, 1 entrada", "(D + 1)<sup>K</sup> = " + (D + 1) + "<sup>" + K + "</sup>", grande(BigInt(D + 1) ** BigInt(K)));
+        if(Do === 1 && K >= 2){
+          var Ds = Math.max(1, Math.round((total - 1)/3));
+          h += fila("Superficial con parámetros parecidos", "D = " + Ds + " → 3D + 1 = " + (3*Ds + 1) + " parámetros; D + 1", grande(BigInt(Ds + 1)));
+        }
+      } else if(K === 1){
+        h += fila("Superficial, D<sub>i</sub> = " + Di + " entradas", "Σ C(D, j), j = 0…" + Math.min(Di, D) + " (Zaslavsky)", grande(zas(D, Di)));
+      } else {
+        h += fila("Profunda con D<sub>i</sub> ≥ 2", "la slide no da fórmula", "—");
+      }
+      h += '</table></div>';
+      $("cOut").innerHTML = h;
+      var st = $("cStatus");
+      if(Di === 1 && Do === 1){
+        var form = 3*D + 1 + (K - 1)*D*(D + 1);
+        st.className = "status ok"; st.innerHTML = "Con D<sub>i</sub> = D<sub>o</sub> = 1 coincide con la fórmula del temario: 3D + 1 + (K − 1)D(D + 1) = " + grupos(form) + ".";
+      } else { st.className = "status info"; st.innerHTML = "Cada neurona tiene un peso por entrada más un sesgo; cuenta capa por capa."; }
+    }
+    var cs = {};
+    function ctl(id, et, mn, mx, val, fn){ cs[id] = DL.control($("cCtrl"), {etiqueta:et, min:mn, max:mx, paso:1, valor:val, formato:function(v){ return String(Math.round(v)); }, alCambiar:function(v){ fn(Math.round(v)); calcular(); }}); }
+    ctl("Di", "entradas D<sub>i</sub>", 1, 100, Di, function(v){ Di = v; });
+    ctl("D", "neuronas por capa D", 1, 500, D, function(v){ D = v; });
+    ctl("Do", "salidas D<sub>o</sub>", 1, 10, Do, function(v){ Do = v; });
+    ctl("K", "capas ocultas K", 1, 6, K, function(v){ K = v; });
+    function poner(a, b, c, k){ Di = a; D = b; Do = c; K = k; cs.Di.fijar(a, true); cs.D.fijar(b, true); cs.Do.fijar(c, true); cs.K.fijar(k, true); calcular(); }
+    $("cSlide").onclick = function(){ poner(100, 500, 1, 1); };
+    $("c342").onclick = function(){ poner(3, 4, 2, 1); };
+    $("cProf").onclick = function(){ poner(1, 4, 1, 3); };
+    calcular();
+  })();
+
+  /* ---------- doblar: composición de dos redes ---------- */
+  (function(){
+    var PRE = {
+      "9":  {p1:{t:[[1.5, 1], [0, 1], [-0.5, 1]], f:[-2, 2, -6, 8]}, p2:{t:[[1.5, 1], [0.2, 1], [-0.3, 1]], f:[1.35, -1.5, 3.5, -3]}},
+      "16": {p1:{t:[[0.5, 1], [0, 1], [0.5, -1]], f:[5, -6, 4, -4]}, p2:{t:[[0.25, -1], [-0.5, 1], [0.75, -1]], f:[-0.125, 0.5, 1.5, 0.5]}}
+    };
+    var clave = "9", desp = 0, x0 = -0.4;
+    var m = {l:38, r:8, t:10, b:28};
+    function P2(){ var p = PRE[clave].p2; return {t:p.t.map(function(t){ return [t[0] - t[1]*desp, t[1]]; }), f:p.f}; }
+    function r1(x){ return red1(PRE[clave].p1, x); }
+    function r2(y){ return red1(P2(), y); }
+    function comp(x){ return r2(r1(x)); }
+    var o1 = {x:[-1, 1], y:[-1.5, 1.5], alto:230, etiquetaX:"x", etiquetaY:"y", margen:m};
+    var o2 = {x:[-1, 1], y:[-1.5, 1.5], alto:230, etiquetaX:"y", etiquetaY:"y′", margen:m};
+    var o3 = {x:[-1, 1], y:[-1.5, 1.5], alto:230, etiquetaX:"x", etiquetaY:"y′", margen:m};
+    var pre = [], yp0 = 0;
+    function preimagenes(c){
+      var n = 4000, r = [], px = -1, pv = comp(-1) - c, i;
+      if(pv === 0) r.push(-1);
+      for(i = 1; i <= n; i++){
+        var x = -1 + 2*i/n, v = comp(x) - c;
+        if(pv*v < 0) r.push(px + (x - px)*(pv/(pv - v)));
+        else if(v === 0) r.push(x);
+        px = x; pv = v;
+      }
+      r.sort(function(a, b){ return a - b; });
+      var out = []; r.forEach(function(v){ if(!out.length || v - out[out.length - 1] > 1e-4) out.push(v); });
+      return out;
+    }
+    var gris = "text-3";
+    var g1 = DL.grafica($("dC1"), o1, function(g){
+      g.funcion(r1, {color:"g2", ancho:2.4, muestras:600});
+      g.horizontal(r1(x0), {color:gris, guiones:true, ancho:1});
+      g.puntos(pre.map(function(x){ return [x, r1(x)]; }), {color:gris, radio:3.5});
+      g.puntos([[x0, r1(x0)]], {color:"accent", radio:6, aro:true});
+    });
+    var g2 = DL.grafica($("dC2"), o2, function(g){
+      g.funcion(r2, {color:"g3", ancho:2.4, muestras:600});
+      g.horizontal(yp0, {color:gris, guiones:true, ancho:1});
+      g.puntos(pre.map(function(x){ return [r1(x), yp0]; }), {color:gris, radio:3.5});
+      g.puntos([[r1(x0), yp0]], {color:"accent", radio:6, aro:true});
+    });
+    var g3 = DL.grafica($("dC3"), o3, function(g){
+      g.funcion(comp, {color:"g5", ancho:2.2, muestras:1200});
+      g.horizontal(yp0, {color:gris, guiones:true, ancho:1});
+      g.puntos(pre.map(function(x){ return [x, yp0]; }), {color:gris, radio:3.5});
+      g.puntos([[x0, yp0]], {color:"accent", radio:6, aro:true});
+    });
+    function nb(n){ return n; }
+    function actualizar(){
+      var rg1 = rango([r1], -1, 1), rg2 = rango([r2], -1, 1), rg3 = rango([comp], -1, 1);
+      o1.y = rg1; o2.y = rg2; o3.y = rg3;
+      yp0 = comp(x0); pre = preimagenes(yp0);
+      var n1 = contarRegiones(r1, -1, 1), n2 = contarRegiones(r2, -1, 1), n3 = contarRegiones(comp, -1, 1);
+      DL.readout($("dRead"), [["x", F(x0, 2)], ["y = red₁(x)", F(r1(x0), 3)], ["y′ = red₂(y)", F(yp0, 3)], ["x distintos con el mismo y′", pre.length], ["regiones de la red 1", n1], ["regiones de la red 2", n2], ["regiones de la composición", n3]]);
+      var st = $("dStatus");
+      st.className = "status " + (n3 > n1 + n2 ? "ok" : "info");
+      st.innerHTML = "La red 1 tiene " + n1 + " regiones y la red 2 tiene " + n2 + ", pero la composición tiene <b>" + n3 + "</b> (máximo posible con 3 neuronas por red: 16). " + (n3 === 16 ? "Es la cota (D + 1)² = 16." : (n3 === 9 ? "Es 3 × 3: cada región de la red 1 se parte en 3." : "Las articulaciones de la red 2 que quedan fuera del rango de y no cuentan."));
+      var p = PRE[clave].p1, q = P2();
+      function lin(P, pr){
+        return "φ" + pr + " = (" + P.f.map(function(v){ return F(v, 3); }).join(", ") + ")<br>" + P.t.map(function(t, d){ return "θ" + pr + (d+1) + " = (" + F(t[0], 3) + ", " + F(t[1], 3) + ")"; }).join(" · ");
+      }
+      $("dParams").innerHTML = "<p><b>Red 1</b> (10 parámetros)<br>" + lin(p, "") + "</p><p><b>Red 2</b> (10 parámetros, con las articulaciones desplazadas " + F(desp, 1) + ")<br>" + lin(q, "′") + "</p>";
+      g1.redibujar(); g2.redibujar(); g3.redibujar();
+    }
+    DL.selector($("dSel"), {opciones:[{v:"9", t:"9 regiones (3 × 3)"}, {v:"16", t:"16 regiones (4 × 4)"}], valor:"9", alCambiar:function(v){ clave = v; actualizar(); }});
+    DL.control($("dCtrl"), {etiqueta:"desplazar articulaciones de la red 2", min:-1, max:1, paso:0.1, valor:0, alCambiar:function(v){ desp = v; actualizar(); }});
+    DL.control($("dCtrl"), {etiqueta:"punto x", min:-1, max:1, paso:0.01, valor:x0, alCambiar:function(v){ x0 = v; actualizar(); }});
+    actualizar();
+  })();
+})();
+</script>
+</body>
+</html>

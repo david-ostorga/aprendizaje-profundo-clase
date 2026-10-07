@@ -1,0 +1,1711 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrenamiento 1: pérdidas y optimizadores</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: solo lo que no existe en estilos.css */
+  .legend i.cuadro{width:12px; height:12px; border-radius:3px}
+  .formula .eq .lbl b{font-weight:600}
+  .tbl td.num-col, .tbl th.num-col{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .tbl td.nw{white-space:nowrap}
+  .cards-paso{display:grid; gap:10px}
+  .cards-paso .carta{border:1px solid var(--border); border-radius:10px; background:var(--surface); padding:10px 14px; font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; line-height:1.55}
+  .cards-paso .carta.nueva{border-color:var(--accent); background:var(--accent-soft)}
+  .cards-paso .carta .ct{font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--text-3); font-weight:600; margin-bottom:3px}
+  .cards-paso .carta .cx{font-family:ui-serif,Georgia,serif; font-size:16.5px; overflow-x:auto}
+  .mini-canvas{width:100%; display:block}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Entrenamiento 1</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 03</div>
+  <h1>De dónde salen las pérdidas y cómo se minimizan</h1>
+  <p class="lead">Una receta de cuatro pasos para construir la pérdida de cualquier problema (Normal, Bernoulli, Categórica, Poisson…) y, después, qué problema resuelve cada optimizador: SGD, momentum, Nesterov y Adam. Es la sección con más derivaciones del examen: aquí las haces paso a paso.</p>
+  <div class="meta">Fuente: <code>slides/Entrenamiento.Rmd</code> · Temario del Examen 1, sección 3 · Lectura de unos 55 minutos, más los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+<p>En el <a href="01_repaso_ml.html#verosimilitud">repaso</a> viste que la pérdida cuadrática sale de suponer ruido Normal alrededor de una recta. Esa derivación se hizo para la regresión lineal. Hoy se vuelve una <strong>receta general</strong>: cambia la distribución y obtienes la pérdida de clasificación, de conteos o de proporciones, sin memorizar ninguna. La segunda mitad responde otra pregunta: ya tienes una pérdida, ¿cómo la bajas cuando su paisaje está lleno de valles, mesetas y cuellos de botella?</p>
+
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Ya hay un modelo f(x, φ), una pérdida cuadrática y gradient descent (clases de repaso y de redes neuronales). Se dijo que la cuadrática «sale de una Normal».</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">Mitad 1: cualquier pérdida sale de una distribución (máxima verosimilitud). Mitad 2: SGD, momentum, Nesterov y Adam, y por qué el paisaje no es un tazón.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Falta calcular el gradiente de esas pérdidas para redes profundas: backpropagation y la inicialización (<a href="04_entrenamiento2.html">artefacto 04</a>).</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>La red <strong>no predice y</strong>. Predice <strong>los parámetros de una distribución sobre y</strong> (por ejemplo, la media de una Normal o la probabilidad de una Bernoulli). La pérdida mide qué tan probable es el dato real bajo esa distribución. Cambiar de problema es cambiar de distribución.</p>
+</div>
+
+<p>Tres avisos de notación antes de empezar:</p>
+<ul>
+  <li><strong>α contra η.</strong> Esta clase usa α para la tasa de aprendizaje (learning rate). El repaso usaba η. Es la misma cantidad (<a href="00_matematicas.html#sym-alpha">α</a>, <a href="00_matematicas.html#sym-eta">η</a>).</li>
+  <li><strong>θ.</strong> En la clase de redes neuronales θ eran los pesos de la capa oculta. Aquí θ son <em>los parámetros de la distribución</em> que predice la red. El contexto lo distingue.</li>
+  <li><strong>λ.</strong> En regularización λ es la fuerza de la penalización. Aquí λ es el parámetro de una Bernoulli o de una Poisson. Otro símbolo, otro papel (<a href="00_matematicas.html#doble-significado">símbolos con doble significado</a>).</li>
+</ul>
+<p>Si algún símbolo te frena, la <a href="00_matematicas.html#notacion">tabla de notación</a> está en el artefacto 00. Los símbolos subrayados de esta página abren su explicación al tocarlos.</p>
+
+<!-- ============ 2. RECETA ============ -->
+<h2 id="receta"><span class="num">Sección 2</span>La receta en cuatro pasos</h2>
+
+<p>Un modelo normal recibe x y devuelve un número ŷ. El problema: ese número no dice <em>qué tan seguro</em> está el modelo ni <em>qué otros valores</em> eran posibles. La alternativa es que la red devuelva una distribución completa. Para que sea manejable, la red no devuelve la distribución entera: devuelve <strong>los pocos números que la describen</strong>.</p>
+
+<div class="flow">
+  <div class="node"><div class="t">x</div><div class="d">La entrada del ejemplo i: <b>xᵢ</b>.</div></div>
+  <div class="node"><div class="t">f(x, φ)</div><div class="d">La red, con sus parámetros φ.</div></div>
+  <div class="node aqui"><div class="t">θ</div><div class="d">Los parámetros de una distribución: <b>θᵢ = f(xᵢ, φ)</b>.</div></div>
+  <div class="node"><div class="t">P(y | θ)</div><div class="d">La distribución sobre y. Evaluada en el dato real da su <b>verosimilitud</b>.</div></div>
+</div>
+
+<p>Un caso con números. La entrada es x = 2 y la red devuelve θ = f(2, φ) = 2.5. Si elegimos una Normal con σ = 1, la red está diciendo «y debería caer cerca de 2.5, con dispersión 1». Si el dato real es y = 3, la altura de esa campana en 3 vale e<sup>−0.125</sup> / √(2π) = 0.352. Esa altura es la verosimilitud del dato. Entrenar es mover φ para que esas alturas sean altas, en <em>todos</em> los datos a la vez.</p>
+
+<div class="note good">
+  <span class="tag">La receta completa</span>
+  <ol>
+    <li><strong>Escoge una distribución</strong> P(y | θ) cuyo soporte coincida con los valores posibles de y (reales, {0, 1}, clases, conteos…).</li>
+    <li><strong>Haz que la red prediga sus parámetros:</strong> θ = f(x, φ), cuidando que θ caiga en el rango permitido.</li>
+    <li><strong>Entrena φ</strong> con máxima verosimilitud: minimiza la negative log-likelihood (NLL).</li>
+    <li><strong>Inferencia:</strong> devuelve la distribución entera o un resumen de ella (la media, la clase más probable…).</li>
+  </ol>
+</div>
+
+<p>Los tres pasos de «entrena con máxima verosimilitud» (producto, logaritmo, signo) merecen su propia fórmula. Cada uno resuelve un problema distinto.</p>
+
+<h3 id="producto-verosimilitud">Paso a: el producto de probabilidades</h3>
+<p>Queremos φ tal que los datos observados sean <em>probables en conjunto</em>. Si las observaciones son <strong>independientes</strong> dados sus inputs y φ, la probabilidad conjunta es el producto de las individuales (la regla de «A y B» para eventos independientes: P(A y B) = P(A)·P(B)). Si además todas salen de <em>la misma</em> distribución, o sea están <strong>idénticamente distribuidas</strong>, el mismo modelo f sirve para todas. A eso se le llama i.i.d. (<a href="00_matematicas.html#iid">sección de i.i.d. del artefacto 00</a>).</p>
+
+<div class="formula">
+  <div class="f-head">Máxima verosimilitud (versión con producto)</div>
+  <div class="f-ejemplo">Tres observaciones a las que el modelo les da probabilidad 0.5, 0.8 y 0.9  →  verosimilitud conjunta = 0.5 · 0.8 · 0.9 = 0.36</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmax"></span><span class="sub r-param">φ</span> <span class="sym" data-s="prod"></span><span class="sub">i=1…n</span> <span class="sym" data-s="P">P</span>( <span class="sym" data-s="y">y</span><span class="sub r-dato">i</span> | <span class="r-dato">x</span><span class="sub r-dato">i</span>, <span class="r-param">φ</span> )
+    <span class="lbl">y como θᵢ = f(xᵢ, φ):&nbsp; P(yᵢ | xᵢ, φ) = P(yᵢ | θᵢ)</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«φ gorro es el valor de φ que hace máximo el producto, sobre todos los ejemplos, de la probabilidad que el modelo le da al dato real yᵢ cuando ve xᵢ.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">φ̂</dt><dd>El mejor φ: el resultado del entrenamiento.</dd>
+      <dt>argmax<sub>φ</sub></dt><dd>«El φ donde se alcanza el máximo». Devuelve un φ, no un valor de pérdida (<a href="00_matematicas.html#optimizar">argmin y argmax</a>).</dd>
+      <dt>Π<sub>i=1…n</sub></dt><dd>Multiplica los n factores, uno por ejemplo (<a href="00_matematicas.html#producto">productoria</a>).</dd>
+      <dt>P(yᵢ | xᵢ, φ)</dt><dd>La probabilidad (o la altura, si y es continua) que el modelo le asigna al dato real yᵢ. Es un número entre 0 y 1 en el caso discreto.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un solo ejemplo recibe probabilidad casi 0: el producto entero se hunde a casi 0. Un solo dato «imposible» arruina el modelo; por eso es un criterio exigente.</li>
+      <li>…n crece: el producto se encoge sin parar. Con 1 000 ejemplos y probabilidad 0.9 cada uno queda 0.9<sup>1000</sup> ≈ 1.7 · 10<sup>−46</sup>, un número que la computadora ya no distingue de cero. Eso motiva el paso siguiente.</li>
+      <li>…los datos no son independientes (por ejemplo, mediciones repetidas de la misma persona): la igualdad «conjunta = producto» deja de ser cierta y la fórmula ya no es la verosimilitud real.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="log-verosimilitud">Paso b: del producto a la suma con el logaritmo</h3>
+<p>Multiplicar miles de números pequeños es incómodo (se desborda hacia cero) y derivar un producto es un dolor. El logaritmo arregla ambas cosas: convierte el producto en suma. Y como log es <strong>creciente</strong> (si a &lt; b entonces log a &lt; log b), el φ que maximiza el producto es el mismo que maximiza su logaritmo. Cambia el valor máximo, no <em>dónde</em> ocurre (<a href="00_matematicas.html#log-argmax">log y argmax</a>).</p>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">log Π<sub>i</sub> P(yᵢ | xᵢ, φ)</div><div class="d-por">Partimos del logaritmo del producto de verosimilitudes. Como log es creciente, maximizar esto es lo mismo que maximizar el producto.</div></li>
+  <li><div class="d-ex">= Σ<sub>i</sub> log P(yᵢ | xᵢ, φ)</div><div class="d-por"><b><a href="00_matematicas.html#log-exp">Log de un producto:</a></b> log(a·b·c) = log a + log b + log c. El producto de n factores se vuelve la suma de n logaritmos.</div></li>
+  <li><div class="d-ex">0.5 · 0.8 · 0.9 = 0.36  ⇒  log 0.36 = −1.0217</div><div class="d-por"><b>Verificación con números:</b> log 0.5 + log 0.8 + log 0.9 = −0.6931 − 0.2231 − 0.1054 = −1.0217. Coincide. ✔</div></li>
+  <li><div class="d-ex">las probabilidades 0.9 se vuelven términos log 0.9 = −0.105, no 1.7 · 10<sup>−46</sup></div><div class="d-por"><b>Interpretación:</b> mil términos de tamaño razonable sumados no se desbordan. El problema numérico desapareció.</div></li>
+</ol>
+
+<h3 id="nll">Paso c: el signo menos, o por qué «minimizamos»</h3>
+<p>Los logaritmos de probabilidades son negativos o cero (log de algo entre 0 y 1). Maximizar una suma de negativos es raro de leer. Por convención, en aprendizaje automático <strong>minimizamos</strong> una pérdida, así que cambiamos el signo: maximizar algo equivale a minimizar su negativo. Lo que resulta se llama <em>negative log-likelihood</em> (NLL, «log-verosimilitud negativa»).</p>
+
+<div class="formula">
+  <div class="f-head">La pérdida: negative log-likelihood</div>
+  <div class="f-ejemplo">Con las probabilidades 0.5, 0.8 y 0.9:  L = −(log 0.5 + log 0.8 + log 0.9) = 0.6931 + 0.2231 + 0.1054 = 1.0217</div>
+  <div class="eq">
+    <span class="sym" data-s="L">L</span>(<span class="r-param">φ</span>) = − <span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="log">log</span> P( <span class="r-dato">y</span><span class="sub r-dato">i</span> | <span class="sym" data-s="f">f</span>(<span class="r-dato">x</span><span class="sub r-dato">i</span>, <span class="r-param">φ</span>) )
+    <span class="lbl">y entonces:&nbsp; φ̂ = argmin<sub>φ</sub> L(φ)</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida es menos la suma, sobre los ejemplos, del logaritmo de la probabilidad que el modelo le da al dato real. Cada ejemplo aporta un costo: bajo si el modelo le dio probabilidad alta, alto si le dio probabilidad baja.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">L(φ)</dt><dd>La pérdida total, un solo número para todo el conjunto. Depende de φ porque las probabilidades dependen de φ.</dd>
+      <dt>−Σ log P(…)</dt><dd>Menos la suma de los logaritmos. Cada término −log P(yᵢ | …) es el costo de <em>un</em> ejemplo, siempre ≥ 0 cuando P es una probabilidad.</dd>
+      <dt class="r-calc">f(xᵢ, φ)</dt><dd>La salida de la red: los parámetros θᵢ de la distribución, no la predicción final.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el modelo le da probabilidad 1 al dato real: −log 1 = 0. Costo cero: no se puede hacer mejor.</li>
+      <li>…le da probabilidad 0.5: el costo es 0.693. Con 0.1 es 2.303. Con 0.01 es 4.605. El costo <em>crece sin límite</em> cuando la probabilidad se acerca a 0.</li>
+      <li>…el dato es continuo y la «probabilidad» es una altura de densidad: la altura puede pasar de 1 y entonces el costo puede ser negativo. No es un error; solo cuenta diferencias entre modelos.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="paso-inferencia">Paso 4: inferencia</h3>
+<p>Una vez entrenada la red, para un x nuevo calculas θ = f(x, φ̂) y tienes <em>una distribución completa</em> sobre y. Puedes devolverla tal cual (por ejemplo, «probabilidad de 0.82 de que sea clase 1») o un resumen: la media, la moda, la clase más probable. Cada ejemplo de las secciones siguientes cierra con su inferencia.</p>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Por qué no basta con «minimizar el error» y listo? ¿Para qué tanta distribución?</div>
+<p>Porque «error» no es una sola cosa. La distancia al cuadrado es la correcta cuando el ruido es Normal. Para una etiqueta sí/no, la distancia al cuadrado no tiene sentido; la medida correcta es qué probabilidad le diste a la etiqueta real. La receta te dice cuál es la pérdida correcta para <em>cada tipo de y</em>.</p>
+
+<div class="q"><span class="qlabel">Duda típica</span>Si P(y | x, φ) es una probabilidad, ¿no debería sumar 1 sobre todos los y posibles?</div>
+<p>Sí, y por eso hay que elegir una distribución «de verdad» (con la normalización correcta) y no inventar una fórmula que se vea bien. Es lo que garantiza que el modelo no pueda «hacer trampa» dándole probabilidad alta a todos los valores a la vez.</p>
+
+<!-- ============ 3. NORMAL ============ -->
+<h2 id="normal"><span class="num">Sección 3</span>Ejemplo 1: regresión, y la pérdida cuadrática</h2>
+
+<p>Queremos predecir un escalar y ∈ ℝ (un ingreso, una temperatura, un puntaje). El soporte es toda la recta real, así que una candidata natural es la <strong>Normal</strong>. Su altura en y, con centro μ y varianza σ², es:</p>
+
+<div class="formula">
+  <div class="f-head">Densidad de la Normal</div>
+  <div class="f-ejemplo">μ = 2.5, σ = 1 y el dato y = 3  →  p(3) = (1/√(2π)) · e<sup>−(3 − 2.5)²/2</sup> = 0.3989 · e<sup>−0.125</sup> = 0.3521</div>
+  <div class="eq">
+    <span class="sym" data-s="P">P</span>( <span class="r-dato">y</span> | <span class="r-calc">μ</span>, <span class="r-calc">σ</span><span class="sup">2</span> ) = <span class="frac"><span class="num">1</span><span class="den">√(2π<span class="r-calc">σ</span><span class="sup">2</span>)</span></span> <span class="sym" data-s="exp">exp</span> ( − <span class="frac"><span class="num">( <span class="r-dato">y</span> − <span class="r-calc">μ</span> )<span class="sup">2</span></span><span class="den">2 <span class="r-calc">σ</span><span class="sup">2</span></span></span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La altura de la campana en y es una constante (uno entre la raíz de dos pi sigma cuadrada) por e elevado a menos la distancia cuadrada al centro, entre dos sigma cuadrada.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">y</dt><dd>El dato observado, donde evaluamos la campana.</dd>
+      <dt class="r-calc">μ</dt><dd>El centro de la campana. Aquí será la salida de la red: μ = f(x, φ).</dd>
+      <dt class="r-calc">σ²</dt><dd>La varianza: qué tan ancha es la campana. σ es la desviación estándar (aquí σ no es la sigmoide).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…y está justo en μ: el exponente es 0, e⁰ = 1 y la altura es la máxima posible, 1/√(2πσ²).</li>
+      <li>…y se aleja de μ: la altura cae como e<sup>−distancia²</sup>, muy rápido.</li>
+      <li>…σ² es chica: campana angosta y alta; premia mucho el acierto y castiga mucho el error. Con σ² grande es ancha, baja y más tolerante. Más detalle en <a href="00_matematicas.html#normal">la Normal y el menos-log</a>.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Ahora la receta. Paso 1: la Normal. Paso 2: la red predice <em>solo la media</em>, μᵢ = f(xᵢ, φ), y dejamos la varianza σ² como una constante fija. Paso 3: sustituir en la NLL y simplificar. Esta es la derivación que debes poder reproducir a mano:</p>
+
+<h3 id="derivacion-normal">Derivación: Normal ⇒ pérdida cuadrática</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> log [ (2πσ²)<sup>−1/2</sup> · exp( −(yᵢ − f(xᵢ, φ))² / (2σ²) ) ]</div><div class="d-por"><b>Sustituir:</b> la NLL con P(yᵢ | xᵢ, φ) igual a la Normal de media f(xᵢ, φ). La raíz del denominador se escribe como potencia −1/2.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ log (2πσ²)<sup>−1/2</sup> + log exp( −(yᵢ − f)² / (2σ²) ) ]</div><div class="d-por"><b>Log de un producto:</b> log(a·b) = log a + log b. Dentro del corchete hay dos factores. (Escribo f por f(xᵢ, φ) para ahorrar espacio.)</div></li>
+  <li><div class="d-ex">log (2πσ²)<sup>−1/2</sup> = −½ log(2πσ²)</div><div class="d-por"><b>Log de una potencia:</b> log(aᵇ) = b · log a, aquí con b = −½.</div></li>
+  <li><div class="d-ex">log exp( −(yᵢ − f)² / (2σ²) ) = −(yᵢ − f)² / (2σ²)</div><div class="d-por"><b>Log y exp se deshacen:</b> log(e<sup>z</sup>) = z.</div></li>
+  <li><div class="d-ex">L(φ) = Σ<sub>i</sub> [ ½ log(2πσ²) + (yᵢ − f)² / (2σ²) ]</div><div class="d-por"><b>Repartir el menos:</b> el signo de afuera cambia el signo de cada término de adentro. Esta es la expresión de la slide.</div></li>
+  <li><div class="d-ex">L(φ) = (n/2) log(2πσ²) + (1 / 2σ²) · Σ<sub>i</sub> (yᵢ − f)²</div><div class="d-por"><b>Propiedades de la suma:</b> sumar n veces una constante da n por esa constante, y una constante multiplicativa (1/2σ²) sale de la suma (<a href="00_matematicas.html#props-suma">propiedades de Σ</a>).</div></li>
+  <li><div class="d-ex">(n/2) log(2πσ²) no contiene a φ</div><div class="d-por"><b>Constante respecto a φ:</b> con σ² fija, el primer término vale lo mismo para cualquier φ. Sumar o restar algo que no depende de φ no cambia <em>dónde</em> está el mínimo.</div></li>
+  <li><div class="d-ex">argmin<sub>φ</sub> L(φ) = argmin<sub>φ</sub> Σ<sub>i</sub> (yᵢ − f(xᵢ, φ))²</div><div class="d-por"><b>Multiplicar por una constante positiva:</b> 1/(2σ²) &gt; 0 solo cambia la escala, no el argmin. Quedan los mínimos cuadrados.</div></li>
+  <li><div class="d-ex">y = (3, 5), f = (2.5, 4), σ² = 1:&nbsp; L = [0.919 + 0.125] + [0.919 + 0.5] = 2.463</div><div class="d-por"><b>Verificación con números:</b> ½ log(2π) = 0.919. Los residuos son 0.5 y 1, y sus cuadrados entre 2 dan 0.125 y 0.5. La parte que depende de φ es (0.25 + 1)/2 = 0.625; el resto, 2 · 0.919 = 1.838, es la constante. ✔</div></li>
+</ol>
+
+<div class="formula">
+  <div class="f-head">Resultado: Normal con varianza constante ⇒ pérdida cuadrática</div>
+  <div class="f-ejemplo">Un ejemplo con yᵢ = 3 y f(xᵢ, φ) = 2.5 aporta (3 − 2.5)² = 0.25. Con otro de yᵢ = 5 y f = 4 aporta 1. Total de la parte que importa: 1.25</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmin"></span><span class="sub r-param">φ</span> <span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> ( <span class="r-dato">y</span><span class="sub r-dato">i</span> − <span class="r-calc">f</span>(<span class="r-dato">x</span><span class="sub r-dato">i</span>, <span class="r-param">φ</span>) )<span class="sup">2</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El mejor φ es el que minimiza la suma de los errores al cuadrado entre el valor real y lo que predice la red.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">yᵢ</dt><dd>El valor real del ejemplo i.</dd>
+      <dt class="r-calc">f(xᵢ, φ)</dt><dd>La media μᵢ que predice la red: lo que usamos como ŷᵢ.</dd>
+      <dt>(yᵢ − f)²</dt><dd>El error al cuadrado de ese ejemplo.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…cambias σ²: el valor de L cambia, pero <em>no el φ óptimo</em>. Con σ² = 0.5, 1 y 2, el término constante por observación vale 0.572, 0.919 y 1.266, y la parte cuadrática de un residuo de 0.5 es 0.25, 0.125 y 0.0625.</li>
+      <li>…los residuos son grandes: el cuadrado los amplifica, así que unos pocos datos atípicos dominan la pérdida. Con una Laplace en lugar de Normal saldría el error absoluto (lo ves en la sección <a href="#disenar">Diseña tu propia pérdida</a>).</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="supuestos-normal">Qué estamos suponiendo</h3>
+<p>«Mínimos cuadrados» no es neutral: es la receta con estos cuatro supuestos, y cada uno puede fallar.</p>
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Supuesto</th><th>Qué significa</th><th>Cuándo falla</th></tr>
+  <tr><td><strong>Independencia</strong></td><td>El error de un ejemplo no informa sobre el de otro.</td><td>Series de tiempo, varias mediciones de la misma persona o colonia.</td></tr>
+  <tr><td><strong>Normalidad</strong></td><td>Los errores forman una campana alrededor de la media.</td><td>Hay valores atípicos muy lejanos, o y solo es positivo y asimétrico (sueldos).</td></tr>
+  <tr><td><strong>Varianza constante</strong></td><td>La dispersión del ruido es la misma para cualquier x. Se llama <em>homoscedasticidad</em>.</td><td>El ruido crece con x (más ingreso, más variabilidad): <em>heteroscedasticidad</em>.</td></tr>
+  <tr><td><strong>Media = f(x, φ)</strong></td><td>El promedio de y dado x es exactamente lo que produce el modelo.</td><td>El modelo es demasiado simple para la relación real.</td></tr>
+</table></div>
+
+<h3 id="heteroscedasticidad">Heteroscedasticidad: aprender también la varianza</h3>
+<p>¿Qué pasó con σ²? La asumimos constante, así que no afectó el φ óptimo. Pero si el ruido cambia con x, un σ² único es mentira: sobreestima la dispersión donde los datos son tranquilos y la subestima donde son ruidosos. La salida es dejar que la red prediga <strong>dos</strong> parámetros de la Normal: μ(x) = f₁(x, φ) y σ²(x) = f₂(x, φ)² (la slide usa el cuadrado de una segunda salida).</p>
+
+<div class="note fix">
+  <span class="tag">Cuidado: σ²(x) tiene que ser positiva</span>
+  <p>La salida de una red es un número real cualquiera, pero una varianza debe ser <strong>estrictamente positiva</strong>: la NLL contiene log σ² y divide entre σ². Hay tres maneras de forzarlo. Con f₂ = 0 el cuadrado da σ² = 0 y la pérdida se vuelve infinita; <code>exp</code> y <em>softplus</em> nunca llegan a 0.</p>
+</div>
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Enlace para σ²</th><th>Fórmula</th><th>Con f₂ = 0</th><th>Con f₂ = −3</th><th>Comentario</th></tr>
+  <tr><td>Cuadrado (la slide)</td><td class="nw">σ² = f₂²</td><td class="nw">0</td><td class="nw">9</td><td>Puede valer exactamente 0, y f₂ = −3 y f₂ = 3 dan lo mismo.</td></tr>
+  <tr><td>Exponencial</td><td class="nw">σ² = e<sup>f₂</sup></td><td class="nw">1</td><td class="nw">0.050</td><td>Siempre positiva; la más usada. Cambiar f₂ en 1 multiplica σ² por e.</td></tr>
+  <tr><td>Softplus</td><td class="nw">σ² = log(1 + e<sup>f₂</sup>)</td><td class="nw">0.693</td><td class="nw">0.049</td><td>Siempre positiva; crece más suavemente que exp para f₂ grande.</td></tr>
+</table></div>
+
+<p>Con σ² dependiendo de x, el primer término de la NLL <strong>ya no es constante</strong> y no se puede tirar. La derivación termina un paso antes y la pérdida es:</p>
+
+<div class="eq">
+  <span class="lbl">NLL con varianza que depende de x:</span>
+  <span class="r-calc">L</span>(<span class="r-param">φ</span>) = <span class="big"><span class="lim">n</span><span class="o">Σ</span><span class="lim">i=1</span></span> [ ½ log(2π σ²(<span class="r-dato">x</span><span class="sub r-dato">i</span>)) + <span class="frac"><span class="num">( <span class="r-dato">y</span><span class="sub r-dato">i</span> − μ(<span class="r-dato">x</span><span class="sub r-dato">i</span>) )<span class="sup">2</span></span><span class="den">2 σ²(<span class="r-dato">x</span><span class="sub r-dato">i</span>)</span></span> ]
+</div>
+<p>Traducción: un primer término que <strong>castiga declarar mucha varianza</strong> (crece con log σ²) y un segundo que <strong>castiga declarar poca</strong> cuando el error es grande (σ² está en el denominador). El modelo busca el equilibrio. ¿Cuál es? Para un solo ejemplo con residuo r = y − μ, lo podemos derivar:</p>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">ℓ(s) = ½ log(2π s) + r² / (2s)&nbsp;&nbsp;&nbsp; con s = σ²</div><div class="d-por">La pérdida de un ejemplo como función de s, con el residuo r fijo.</div></li>
+  <li><div class="d-ex">dℓ/ds = 1/(2s) − r²/(2s²)</div><div class="d-por"><b>Derivada del log y de una potencia:</b> d(log s)/ds = 1/s (el ½ y el 2π constante se quedan, y log(2π s) = log 2π + log s), y d(1/s)/ds = −1/s². Por eso r²/(2s) deriva en −r²/(2s²).</div></li>
+  <li><div class="d-ex">1/(2s) − r²/(2s²) = 0&nbsp; ⇒&nbsp; s = r²</div><div class="d-por"><b>Igualar a cero:</b> multiplicando por 2s² queda s − r² = 0. El mejor σ² para ese ejemplo es el cuadrado de su error.</div></li>
+  <li><div class="d-ex">r = 1:&nbsp; ℓ(0.25) = 2.226,&nbsp; ℓ(1) = 1.419,&nbsp; ℓ(4) = 1.737</div><div class="d-por"><b>Verificación con números:</b> con r = 1 el mínimo está en s = 1 y los valores vecinos son peores. ✔ Intuición: el modelo aprende σ² grande donde sus errores son grandes.</div></li>
+</ol>
+
+<h3 id="lab-heterosc" class="lab" data-toc="Lab: σ constante contra σ(x)">Laboratorio: ruido que crece con x</h3>
+<p>Datos sintéticos (semilla fija): y = 2 + 0.8x + ruido, donde la desviación del ruido crece con x (0.25 en x = 0 y cerca de 3 en x = 10). Compara dos modelos, ambos con media lineal: uno con <strong>σ constante</strong> y otro con <strong>log σ(x) = c + d·x</strong> (equivale a σ²(x) = e<sup>2(c+dx)</sup>, siempre positiva). Ambos se ajustan con cálculos reales al cargar la página: el primero con la solución de mínimos cuadrados y el segundo con 4 000 pasos de Adam sobre la NLL.</p>
+<div class="widget" id="labHet">
+  <div class="widget-head"><div class="wt">Banda de ±2σ y NLL de cada modelo</div><div class="ws">Elige el modelo. La banda sombreada es μ(x) ± 2σ(x).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="hetCanvas"></canvas>
+      <div><div id="hetSel"></div><div id="hetRead"></div><div class="status info" id="hetStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con «σ constante»: una sola banda de ancho fijo (σ ≈ 1.23). Sobra espacio a la izquierda (los puntos están pegados a la recta) y falta a la derecha (muchos puntos quedan fuera).</li>
+    <li>Con «σ(x) aprendida»: la banda se abre como embudo, de σ ≈ 0.3 en x = 0 a σ ≈ 2.6 en x = 10, y envuelve a los puntos en todo el rango.</li>
+    <li>Compara la NLL: la del modelo con σ(x) es mucho menor (unos 80 contra 98). Es la misma regla de selección que siempre: menor NLL, mejor modelo para esos datos.</li>
+    <li>La recta media casi no cambia entre los dos modelos. Lo que mejora es qué tan <em>honesta</em> es la incertidumbre.</li>
+  </ol>
+</div>
+
+<!-- ============ 4. BERNOULLI ============ -->
+<h2 id="bernoulli"><span class="num">Sección 4</span>Ejemplo 2: clasificación binaria, y la BCE</h2>
+
+<p>Ahora y solo toma dos valores, y ∈ {0, 1} (aprobó o no aprobó, hubo fraude o no). La distribución con soporte {0, 1} es la <strong>Bernoulli</strong>, con un único parámetro λ ∈ [0, 1]: la probabilidad de que y sea 1.</p>
+
+<div class="formula">
+  <div class="f-head">Bernoulli: dos formas de escribir la misma cosa</div>
+  <div class="f-ejemplo">λ = 0.8:&nbsp; P(y = 1) = 0.8 y P(y = 0) = 1 − 0.8 = 0.2.&nbsp; Con el truco del exponente: y = 1 → (0.2)⁰ · (0.8)¹ = 0.8;&nbsp; y = 0 → (0.2)¹ · (0.8)⁰ = 0.2</div>
+  <div class="eq">
+    P(<span class="r-dato">y</span> | <span class="r-calc">λ</span>) = { 1 − <span class="r-calc">λ</span>&nbsp; si y = 0 ;&nbsp; <span class="r-calc">λ</span>&nbsp; si y = 1 }
+    <span class="lbl">o, en una sola línea:&nbsp; P(y | λ) = (1 − λ)<sup>1−y</sup> · λ<sup>y</sup></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de y es λ si y vale uno y uno menos λ si y vale cero. La versión de una línea usa y como interruptor en los exponentes.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">λ</dt><dd>La probabilidad de la clase 1, entre 0 y 1. Aquí λ es un parámetro de la distribución, <em>no</em> la fuerza de regularización.</dd>
+      <dt class="r-dato">y</dt><dd>La etiqueta real: 0 o 1. Funciona como interruptor.</dd>
+      <dt>(1 − λ)<sup>1−y</sup></dt><dd>Vale 1 − λ si y = 0 y vale 1 (porque algo elevado a 0 es 1) si y = 1.</dd>
+      <dt>λ<sup>y</sup></dt><dd>Vale λ si y = 1 y vale 1 si y = 0.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…y = 1: el exponente 1 − y = 0 apaga el factor (1 − λ) y queda λ.</li>
+      <li>…y = 0: el exponente y = 0 apaga el factor λ y queda 1 − λ.</li>
+      <li>…λ = 0.5: da lo mismo cualquier etiqueta, ambas valen 0.5. Es el modelo «no sé».</li>
+    </ul>
+  </div>
+</div>
+
+<p>El problema de conectar la red con λ: la salida f(x, φ) puede ser cualquier número real, pero λ debe estar en [0, 1]. La solución es pasarla por la <strong>sigmoide</strong> (<a href="00_matematicas.html#funciones">funciones: log, exp, sigmoide y softmax</a>), que aplasta cualquier real en el intervalo (0, 1):</p>
+
+<div class="formula">
+  <div class="f-head">Sigmoide: del score a la probabilidad</div>
+  <div class="f-ejemplo">score f = 2  →  σ(2) = 1 / (1 + e<sup>−2</sup>) = 1 / (1 + 0.1353) = 0.8808.&nbsp; Con f = −2: 0.1192.&nbsp; Con f = 0: 0.5</div>
+  <div class="eq">
+    <span class="r-calc">σ</span>(<span class="r-calc">z</span>) = <span class="frac"><span class="num">1</span><span class="den">1 + <span class="sym" data-s="exp">e<sup>−z</sup></span></span></span>
+    <span class="lbl">y en el modelo:&nbsp; λᵢ = σ( f(xᵢ, φ) )</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Sigmoide de z es uno entre uno más e a la menos z. La probabilidad de la clase 1 para el ejemplo i es la sigmoide del score que da la red.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">σ(z)</dt><dd>La función sigmoide. Aquí σ no es una desviación estándar; es esta función.</dd>
+      <dt class="r-calc">z = f(x, φ)</dt><dd>El «score» (también llamado logit): un número real, positivo o negativo, que sale de la red.</dd>
+      <dt class="r-calc">λᵢ</dt><dd>La probabilidad estimada de que yᵢ = 1.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el score es muy positivo (f = 4): e<sup>−4</sup> es casi 0 y λ = 0.982, casi 1.</li>
+      <li>…el score es muy negativo (f = −4): λ = 0.018, casi 0.</li>
+      <li>…el score es 0: λ = 0.5, justo en la frontera de decisión.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion-bce">Derivación: Bernoulli + sigmoide ⇒ binary cross-entropy</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">P(yᵢ | xᵢ, φ) = (1 − λᵢ)<sup>1−yᵢ</sup> · λᵢ<sup>yᵢ</sup>,&nbsp;&nbsp; λᵢ = σ(f(xᵢ, φ))</div><div class="d-por">Partimos de la Bernoulli en una línea, con λᵢ producido por la sigmoide.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> log [ (1 − λᵢ)<sup>1−yᵢ</sup> · λᵢ<sup>yᵢ</sup> ]</div><div class="d-por"><b>Definición de la NLL:</b> menos la suma del log de la probabilidad que el modelo da al dato real.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ log (1 − λᵢ)<sup>1−yᵢ</sup> + log λᵢ<sup>yᵢ</sup> ]</div><div class="d-por"><b>Log de un producto:</b> log(a·b) = log a + log b.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ (1 − yᵢ) log(1 − λᵢ) + yᵢ log λᵢ ]</div><div class="d-por"><b>Log de una potencia:</b> log(aᵇ) = b · log a. Los exponentes bajan como multiplicadores.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ (1 − yᵢ) log(1 − σ(f(xᵢ, φ))) + yᵢ log σ(f(xᵢ, φ)) ]</div><div class="d-por"><b>Sustituir</b> λᵢ = σ(f(xᵢ, φ)). Es la <em>binary cross-entropy</em> (BCE) de la slide.</div></li>
+  <li><div class="d-ex">yᵢ = 1 ⇒ ℓᵢ = −log σ(f);&nbsp;&nbsp; yᵢ = 0 ⇒ ℓᵢ = −log(1 − σ(f))</div><div class="d-por"><b>Interpretación:</b> la etiqueta funciona como interruptor, así que cada ejemplo aporta uno solo de los dos términos: el costo de haber dado probabilidad λ a «1», o 1 − λ a «0».</div></li>
+  <li><div class="d-ex">yᵢ = 1, f = 1.5:&nbsp; λ = 0.8176,&nbsp; ℓ = −log 0.8176 = 0.2014.&nbsp;&nbsp; yᵢ = 0, f = 1.5:&nbsp; ℓ = −log(0.1824) = 1.7014</div><div class="d-por"><b>Verificación con números:</b> con el mismo score 1.5, acertar cuesta 0.20 y fallar cuesta 1.70, ocho veces más.</div></li>
+</ol>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Por qué no uso la pérdida cuadrática también para clasificar, con y = 0 o 1?</div>
+<p>Porque no hay una campana Normal sobre {0, 1}; el supuesto no aplica. Con la BCE, un error muy confiado se castiga con un costo que crece sin límite (lo ves en el laboratorio siguiente); con el cuadrado, el costo máximo de un error es 1, así que el entrenamiento recibe una señal débil justo donde más la necesita.</p>
+
+<h3 id="lab-sigmoide-bce" class="lab" data-toc="Lab: sigmoide y BCE">Laboratorio: sigmoide + BCE</h3>
+<p>Mueve el score f que produce la red. La gráfica de la izquierda muestra las dos curvas de pérdida en función de la probabilidad λ: −log λ (cuando y = 1) y −log(1 − λ) (cuando y = 0). El punto marca dónde estás según el y que elijas. Parte de f = 1.5 con y = 1.</p>
+<div class="widget" id="labBce">
+  <div class="widget-head"><div class="wt">λ = σ(f) y el costo de cada etiqueta</div><div class="ws">La curva sólida es la de la etiqueta elegida; la punteada es la otra.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="bceCanvas"></canvas>
+      <div><div id="bceSel"></div><div id="bceCtrl"></div><div id="bceRead"></div><div class="status info" id="bceStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="bceConf">Equivocarme con mucha confianza</button>
+    <button class="btn" id="bceReset">Reiniciar</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con y = 1 y f = 1.5: λ = 0.818 y el costo es 0.201. Sube f a 4: λ = 0.982 y el costo cae a 0.018. Acertar con más confianza cuesta cada vez menos, pero con rendimientos decrecientes.</li>
+    <li>Cambia a y = 0 sin tocar f = 1.5: el costo salta a 1.701. El modelo estaba confiado en «1» y la etiqueta real es «0».</li>
+    <li>Pulsa «Equivocarme con mucha confianza» (y = 0, f = 6): λ = 0.9975 y el costo es 6.0. Con f = 10 serían 10.0. El costo crece de forma casi lineal en el score: nunca se «satura».</li>
+    <li>Con f = 0: λ = 0.5 y el costo es 0.693 = log 2 para cualquier etiqueta. Es el costo de no saber.</li>
+  </ol>
+</div>
+
+<h3 id="inferencia-binaria">Inferencia y una advertencia de calibración</h3>
+<p>Con la red entrenada puedes devolver la probabilidad λ = P(y = 1 | x), o una clase usando un <strong>umbral</strong>: ŷ = 1 si λ ≥ 0.5 y ŷ = 0 si λ &lt; 0.5. Como σ(0) = 0.5, el umbral de 0.5 equivale a mirar el signo del score: f ≥ 0 da la clase 1.</p>
+<div class="note fix">
+  <span class="tag">Trampa común: λ no es automáticamente una probabilidad confiable</span>
+  <p>λ es la probabilidad <em>estimada por el modelo</em>, y puede estar mal <strong>calibrada</strong>. Que el modelo diga λ = 0.9 no garantiza que, entre todos los casos con esa predicción, el 90 % de verdad sea de la clase 1. Puede que sea el 70 %. Antes de usar λ como probabilidad en una política pública (por ejemplo, para priorizar visitas), conviene verificar la calibración con datos que el modelo no vio.</p>
+</div>
+
+<!-- ============ 5. CATEGORICA ============ -->
+<h2 id="categorica"><span class="num">Sección 5</span>Ejemplo 3: multiclase, y la cross-entropy</h2>
+
+<p>Ahora y es una de K clases: y ∈ {1, …, K} (qué dígito es, a qué partido pertenece un texto). La distribución es la <strong>Categórica</strong>: la clase k tiene probabilidad λₖ, con λₖ ≥ 0 y λ₁ + … + λ<sub>K</sub> = 1. (Aquí K es el número de clases, no el de capas.) Es la Bernoulli generalizada a más de dos opciones.</p>
+
+<p>La red produce un score por clase, f(x, φ) = (f₁, …, f<sub>K</sub>), cualquier número real cada uno. Hay que convertirlos en probabilidades positivas que sumen 1. La función que lo hace es la <strong>softmax</strong>:</p>
+
+<div class="formula">
+  <div class="f-head">Softmax: de scores a probabilidades</div>
+  <div class="f-ejemplo">Scores (1, 0, 0)  →  e¹ = 2.718, e⁰ = 1, e⁰ = 1,  suma = 4.718  →  probabilidades (0.576, 0.212, 0.212)</div>
+  <div class="eq">
+    softmax<sub>k</sub>(<span class="r-calc">z</span>) = <span class="frac"><span class="num"><span class="sym" data-s="exp">e<sup>z<sub>k</sub></sup></span></span><span class="den"><span class="big"><span class="lim">K</span><span class="o">Σ</span><span class="lim">j=1</span></span> e<sup>z<sub>j</sub></sup></span></span>
+    <span class="lbl">y en el modelo:&nbsp; P(y = k | x, φ) = softmax<sub>k</sub>( f(x, φ) )</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de la clase k es e elevado al score de k, dividido entre la suma de e elevado al score de todas las clases.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">zₖ</dt><dd>El score de la clase k: un número real cualquiera.</dd>
+      <dt>e<sup>zₖ</sup></dt><dd>Lo vuelve positivo (la exponencial nunca es negativa) y amplifica las diferencias.</dd>
+      <dt>Σⱼ e<sup>zⱼ</sup></dt><dd>La suma sobre las K clases. Dividir entre ella garantiza que las probabilidades sumen 1.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…subes el score de una clase: su probabilidad sube y la de todas las demás baja (compiten por una bolsa fija de 1).</li>
+      <li>…le sumas la misma constante a todos los scores: <em>no cambia nada</em>. Por ejemplo (5, 4, 4) da las mismas probabilidades que (1, 0, 0), porque la constante se cancela entre numerador y denominador.</li>
+      <li>…hay solo K = 2 clases: softmax se reduce a la sigmoide de la diferencia de scores, σ(f₁ − f₂). La BCE es el caso K = 2.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion-ce">Derivación: Categórica + softmax ⇒ cross-entropy multiclase</h3>
+<p>Sea yᵢ la clase correcta del ejemplo i. La probabilidad que el modelo le da es softmax evaluada en esa clase:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">P(yᵢ | xᵢ, φ) = e<sup>f<sub>yᵢ</sub></sup> / Σ<sub>k</sub> e<sup>f<sub>k</sub></sup></div><div class="d-por">La probabilidad de la clase correcta. Escribo f<sub>k</sub> por f<sub>k</sub>(xᵢ, φ); el subíndice yᵢ elige <em>el score de la clase correcta</em>.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> log [ e<sup>f<sub>yᵢ</sub></sup> / Σ<sub>k</sub> e<sup>f<sub>k</sub></sup> ]</div><div class="d-por"><b>Definición de la NLL.</b> Es la primera forma de la slide.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ log e<sup>f<sub>yᵢ</sub></sup> − log Σ<sub>k</sub> e<sup>f<sub>k</sub></sup> ]</div><div class="d-por"><b>Log de un cociente:</b> log(a/b) = log a − log b.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ f<sub>yᵢ</sub> − log Σ<sub>k</sub> e<sup>f<sub>k</sub></sup> ]</div><div class="d-por"><b>Log y exp se deshacen:</b> log(e<sup>z</sup>) = z, aquí con z = f<sub>yᵢ</sub>. El log de la suma no se simplifica: es log de una <em>suma</em>, no de un producto.</div></li>
+  <li><div class="d-ex">L(φ) = Σ<sub>i</sub> [ log Σ<sub>k</sub> e<sup>f<sub>k</sub>(xᵢ, φ)</sup> − f<sub>yᵢ</sub>(xᵢ, φ) ]</div><div class="d-por"><b>Repartir el menos.</b> Esta es la segunda forma de la slide: la cross-entropy multiclase.</div></li>
+  <li><div class="d-ex">scores (1, 0, 0), clase correcta 1:&nbsp; log(4.718) − 1 = 1.5514 − 1 = 0.5514 = −log(0.576)</div><div class="d-por"><b>Verificación con números:</b> las dos formas dan el mismo costo, 0.5514. Si la clase correcta fuera la 2 (score 0), el costo sería 1.5514 − 0 = 1.5514. ✔</div></li>
+</ol>
+<div class="note good">
+  <span class="tag">Lectura intuitiva</span>
+  <p>El término log Σ e<sup>f<sub>k</sub></sup> es un «máximo suave» de los scores (cercano al score más alto). La pérdida de un ejemplo es entonces <strong>«el score más alto, menos el score de la clase correcta»</strong>. Si la clase correcta ya es la de mayor score y gana por mucho, el costo es casi 0. Si pierde, el costo es aproximadamente cuánto le falta para ser la ganadora.</p>
+</div>
+
+<h3 id="lab-softmax-ce" class="lab" data-toc="Lab: softmax y cross-entropy">Laboratorio: scores, softmax y pérdida</h3>
+<p>Mueve los cuatro scores (K = 4). Las barras muestran las probabilidades de softmax; la barra de la clase correcta está marcada. La pérdida es −log de la probabilidad de esa clase. Parte de los scores (1, 0, 0, 0) con la clase 1 como correcta.</p>
+<div class="widget" id="labSmx">
+  <div class="widget-head"><div class="wt">Cross-entropy en vivo</div><div class="ws">Barra marcada = clase correcta. El costo depende solo de esa barra.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="smxCanvas"></canvas>
+      <div><div id="smxSel"></div><div id="smxCtrl"></div><div id="smxRead"></div><div class="status info" id="smxStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="smxIgual">Sumar +2 a todos</button>
+    <button class="btn" id="smxReset">Reiniciar</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con (1, 0, 0, 0) y clase 1: probabilidades (0.475, 0.175, 0.175, 0.175) y costo 0.744. Sube el score 1 a 4: la probabilidad de la clase 1 pasa de 0.475 a 0.948 y el costo cae a 0.054.</li>
+    <li>Pulsa «Sumar +2 a todos»: los scores cambian, las barras <em>no se mueven</em> y el costo es el mismo. Softmax solo mira las diferencias.</li>
+    <li>Cambia la clase correcta a la 2 sin tocar los scores: el costo sube a 1.744 (= −log 0.175). El modelo daba poca probabilidad a la clase 2.</li>
+    <li>Baja el score de la clase correcta a −4 mientras las otras valen 0: la probabilidad de la clase correcta cae a 0.006 y el costo sube a 5.10; sigue creciendo sin tope.</li>
+  </ol>
+</div>
+
+<h3 id="inferencia-multiclase">Inferencia</h3>
+<p>Para un x nuevo puedes devolver toda la distribución (P(y = 1 | x), …, P(y = K | x)) o la <strong>clase más probable</strong>: ŷ = argmax<sub>k</sub> P(y = k | x). Como e<sup>z</sup> es creciente, la clase con mayor probabilidad es la que tiene mayor score: puedes decidir con los scores sin calcular softmax.</p>
+
+<details>
+  <summary>Para profundizar: ¿por qué «cross-entropy» y no «NLL»?</summary>
+  <div class="dbody"><p>Son lo mismo, y la <a href="#entropia">sección de cross-entropy y KL</a> muestra por qué: con etiquetas «one-hot» la cross-entropy entre la etiqueta y la predicción es exactamente −log P(yᵢ | xᵢ), el término de la NLL.</p></div>
+</details>
+
+<!-- ============ 6. DISEÑAR ============ -->
+<h2 id="disenar"><span class="num">Sección 6</span>Diseña tu propia pérdida</h2>
+
+<p>El temario pide algo más que reproducir las tres derivaciones: <strong>diseñar una pérdida para un problema nuevo</strong>. La receta lo permite porque los pasos no cambian. Lo que cambia es la respuesta a tres preguntas:</p>
+<ol>
+  <li><strong>¿Qué valores puede tomar y?</strong> Eso fija la distribución. Consulta el formulario del examen: cada distribución trae su soporte.</li>
+  <li><strong>¿Qué rango tiene su parámetro?</strong> Eso fija la <strong>función de enlace</strong> (link function) que convierte la salida de la red, un real cualquiera, en un parámetro válido. Real: identidad. Positivo: exp o softplus. En [0, 1]: sigmoide. Vector de probabilidades: softmax.</li>
+  <li><strong>¿Cuál es la NLL y qué sobra?</strong> Escribe −log P, simplifica con las propiedades del log y <em>tira todo lo que no dependa de φ</em>, porque no cambia el argmin.</li>
+</ol>
+
+<h3 id="poisson">Ejemplo resuelto: conteos con Poisson</h3>
+<p>Caso de la Tarea 3: predecir cuántos peatones pasan por un punto de la ciudad en un minuto (0, 1, 2, …) a partir de la hora, la ubicación y el tipo de colonia. El soporte es {0, 1, 2, …}: enteros no negativos, sin tope claro. Ni la Normal (reales, negativos incluidos) ni la Bernoulli sirven. El formulario da la <strong>Poisson</strong>, con un parámetro λ &gt; 0 que además es su media.</p>
+
+<div class="formula">
+  <div class="f-head">Poisson: probabilidad de un conteo</div>
+  <div class="f-ejemplo">λ = 3.32 peatones esperados por minuto, y = 4 observados  →  P = 3.32⁴ · e<sup>−3.32</sup> / 4! = 121.5 · 0.0362 / 24 = 0.183</div>
+  <div class="eq">
+    P(<span class="r-dato">y</span> | <span class="r-calc">λ</span>) = <span class="frac"><span class="num"><span class="r-calc">λ</span><sup><span class="r-dato">y</span></sup> e<sup>−<span class="r-calc">λ</span></sup></span><span class="den"><span class="r-dato">y</span>!</span></span>
+    <span class="lbl">con y ∈ {0, 1, 2, …} y λ &gt; 0.&nbsp; Enlace para garantizar λ &gt; 0:&nbsp; λ = e<sup>f(x, φ)</sup></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de contar exactamente y eventos es lambda a la y, por e a la menos lambda, entre y factorial. La red predice f, y lambda es e elevado a f, que siempre es positivo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">y</dt><dd>El conteo observado (un entero ≥ 0). y! es su factorial: y! = y · (y − 1) · … · 1, con 0! = 1.</dd>
+      <dt class="r-calc">λ</dt><dd>La tasa media de eventos. Debe ser positiva.</dd>
+      <dt class="r-calc">f(x, φ)</dt><dd>La salida de la red, un real cualquiera. Con λ = e<sup>f</sup>, f = 0 equivale a λ = 1, y cada +1 de f multiplica λ por e ≈ 2.72.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…f = 1.2: λ = e<sup>1.2</sup> = 3.32 y la distribución se centra cerca de 3.</li>
+      <li>…f es negativo (f = −2): λ = 0.135, un conteo esperado casi 0: se espera ver casi siempre 0.</li>
+      <li>…usaras λ = f directamente: la red podría dar λ negativo o cero y la fórmula no tendría sentido (λ<sup>y</sup> e<sup>−λ</sup> negativo no es probabilidad).</li>
+    </ul>
+  </div>
+</div>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> log [ λᵢ<sup>yᵢ</sup> e<sup>−λᵢ</sup> / yᵢ! ],&nbsp;&nbsp; λᵢ = e<sup>f(xᵢ, φ)</sup></div><div class="d-por"><b>Definición de la NLL</b> con la Poisson y el enlace exponencial.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ log λᵢ<sup>yᵢ</sup> + log e<sup>−λᵢ</sup> − log yᵢ! ]</div><div class="d-por"><b>Log de un producto y de un cociente:</b> log(a·b/c) = log a + log b − log c.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ yᵢ log λᵢ − λᵢ − log yᵢ! ]</div><div class="d-por"><b>Log de una potencia y log-exp:</b> log(λ<sup>y</sup>) = y log λ y log(e<sup>−λ</sup>) = −λ.</div></li>
+  <li><div class="d-ex">log λᵢ = log e<sup>f(xᵢ, φ)</sup> = f(xᵢ, φ)</div><div class="d-por"><b>Log y exp se deshacen</b> otra vez. Aquí se ve la ventaja del enlace exponencial: el log de λ es justo el score f.</div></li>
+  <li><div class="d-ex">L(φ) = − Σ<sub>i</sub> [ yᵢ f(xᵢ, φ) − e<sup>f(xᵢ, φ)</sup> − log yᵢ! ]</div><div class="d-por"><b>Sustituir</b> log λᵢ = f y λᵢ = e<sup>f</sup>.</div></li>
+  <li><div class="d-ex">L(φ) = Σ<sub>i</sub> [ e<sup>f(xᵢ, φ)</sup> − yᵢ f(xᵢ, φ) + log yᵢ! ]</div><div class="d-por"><b>Repartir el menos.</b> Es la NLL de Poisson.</div></li>
+  <li><div class="d-ex">log yᵢ! depende de yᵢ, no de φ</div><div class="d-por"><b>Constante respecto a φ:</b> yᵢ es un dato fijo, así que log yᵢ! es un número conocido que no se mueve cuando cambia φ. Se puede tirar sin cambiar el argmin.</div></li>
+  <li><div class="d-ex">L(φ) ≃ Σ<sub>i</sub> [ e<sup>f(xᵢ, φ)</sup> − yᵢ f(xᵢ, φ) ]</div><div class="d-por"><b>Pérdida simplificada</b> (≃ significa «igual salvo una constante»).</div></li>
+  <li><div class="d-ex">y = 4, f = 1.2:&nbsp; e<sup>1.2</sup> − 4 · 1.2 + log 24 = 3.320 − 4.8 + 3.178 = 1.698 = −log(0.183)</div><div class="d-por"><b>Verificación con números:</b> la fórmula completa da 1.698, igual que −log de la probabilidad directa. ✔ Sin el término constante, la parte que mueve a φ vale 3.320 − 4.8 = −1.480.</div></li>
+  <li><div class="d-ex">d/df [ e<sup>f</sup> − y f ] = e<sup>f</sup> − y = 0&nbsp; ⇒&nbsp; f = log y</div><div class="d-por"><b>Interpretación:</b> para un ejemplo suelto, la pérdida se minimiza cuando λ = e<sup>f</sup> = y: la tasa predicha iguala al conteo observado. El gradiente e<sup>f</sup> − y es «lo que predije menos lo que vi», igual de interpretable que el de la regresión.</div></li>
+</ol>
+
+<h3 id="lab-asistente" class="lab" data-toc="Lab: asistente de diseño">Laboratorio: asistente de diseño de pérdidas</h3>
+<p>Elige el tipo de dato de tu problema y pulsa «Siguiente» para recorrer la receta: distribución, restricción del parámetro, función de enlace, NLL simplificada e inferencia. Cada paso muestra lo que decidiste en los anteriores. La línea «Con números» evalúa la fórmula con valores concretos usando cálculo real.</p>
+<div class="widget" id="labAsist">
+  <div class="widget-head"><div class="wt">Receta paso a paso según el tipo de dato</div><div class="ws">Distribuciones del formulario del examen. Parte de «conteo» (el ejemplo resuelto).</div></div>
+  <div class="widget-body">
+    <div id="asSel"></div>
+    <div id="asCartas" class="cards-paso"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>El <strong>enlace</strong> sale del rango del parámetro: λ ∈ [0, 1] pide sigmoide; λ &gt; 0 pide exp o softplus; un vector de probabilidades pide softmax; un real cualquiera, nada.</li>
+    <li>En «real con atípicos» la NLL con Laplace deja el <strong>error absoluto</strong> |y − f|, en lugar del cuadrado. Cambiar de distribución cambia el tipo de error que castigas.</li>
+    <li>En «proporción en (0, 1)» con Beta <strong>no se cae ningún término</strong> constante: todos dependen de α y β, que ahora son salidas de la red. Y la NLL puede salir negativa porque la densidad pasa de 1.</li>
+    <li>En «varias etiquetas» la pérdida es la suma de BCE, una por etiqueta: es el supuesto de independencia condicional de abajo.</li>
+  </ol>
+</div>
+
+<h3 id="salidas-multiples">Salidas múltiples e independencia condicional</h3>
+<p>¿Y si hay varias salidas a la vez, como una foto con varias etiquetas posibles (perro, pelota, parque)? Escribir la distribución conjunta de todas es difícil. El supuesto simplificador: dado x, las dimensiones del output son <strong>condicionalmente independientes</strong>. Entonces la probabilidad conjunta se vuelve un producto, y el log convierte el producto en suma:</p>
+
+<div class="formula">
+  <div class="f-head">Pérdida con salidas múltiples</div>
+  <div class="f-ejemplo">Dos etiquetas con probabilidades predichas 0.9 (la etiqueta 1 presente) y 0.6 (la etiqueta 2 presente), ambas presentes  →  conjunta = 0.9 · 0.6 = 0.54  →  costo = −log 0.9 − log 0.6 = 0.105 + 0.511 = 0.616</div>
+  <div class="eq">
+    P( <span class="r-dato">y</span><span class="sub r-dato">i</span> | f(<span class="r-dato">x</span><span class="sub r-dato">i</span>, <span class="r-param">φ</span>) ) = <span class="sym" data-s="prod"></span><span class="sub">d</span> P( <span class="r-dato">y</span><span class="sub r-dato">id</span> | f<sub>d</sub>(<span class="r-dato">x</span><span class="sub r-dato">i</span>, <span class="r-param">φ</span>) )
+    <span class="lbl">y la pérdida:&nbsp; L(φ) = − Σᵢ Σ<sub>d</sub> log P( yᵢd | f<sub>d</sub>(xᵢ, φ) )</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de todas las etiquetas del ejemplo i es el producto, sobre las dimensiones d, de la probabilidad de cada etiqueta con su propia salida de la red. La pérdida suma el costo de cada etiqueta de cada ejemplo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">yᵢd</dt><dd>La dimensión d de la salida del ejemplo i (la etiqueta d de la foto i).</dd>
+      <dt class="r-calc">f<sub>d</sub>(xᵢ, φ)</dt><dd>La parte de la salida de la red que corresponde a la dimensión d.</dd>
+      <dt>Σᵢ Σ<sub>d</sub></dt><dd>Dos sumas anidadas: sobre ejemplos y, dentro de cada uno, sobre dimensiones.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…las dimensiones <em>sí</em> son independientes: el producto es la conjunta real y la pérdida es la correcta.</li>
+      <li>…las dimensiones están correlacionadas (dos etiquetas que siempre aparecen juntas, como «cancha» y «pelota»): el supuesto falla. Si cada una tiene probabilidad 0.6 y siempre aparecen juntas, la conjunta real de «ambas presentes» es 0.6, pero el modelo independiente le da 0.6 · 0.6 = 0.36, y reparte 0.6 · 0.4 = 0.24 a cada combinación «una sí, la otra no» que en realidad nunca ocurre.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ 7. ENTROPIA ============ -->
+<h2 id="entropia"><span class="num">Sección 7</span>Cross-entropy y KL: la misma pérdida, vista desde las distribuciones</h2>
+
+<p>Hay una segunda forma de llegar a la misma pérdida, y aparece mucho en la literatura: comparar dos distribuciones. Sea <strong>q</strong> la distribución «objetivo» (lo que dicen las etiquetas) y <strong>p<sub>φ</sub></strong> la que predice el modelo. La <strong>divergencia KL</strong> mide cuánto se aleja p de q.</p>
+
+<div class="formula">
+  <div class="f-head">Divergencia KL</div>
+  <div class="f-ejemplo">q = (0.1, 0.8, 0.1), p = (0.2, 0.7, 0.1)  →  0.1·log(0.1/0.2) + 0.8·log(0.8/0.7) + 0.1·log(0.1/0.1) = −0.0693 + 0.1068 + 0 = 0.0375</div>
+  <div class="eq">
+    <span class="sym" data-s="KL"></span> = <span class="big"><span class="lim"> </span><span class="o">Σ</span><span class="lim">y</span></span> q(y) log <span class="frac"><span class="num">q(y)</span><span class="den">p<sub>φ</sub>(y)</span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La divergencia de q a p es la suma, sobre cada valor posible, de la probabilidad que q le da multiplicada por el logaritmo de cuántas veces más probable lo hace q que p.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>q(y)</dt><dd>La probabilidad «objetivo» del valor y. Viene de las etiquetas, no depende de φ.</dd>
+      <dt>p<sub>φ</sub>(y)</dt><dd>La probabilidad que predice el modelo. Sí depende de φ.</dd>
+      <dt>log(q/p)</dt><dd>Cero cuando coinciden; positivo si q le da más probabilidad que p; negativo si menos.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…p = q en todo valor: cada log vale 0 y KL = 0. Es el mínimo posible: KL nunca es negativa.</li>
+      <li>…p le da probabilidad casi 0 a un valor donde q tiene masa: log(q/p) es enorme y KL se dispara.</li>
+      <li>…el orden importa: KL(q‖p) no es igual a KL(p‖q). No es una distancia simétrica.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion-kl">Derivación: KL = −H(q) + H(q, p)</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">D<sub>KL</sub>(q‖p<sub>φ</sub>) = Σ<sub>y</sub> q(y) log [ q(y) / p<sub>φ</sub>(y) ]</div><div class="d-por">Partimos de la definición de la KL.</div></li>
+  <li><div class="d-ex">= Σ<sub>y</sub> q(y) [ log q(y) − log p<sub>φ</sub>(y) ]</div><div class="d-por"><b>Log de un cociente:</b> log(a/b) = log a − log b.</div></li>
+  <li><div class="d-ex">= Σ<sub>y</sub> q(y) log q(y) − Σ<sub>y</sub> q(y) log p<sub>φ</sub>(y)</div><div class="d-por"><b>Distribuir q(y) y separar la suma</b> en dos sumas (propiedad de Σ: la suma de una resta es la resta de las sumas).</div></li>
+  <li><div class="d-ex">Σ<sub>y</sub> q(y) log q(y) = −H(q),&nbsp;&nbsp; − Σ<sub>y</sub> q(y) log p<sub>φ</sub>(y) = H(q, p<sub>φ</sub>)</div><div class="d-por"><b>Nombrar las dos piezas:</b> H(q) = −Σ q log q es la entropía de q (cuánta incertidumbre hay en q) y H(q, p) = −Σ q log p es la <em>cross-entropy</em>.</div></li>
+  <li><div class="d-ex">D<sub>KL</sub>(q‖p<sub>φ</sub>) = −H(q) + H(q, p<sub>φ</sub>)</div><div class="d-por"><b>Juntar:</b> es la fórmula de la slide.</div></li>
+  <li><div class="d-ex">q = (0.1, 0.8, 0.1):&nbsp; H(q) = 0.639,&nbsp; H(q, p) = 0.6765,&nbsp; −0.639 + 0.6765 = 0.0375</div><div class="d-por"><b>Verificación con números:</b> coincide con el cálculo directo del ejemplo, 0.0375. ✔</div></li>
+</ol>
+
+<h3 id="kl-equivale-ce">Por qué minimizar KL es minimizar la cross-entropy</h3>
+<p>En la fórmula KL = −H(q) + H(q, p<sub>φ</sub>), el término H(q) depende solo de q, o sea de las etiquetas, que están fijas. No contiene a φ. Es una constante respecto a φ, igual que log(2πσ²) en la Normal. Quitar una constante no cambia el argmin, así que <strong>argmin<sub>φ</sub> KL(q‖p<sub>φ</sub>) = argmin<sub>φ</sub> H(q, p<sub>φ</sub>)</strong>.</p>
+
+<p>¿Y qué tiene que ver con la NLL? En clasificación supervisada la etiqueta es <strong>one-hot</strong>: q le da probabilidad 1 a la clase correcta yᵢ y 0 a las demás. Entonces en la suma H(q, p) = −Σ<sub>y</sub> q(y) log p(y) solo sobrevive un término, el de la clase correcta:</p>
+
+<div class="eq">
+  <span class="r-calc">H</span>( q<sub>i</sub>, p<sub>φ</sub>(· | <span class="r-dato">x</span><sub>i</sub>) ) = − Σ<sub>y</sub> q<sub>i</sub>(y) log p<sub>φ</sub>(y | xᵢ) = − log p<sub>φ</sub>( <span class="r-dato">y</span><sub>i</sub> | <span class="r-dato">x</span><sub>i</sub> )
+  <span class="lbl">(las probabilidades 0 anulan sus términos y el 1 deja el término de la clase correcta)</span>
+</div>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Caso</th><th>q</th><th>p<sub>φ</sub></th><th>H(q)</th><th>H(q, p)</th><th>KL = H(q, p) − H(q)</th></tr>
+  <tr><td>Etiqueta one-hot</td><td class="nw">(0, 1, 0)</td><td class="nw">(0.2, 0.7, 0.1)</td><td class="num-col">0</td><td class="num-col">0.3567</td><td class="num-col">0.3567</td></tr>
+  <tr><td>Objetivo suavizado</td><td class="nw">(0.1, 0.8, 0.1)</td><td class="nw">(0.2, 0.7, 0.1)</td><td class="num-col">0.6390</td><td class="num-col">0.6765</td><td class="num-col">0.0375</td></tr>
+</table></div>
+<p>En la fila one-hot, H(q) = 0 (no hay incertidumbre en la etiqueta, y se toma 0 · log 0 = 0), y H(q, p) = −log 0.7 = 0.3567, que es exactamente el costo de ese ejemplo en la NLL. Sumando sobre los n ejemplos, <strong>cross-entropy y NLL son la misma pérdida</strong>.</p>
+
+<div class="note exam">
+  <span class="tag">En el examen</span>
+  <p>Dos frases que debes poder justificar: «minimizar KL es equivalente a minimizar la cross-entropy porque H(q) no depende de φ» y «con etiquetas one-hot, la cross-entropy es −log p(yᵢ | xᵢ), es decir, el término de la NLL».</p>
+</div>
+
+<!-- ============ 8. NO CONVEXO ============ -->
+<h2 id="no-convexo"><span class="num">Sección 8</span>Optimización: el paisaje no es un tazón</h2>
+
+<p>Con la pérdida elegida, queda <strong>entrenar</strong>: encontrar el φ que la minimiza. El procedimiento general (lo que en clase llaman entrenamiento o ajuste) es calcular el gradiente de la pérdida, mover los parámetros con él y repetir hasta que la pérdida sea suficientemente baja. El método base es <em>gradient descent</em> (GD), que ya conoces del <a href="01_repaso_ml.html">repaso</a>. Lo repasamos con los símbolos de esta clase, donde la tasa de aprendizaje es α:</p>
+
+<div class="formula">
+  <div class="f-head">Gradient descent</div>
+  <div class="f-ejemplo">L(φ) = (φ − 3)², φ₀ = 0, α = 0.1  →  ∇L(0) = 2 · (0 − 3) = −6  →  φ₁ = 0 − 0.1 · (−6) = 0.6  (se acerca al mínimo en φ = 3)</div>
+  <div class="eq">
+    <span class="r-param">φ</span><span class="sub">t+1</span> = <span class="r-param">φ</span><span class="sub">t</span> − <span class="sym" data-s="alpha"></span> <span class="sym" data-s="grad"></span>(<span class="r-param">φ</span><span class="sub">t</span>)
+    <span class="lbl">donde el gradiente es el vector de derivadas parciales:&nbsp; ∇<sub>φ</sub>L = ( ∂L/∂φ₁, …, ∂L/∂φ<sub>N</sub> )</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El nuevo φ es el anterior menos alfa por el gradiente de la pérdida evaluado en el φ anterior. Das un paso en la dirección en que la pérdida baja más rápido, y alfa dice qué tan largo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">φₜ</dt><dd>Los parámetros en el paso t (un vector con N entradas).</dd>
+      <dt class="r-hiper">α</dt><dd>La tasa de aprendizaje: lo eliges tú. Es la misma η del repaso.</dd>
+      <dt class="r-calc">∇<sub>φ</sub>L(φₜ)</dt><dd>El gradiente en el punto actual: apunta hacia donde la pérdida <em>sube</em> más rápido, por eso se resta. Se calcula con derivadas parciales (<a href="00_matematicas.html#parciales">parciales</a>).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…α es muy chica: avanza bien pero lentísimo.</li>
+      <li>…α es muy grande: se pasa del mínimo y puede diverger (en el ejemplo, α = 1.1 da φ₁ = 6.6 desde φ₀ = 0).</li>
+      <li>…el gradiente es 0: te quedas quieto. Puede ser un mínimo, pero también un punto silla o una meseta.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="convexo">Convexa o no convexa: qué garantiza GD</h3>
+<p>Una función es <strong>convexa</strong> cuando su gráfica es un tazón: no tiene valles secundarios. Si L(φ) es convexa y α es adecuada, GD converge al <strong>mínimo global</strong>: no existen mínimos locales «malos». La regresión lineal con pérdida cuadrática es el ejemplo clásico. Pero la pérdida de una red neuronal normalmente <strong>no es convexa</strong>, y GD puede quedarse en cualquiera de estos tres lugares:</p>
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Región</th><th>Qué es</th><th>Qué pasa con el gradiente</th></tr>
+  <tr><td><strong>Mínimo local</strong></td><td>Un valle: más bajo que todo lo cercano, pero no el más bajo de todo el paisaje.</td><td>Es 0 y todas las direcciones suben. GD se queda ahí; no hay manera de saber que existe un valle mejor.</td></tr>
+  <tr><td><strong>Punto silla</strong></td><td>Sube en unas direcciones y baja en otras (como una silla de montar).</td><td>Es 0 pero no es un mínimo. Cerca de él, GD avanza muy despacio.</td></tr>
+  <tr><td><strong>Región plana (meseta)</strong></td><td>Una zona donde la pérdida casi no cambia.</td><td>Casi 0: los pasos son diminutos y el entrenamiento parece trabado, sin estar en ningún mínimo.</td></tr>
+</table></div>
+
+<p>Un ejemplo sencillo de pérdida no convexa es el <strong>modelo de Gabor</strong>, que usa la slide. Es una onda seno encerrada en una campana, con solo dos parámetros (φ₀ y φ₁), así que su paisaje se puede dibujar en 2D:</p>
+
+<div class="formula">
+  <div class="f-head">Modelo de Gabor</div>
+  <div class="f-ejemplo">φ₀ = 0, φ₁ = 16, x = 5  →  u = 0 + 0.06 · 16 · 5 = 4.8  →  f = sin(4.8) · e<sup>−4.8²/32</sup> = (−0.9962) · (0.4868) = −0.485</div>
+  <div class="eq">
+    <span class="sym" data-s="f">f</span>(<span class="r-dato">x</span>, <span class="r-param">φ</span>) = sin( <span class="r-param">φ</span><sub>0</sub> + 0.06 <span class="r-param">φ</span><sub>1</sub> <span class="r-dato">x</span> ) · <span class="sym" data-s="exp">exp</span> [ − <span class="frac"><span class="num">( <span class="r-param">φ</span><sub>0</sub> + 0.06 <span class="r-param">φ</span><sub>1</sub> <span class="r-dato">x</span> )<span class="sup">2</span></span><span class="den">32</span></span> ]
+    <span class="lbl">pérdida de mínimos cuadrados:&nbsp; L(φ) = Σᵢ ( f(xᵢ, φ) − yᵢ )²</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Toma u igual a φ cero más cero punto cero seis por φ uno por x. La salida es el seno de u, amortiguado por una campana en u. φ₀ desplaza la onda y φ₁ la estira o la comprime.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">φ₀</dt><dd>Desplaza la onda horizontalmente (cambia la fase).</dd>
+      <dt class="r-param">φ₁</dt><dd>Controla la frecuencia: con φ₁ grande, la onda oscila más rápido en x.</dd>
+      <dt>0.06 y 32</dt><dd>Constantes fijas del modelo: la escala de x y el ancho de la campana.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…φ₁ cambia un poco: la onda se estira o se comprime, y los picos se corren sobre los datos. Un seno que casi pega con los datos puede estar a media oscilación de pegar bien: de ahí salen los valles secundarios.</li>
+      <li>…φ₁ es muy chico: u casi no depende de x y f es casi una constante en x: una región plana de la pérdida.</li>
+    </ul>
+  </div>
+</div>
+
+<p>En el laboratorio, los datos se generan a partir de unos parámetros verdaderos, φ* = (0, 16), con 30 puntos y ruido Normal de desviación 0.12 (semilla fija). Como la pérdida es la <em>media</em> de los errores cuadrados (la suma de la slide dividida entre n, para que α no dependa de n), el mejor ajuste está cerca de φ* y la pérdida ahí es chica. Hay además al menos siete valles secundarios dentro de la ventana que se dibuja.</p>
+
+<h3 id="lab-gabor" class="lab" data-toc="Lab: paisaje de Gabor">Laboratorio: el paisaje de Gabor</h3>
+<p>Haz clic en el mapa para elegir el punto de inicio. Después da pasos de GD con la α que quieras. Más oscuro = pérdida más baja (escala logarítmica); las líneas son curvas de nivel. Abajo se ve la curva del modelo en el φ actual contra los datos.</p>
+<div class="widget" id="labGabor">
+  <div class="widget-head"><div class="wt">Pérdida L(φ₀, φ₁) y descenso de gradiente</div><div class="ws">Clic = nuevo inicio. Parte de (3, 10) con α = 2.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="gabCanvas"></canvas>
+      <div><div id="gabCtrl"></div><div id="gabRead"></div><div class="status info" id="gabStatus"></div></div>
+    </div>
+    <canvas id="gabFit" class="mini-canvas" style="margin-top:12px"></canvas>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="gabPaso">Un paso</button>
+    <button class="btn" id="gabCorrer">Correr</button>
+    <button class="btn" id="gabMuchos">Lanzar 12 inicios</button>
+    <button class="btn" id="gabReset">Reiniciar</button>
+    <span class="pill" id="gabPill">paso 0</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Pulsa «Correr» desde (3, 10) con α = 2: GD baja a un valle cercano, alrededor de (1.85, 6.82), con pérdida 0.33. <strong>No es el mínimo global</strong>: la curva de abajo no sigue los datos.</li>
+    <li>Haz clic cerca de (0, 8) y corre: llega a (−0.09, 15.93), el mínimo global, con pérdida 0.015. La curva sigue a los datos. Mismo algoritmo, mismo α, otro inicio y otro resultado.</li>
+    <li>Pulsa «Lanzar 12 inicios»: cada inicio (círculo hueco) llega al valle de su cuenca (círculo lleno). Aparecen varios destinos distintos, con pérdidas finales entre 0.015 y 0.33.</li>
+    <li>Baja α a 0.2: se mueve despacio, y en las zonas más planas parece quedarse «trabado» aunque no esté en un mínimo. Súbela a 5 y el camino se vuelve brincos largos.</li>
+  </ol>
+</div>
+
+<div class="note key">
+  <span class="tag">Lo que debes llevarte</span>
+  <p>GD sin más no garantiza el mínimo global en una pérdida no convexa: el punto de inicio decide a qué valle llegas. En redes profundas esto ocurre en espacios de millones de parámetros. Los métodos de las siguientes secciones no resuelven el problema por completo; lo hacen más manejable.</p>
+</div>
+
+<!-- ============ 9. SGD ============ -->
+<h2 id="sgd"><span class="num">Sección 9</span>SGD: gradiente con una muestra del conjunto</h2>
+
+<p>GD «completo» (full-batch) usa <strong>todos</strong> los n ejemplos para cada paso. Si n es grande (millones de imágenes), un solo paso es muy costoso. <strong>Stochastic gradient descent</strong> (SGD) calcula el gradiente con un subconjunto aleatorio, el <strong>mini-batch</strong> B<sub>t</sub> ⊂ {1, …, n}, que cambia en cada paso. Una <strong>época</strong> es una pasada completa por el conjunto de entrenamiento: normalmente se barajan los datos y se procesan varios mini-batches por época.</p>
+
+<div class="formula">
+  <div class="f-head">Actualización de mini-batch SGD</div>
+  <div class="f-ejemplo">Cuatro ejemplos con gradientes individuales (2, −1, 4, 3). El gradiente completo es (2 − 1 + 4 + 3)/4 = 2. Con el mini-batch {1, 3}: (2 + 4)/2 = 3. Con {2, 4}: (−1 + 3)/2 = 1. Con α = 0.1 el paso es 0.1 · 3 = 0.3 o 0.1 · 1 = 0.1, en lugar de 0.2</div>
+  <div class="eq">
+    <span class="r-param">φ</span><sub>t+1</sub> = <span class="r-param">φ</span><sub>t</sub> − <span class="sym" data-s="alpha"></span> <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="batch"></span></span></span> <span class="big"><span class="lim">&nbsp;</span><span class="o">Σ</span><span class="lim">i ∈ <span class="sym" data-s="Bt"></span></span></span> ∇<sub>φ</sub> <span class="sym" data-s="ell"></span><sub>i</sub>(<span class="r-param">φ</span><sub>t</sub>)
+    <span class="lbl">el término 1/|B| Σ ∇ℓᵢ es el gradiente del mini-batch, g<sub>t</sub></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El nuevo φ es el anterior menos alfa por el promedio de los gradientes de cada ejemplo del mini-batch, evaluados en el φ anterior.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">B<sub>t</sub></dt><dd>Los índices de los ejemplos elegidos en el paso t. Cambia en cada paso.</dd>
+      <dt class="r-hiper">|B|</dt><dd>El tamaño del mini-batch (cuántos ejemplos). Lo eliges tú. Si |B| = n es GD completo.</dd>
+      <dt class="r-calc">∇<sub>φ</sub>ℓᵢ</dt><dd>El gradiente de la pérdida de <em>un solo</em> ejemplo i.</dd>
+      <dt class="r-calc">(1/|B|) Σ</dt><dd>El promedio de esos gradientes: la estimación del gradiente total.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…|B| = 1: la estimación es muy ruidosa, pero cada paso es baratísimo.</li>
+      <li>…|B| crece: la estimación se parece cada vez más al gradiente verdadero, con menos ruido y más costo por paso.</li>
+      <li>…|B| = n: es GD completo: sin ruido y con el costo más alto por paso.</li>
+      <li>…n = 1 000 y |B| = 50: una época son 1 000 / 50 = 20 actualizaciones.</li>
+    </ul>
+  </div>
+</div>
+
+<p>En el ejemplo, los dos mini-batches dan gradientes distintos (3 y 1) y ninguno es el real (2), pero su promedio sí lo es: el ruido «no se inclina» a un lado. Eso es lo que significa la propiedad 3 de abajo.</p>
+
+<h3 id="propiedades-sgd">Las cinco propiedades de SGD</h3>
+<ol>
+  <li><strong>Cada actualización usa solo una parte de los datos.</strong> No ves todo el conjunto antes de moverte.</li>
+  <li><strong>Es menos costoso por actualización</strong> que GD completo, y puedes dar muchas más actualizaciones por la misma cantidad de cómputo.</li>
+  <li><strong>Con muestreo uniforme, cada ejemplo contribuye en promedio</strong> lo mismo: el gradiente del mini-batch es una estimación sin sesgo (en promedio acierta) pero ruidosa del gradiente total.</li>
+  <li><strong>El ruido puede ayudar:</strong> no quedarse demasiado tiempo en regiones planas o puntos silla, y a veces salir de un valle poco profundo.</li>
+  <li><strong>En deep learning funciona muy bien en la práctica</strong>, aunque no garantiza el mínimo global.</li>
+</ol>
+<p>Con tasa de aprendizaje <em>decreciente</em>, SGD puede converger bajo ciertas condiciones. Con tasa <em>constante</em>, suele oscilar alrededor de regiones de baja pérdida sin asentarse del todo, porque el ruido nunca desaparece.</p>
+
+<h3 id="lab-sgd" class="lab" data-toc="Lab: GD contra SGD">Laboratorio: GD contra SGD en el paisaje de Gabor</h3>
+<p>Mismo paisaje y mismo inicio para ambos. GD (naranja) usa los 30 datos en cada paso. SGD (azul) usa un mini-batch de tamaño |B| al azar (se barajan los datos en cada época, con semilla fija). La gráfica de abajo muestra la pérdida <em>real</em> (con los 30 datos) de cada uno en cada paso.</p>
+<div class="widget" id="labSgd">
+  <div class="widget-head"><div class="wt">Mismo inicio, dos caminos</div><div class="ws">Parte de (3, 10), α = 2, |B| = 5, semilla 2. Clic = otro inicio.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="sgdCanvas"></canvas>
+      <div><div id="sgdSelB"></div><div id="sgdCtrl"></div><div id="sgdRead"></div><div class="status info" id="sgdStatus"></div></div>
+    </div>
+    <canvas id="sgdLoss" class="mini-canvas" style="margin-top:12px"></canvas>
+    <div class="legend"><span><i class="cuadro" style="background:var(--g1)"></i>GD completo</span><span><i class="cuadro" style="background:var(--g2)"></i>SGD (mini-batch)</span></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="sgdPaso">Un paso</button>
+    <button class="btn" id="sgdCorrer">Correr 300 pasos</button>
+    <button class="btn" id="sgdSemilla">Otra semilla</button>
+    <button class="btn" id="sgdReset">Reiniciar</button>
+    <span class="pill" id="sgdPill">paso 0</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con los valores iniciales (semilla 2): GD se queda en el valle (1.85, 6.82), con pérdida 0.33, mientras que SGD sale de esa zona y llega cerca del mínimo global (−0.1, 15.9). El ruido lo sacó del valle poco profundo.</li>
+    <li>Pulsa «Otra semilla» varias veces (semillas 1 a 8, con |B| = 5): solo en algunas SGD llega al mínimo global; en otras cae en el valle de (6, 14), con pérdida 0.16. <strong>El ruido a veces ayuda, no siempre.</strong></li>
+    <li>Fíjate en la curva azul de pérdida cuando ya llegó a un valle: no se asienta, <em>oscila</em>. Con α constante el ruido sigue moviendo φ. La curva naranja de GD es lisa.</li>
+    <li>Pasa |B| a 30: es GD completo, y el camino azul se pega al naranja. Con |B| = 1 el camino es el más errático.</li>
+  </ol>
+</div>
+
+<!-- ============ 10. MOMENTUM ============ -->
+<h2 id="momentum"><span class="num">Sección 10</span>Momentum y Nesterov</h2>
+
+<p>SGD tiene dos problemas visibles en el laboratorio: el ruido hace zigzaguear el camino, y en los valles estrechos (largos en una dirección, angostos en otra) el gradiente apunta sobre todo hacia las paredes, no hacia el fondo. <strong>Momentum</strong> usa una combinación del gradiente actual y de la dirección acumulada de los pasos anteriores. Es como una pelota con inercia: los empujones que van en la misma dirección se suman y los que cambian de lado se cancelan.</p>
+
+<div class="formula">
+  <div class="f-head">Momentum (forma de promedio móvil de la slide)</div>
+  <div class="f-ejemplo">g₁ = 1, g₂ = 1, β = 0.9, α = 0.1, m₀ = 0  →  m₁ = 0.9·0 + 0.1·1 = 0.1, φ cambia −0.1 · 0.1 = −0.01  →  m₂ = 0.9·0.1 + 0.1·1 = 0.19, φ cambia −0.1 · 0.19 = −0.019</div>
+  <div class="eq">
+    <span class="sym" data-s="mt"></span><sub>t+1</sub> = <span class="sym" data-s="betam"></span> <span class="r-calc">m</span><sub>t</sub> + (1 − <span class="r-hiper">β</span>) <span class="sym" data-s="gt"></span>
+    <span class="lbl">y luego:&nbsp; φ<sub>t+1</sub> = φ<sub>t</sub> − α m<sub>t+1</sub></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La nueva dirección m es una mezcla: β de la dirección anterior y uno menos β del gradiente de ahora. Luego avanzas con esa dirección en vez de con el gradiente crudo. m es la dirección promedio reciente.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">mₜ</dt><dd>El «momento»: un promedio móvil de los gradientes pasados. Empieza en m₀ = 0.</dd>
+      <dt class="r-hiper">β</dt><dd>Cuánta memoria conservas, entre 0 y 1. Esta β es la de momentum; no es el sesgo β de las capas.</dd>
+      <dt class="r-calc">gₜ</dt><dd>El gradiente del mini-batch en el paso t: (1/|B|) Σ ∇ℓᵢ(φₜ).</dd>
+      <dt class="r-hiper">α</dt><dd>La tasa de aprendizaje, igual que antes.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…β = 0: m<sub>t+1</sub> = g<sub>t</sub> y recuperas SGD sin momentum.</li>
+      <li>…β es cercano a 1 (0.99): casi no escuchas al gradiente nuevo y mucha inercia: el camino es suave, pero tarda en reaccionar y puede pasarse del mínimo.</li>
+      <li>…los gradientes apuntan siempre al mismo lado: m crece hacia g y avanzas más rápido que con SGD. Si cambian de signo cada paso (zigzag), se cancelan y m queda chico.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="momentum-promedio">Por qué es un promedio</h3>
+<p>Desenrollar la recursión con m₀ = 0 muestra que m es un promedio con pesos que decaen:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">m₁ = (1 − β) g₀</div><div class="d-por"><b>Sustituir m₀ = 0</b> en m₁ = β m₀ + (1 − β) g₀.</div></li>
+  <li><div class="d-ex">m₂ = β m₁ + (1 − β) g₁ = β(1 − β) g₀ + (1 − β) g₁</div><div class="d-por"><b>Sustituir m₁</b> en la regla de m₂.</div></li>
+  <li><div class="d-ex">m₃ = (1 − β) [ g₂ + β g₁ + β² g₀ ]</div><div class="d-por"><b>Repetir y factorizar (1 − β):</b> el gradiente más reciente pesa 1, el anterior pesa β, el de antes β², y así.</div></li>
+  <li><div class="d-ex">β = 0.9:&nbsp; pesos 0.1, 0.09, 0.081, 0.0729, … (cada uno 0.9 veces el anterior)</div><div class="d-por"><b>Verificación con números:</b> el gradiente de hace 7 pasos pesa 0.9<sup>7</sup> = 0.478 de lo que pesaba el actual; el de hace 10 pasos ya solo 0.349. Por eso se dice que m «recuerda» unos 1/(1 − β) = 10 pasos.</div></li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Trampa: dos formas de escribir momentum</span>
+  <p>La slide usa m ← βm + (1 − β)g (promedio móvil). <strong>PyTorch</strong> (<code>torch.optim.SGD(momentum=…)</code>) usa m ← βm + g, sin el (1 − β). Son equivalentes salvo que la segunda reescala la tasa de aprendizaje por 1/(1 − β) (con β = 0.9, diez veces mayor). En el ejemplo con g = 1: la forma de la slide da m₁ = 0.1 y m₂ = 0.19; la de PyTorch da 1 y 1.9. <strong>En el examen, usa la forma de la slide.</strong></p>
+</div>
+
+<h3 id="nesterov">Momentum acelerado de Nesterov</h3>
+<p>La idea: antes de calcular el gradiente, <strong>mira hacia dónde te llevaría el momentum actual</strong> y evalúa el gradiente <em>ahí</em>, en el punto adelantado. Si el impulso ya te va a pasar del mínimo, el gradiente de ese punto te frena antes.</p>
+
+<div class="formula">
+  <div class="f-head">Nesterov</div>
+  <div class="f-ejemplo">L(φ) = ½φ², φₜ = 0.2, mₜ = 3, β = 0.9, α = 0.1  →  punto adelantado: 0.2 − 0.1·0.9·3 = −0.07 (ya pasó el mínimo en 0)  →  g<sup>N</sup> = −0.07 (negativo: frena); el de momentum normal sería +0.2 (sigue empujando)</div>
+  <div class="eq">
+    <span class="r-calc">g</span><sub>t</sub><sup>N</sup> = <span class="frac"><span class="num">1</span><span class="den"><span class="r-hiper">|B|</span></span></span> <span class="big"><span class="lim">&nbsp;</span><span class="o">Σ</span><span class="lim">i ∈ B<sub>t</sub></span></span> ∇<sub>φ</sub> ℓ<sub>i</sub>( <span class="r-param">φ</span><sub>t</sub> − <span class="r-hiper">α</span> <span class="r-hiper">β</span> <span class="r-calc">m</span><sub>t</sub> )
+    <span class="lbl">y luego:&nbsp; m<sub>t+1</sub> = β m<sub>t</sub> + (1 − β) g<sub>t</sub><sup>N</sup>,&nbsp;&nbsp; φ<sub>t+1</sub> = φ<sub>t</sub> − α m<sub>t+1</sub></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Calcula el gradiente no donde estás, sino donde terminarías si siguieras con la inercia que traes (φ menos alfa beta m). Con ese gradiente actualiza la dirección y da el paso.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">φₜ − αβmₜ</dt><dd>El punto adelantado: dónde caerías aproximadamente si solo siguieras el momentum. No es donde das el paso; es donde <em>miras</em>.</dd>
+      <dt class="r-calc">g<sup>N</sup><sub>t</sub></dt><dd>El gradiente de Nesterov: calculado en el punto adelantado, no en φₜ.</dd>
+      <dt>m<sub>t+1</sub>, φ<sub>t+1</sub></dt><dd>Se actualizan igual que en momentum normal, pero con g<sup>N</sup> en lugar de g.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el punto adelantado está en terreno más bajo y en la misma dirección: g<sup>N</sup> es parecido a g y casi no cambia nada.</li>
+      <li>…el punto adelantado ya pasó el valle (como en el ejemplo): g<sup>N</sup> tiene signo contrario y funciona de <em>freno anticipado</em>. Con los números del ejemplo: m<sub>t+1</sub> = 0.9·3 + 0.1·(−0.07) = 2.693 contra 2.720 en momentum normal.</li>
+      <li>…β = 0: el punto adelantado es φₜ y Nesterov coincide con SGD.</li>
+    </ul>
+  </div>
+</div>
+<p>La diferencia por paso parece pequeña (2.693 contra 2.720), porque el gradiente nuevo solo pesa (1 − β) = 0.1. Se acumula a lo largo de muchos pasos, y es lo que reduce el «pasarse» que ves en el laboratorio de la <a href="#carrera">carrera de optimizadores</a>.</p>
+
+<!-- ============ 11. ADAM ============ -->
+<h2 id="adam"><span class="num">Sección 11</span>Métodos adaptativos y Adam</h2>
+
+<p>Con una sola α para todos los parámetros hay un problema: <strong>las coordenadas del gradiente pueden tener escalas muy distintas</strong>. Imagina que un parámetro tiene gradientes del orden de 100 y otro del orden de 1. Con SGD, el paso de cada parámetro es α por su gradiente: el primero se mueve 100 veces más. Si α es lo bastante chica para que el primero no se descontrole (α = 0.01 lo mueve 1.0 por paso), el segundo casi no avanza (0.01 por paso). La idea de los <strong>métodos adaptativos</strong> es ajustar el tamaño del paso <em>por coordenada</em>.</p>
+
+<h3 id="normalizacion">Normalización por coordenada</h3>
+<p>Una intuición simple: dividir cada coordenada del gradiente entre su propia magnitud. Con g<sub>t</sub> = ∇L(φ<sub>t</sub>) y v<sub>t</sub> = g<sub>t</sub>² (el cuadrado, coordenada por coordenada):</p>
+
+<div class="formula">
+  <div class="f-head">Normalización del gradiente por coordenada</div>
+  <div class="f-ejemplo">g = (100, 1), α = 0.01, ε = 10⁻⁸  →  √v = (100, 1)  →  g/(√v + ε) ≈ (1, 1)  →  paso = (0.01, 0.01). Sin normalizar, los pasos serían (1, 0.01)</div>
+  <div class="eq">
+    <span class="r-param">φ</span><sub>t+1</sub> = <span class="r-param">φ</span><sub>t</sub> − <span class="r-hiper">α</span> <span class="frac"><span class="num"><span class="r-calc">g</span><sub>t</sub></span><span class="den">√<span class="r-calc">v</span><sub>t</sub> + <span class="sym" data-s="eps"></span></span></span>
+    <span class="lbl">con v<sub>t</sub> = g<sub>t</sub>², todo coordenada por coordenada</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Divide el gradiente de cada parámetro entre su propia magnitud, y avanza alfa en esa dirección. Cada coordenada da pasos del mismo tamaño, sin importar si su gradiente es grande o chico.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">gₜ</dt><dd>El gradiente (un vector, con una entrada por parámetro).</dd>
+      <dt class="r-calc">vₜ = gₜ²</dt><dd>Su cuadrado coordenada por coordenada; √vₜ es el valor absoluto de cada entrada.</dd>
+      <dt class="r-hiper">ε</dt><dd>Un número diminuto (por ejemplo 10⁻⁸) que evita dividir entre cero.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…g/√v = g/|g| = ±1: es el <strong>signo</strong> del gradiente. El paso es α · signo, sin importar la magnitud. La slide lo dice: se parece a usar solo el signo del gradiente por coordenada.</li>
+      <li>…g es 0 en alguna coordenada: gracias a ε el cociente es 0 en vez de «0/0».</li>
+    </ul>
+  </div>
+</div>
+
+<p>Esto, tal cual, es demasiado brusco: con un gradiente ruidoso el signo cambia al azar. En la práctica, Adam y otros métodos usan <strong>promedios móviles</strong> de g y de g² para que la normalización sea más estable.</p>
+
+<h3 id="adam-formulas">Adam: momentum, normalización y corrección de sesgo</h3>
+<p>Adam (<em>Adaptive Moment Estimation</em>) combina dos ideas: <strong>momentum</strong> sobre los gradientes (un promedio móvil de g) y <strong>normalización adaptativa</strong> por coordenada (un promedio móvil de g²). Lo hace en cuatro fórmulas. Sigue con una coordenada con g = 4, β₁ = 0.9, β₂ = 0.999, α = 0.1 en el primer paso.</p>
+
+<div class="formula">
+  <div class="f-head">Adam, fórmula 1: promedio móvil del gradiente</div>
+  <div class="f-ejemplo">g = 4, m₀ = 0, β₁ = 0.9  →  m₁ = 0.9·0 + 0.1·4 = 0.4</div>
+  <div class="eq">
+    <span class="r-calc">m</span><sub>t+1</sub> = <span class="sym" data-s="beta1"></span> <span class="r-calc">m</span><sub>t</sub> + (1 − <span class="r-hiper">β</span><sub>1</sub>) <span class="r-calc">g</span><sub>t</sub>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Igual que en momentum: m es la dirección promedio reciente del gradiente.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">m</dt><dd>Promedio móvil de g (el «primer momento»).</dd>
+      <dt class="r-hiper">β₁</dt><dd>Su memoria; suele valer 0.9.</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Adam, fórmula 2: promedio móvil del gradiente al cuadrado</div>
+  <div class="f-ejemplo">g = 4, v₀ = 0, β₂ = 0.999  →  v₁ = 0.999·0 + 0.001·4² = 0.016</div>
+  <div class="eq">
+    <span class="r-calc">v</span><sub>t+1</sub> = <span class="sym" data-s="beta2"></span> <span class="r-calc">v</span><sub>t</sub> + (1 − <span class="r-hiper">β</span><sub>2</sub>) <span class="r-calc">g</span><sub>t</sub><sup>2</sup>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«v es el promedio reciente del cuadrado del gradiente: dice qué tan grande suele ser el gradiente de esa coordenada, sin importar el signo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">v</dt><dd>Promedio móvil de g² (el «segundo momento»). Su raíz √v es la escala típica del gradiente de esa coordenada.</dd>
+      <dt class="r-hiper">β₂</dt><dd>Su memoria; suele valer 0.999, mucho más larga que la de m (unos 1 000 pasos).</dd>
+    </dl>
+  </div>
+</div>
+
+<p>Un problema: m₀ = 0 y v₀ = 0, así que al inicio los promedios están <strong>sesgados hacia cero</strong>. En el ejemplo, el gradiente real es 4 pero m₁ = 0.4 (diez veces menos) y v₁ = 0.016 cuando g² = 16 (mil veces menos). La corrección divide entre cuánto «falta» de la historia:</p>
+
+<div class="formula">
+  <div class="f-head">Adam, fórmula 3: corrección de sesgo</div>
+  <div class="f-ejemplo">t + 1 = 1:&nbsp; m̂₁ = 0.4 / (1 − 0.9¹) = 0.4 / 0.1 = 4,&nbsp;&nbsp; v̂₁ = 0.016 / (1 − 0.999¹) = 0.016 / 0.001 = 16</div>
+  <div class="eq">
+    <span class="sym" data-s="mhat">m̂<sub>t+1</sub></span> = <span class="frac"><span class="num"><span class="r-calc">m</span><sub>t+1</sub></span><span class="den">1 − <span class="r-hiper">β</span><sub>1</sub><sup>t+1</sup></span></span>,&nbsp;&nbsp;&nbsp; <span class="r-calc">v̂</span><sub>t+1</sub> = <span class="frac"><span class="num"><span class="r-calc">v</span><sub>t+1</sub></span><span class="den">1 − <span class="r-hiper">β</span><sub>2</sub><sup>t+1</sup></span></span>
+    <span class="lbl">con β₁, β₂ ∈ [0, 1)</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«m gorro es m dividida entre uno menos beta uno elevada a la potencia t + 1; igual para v con beta dos. Es un reescalado que quita el sesgo del arranque.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">m̂, v̂</dt><dd>Las versiones corregidas de m y v.</dd>
+      <dt>1 − β₁<sup>t+1</sup></dt><dd>Qué fracción de «peso total» ha acumulado ya el promedio: 0.1 en el primer paso, 0.19 en el segundo… tiende a 1.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…t es pequeño: el denominador es chico y la corrección es grande: devuelve m y v a su escala correcta.</li>
+      <li>…t es grande: β<sup>t+1</sup> → 0, el denominador → 1 y la corrección desaparece. Solo importa al arranque. Con β₂ = 0.999 dura mucho más que con β₁ = 0.9.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Adam, fórmula 4: la actualización</div>
+  <div class="f-ejemplo">m̂ = 4, v̂ = 16, α = 0.1  →  Δφ = −0.1 · 4/(√16 + 10⁻⁸) = −0.1 · 4/4 = −0.1. El primer paso mide exactamente α</div>
+  <div class="eq">
+    <span class="r-param">φ</span><sub>t+1</sub> = <span class="r-param">φ</span><sub>t</sub> − <span class="r-hiper">α</span> <span class="frac"><span class="num"><span class="r-calc">m̂</span><sub>t+1</sub></span><span class="den">√<span class="r-calc">v̂</span><sub>t+1</sub> + <span class="r-hiper">ε</span></span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Avanza en la dirección promedio del gradiente (el numerador), dividida entre la escala típica de ese gradiente (el denominador). Es la normalización por coordenada, pero con promedios en lugar de un solo gradiente.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">m̂/(√v̂ + ε)</dt><dd>La «dirección con la escala quitada»: cerca de ±1 cuando el gradiente es consistente, cerca de 0 cuando cambia de signo al azar.</dd>
+      <dt class="r-hiper">α</dt><dd>El tamaño máximo aproximado del paso por coordenada (cuando la dirección es consistente).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un parámetro tiene gradientes 100 veces mayores: m̂ y √v̂ crecen 100 veces y el cociente no cambia. Los dos parámetros avanzan parecido: eso es lo que resuelve el problema inicial.</li>
+      <li>…el gradiente cambia de signo todo el tiempo: m̂ es chico frente a √v̂ y el paso se encoge solo; Adam frena donde hay ruido.</li>
+      <li>…ε sube (por ejemplo a 10⁻³): las coordenadas con gradientes minúsculos dejan de «inflarse» y la normalización se debilita.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="tabla-sesgo">Tabla: la corrección de sesgo en acción</h3>
+<p>Un gradiente constante g = 1, con β₁ = 0.9 y β₂ = 0.999. La corrección debería devolver m̂ = v̂ = 1 en todos los pasos. Los valores sin corregir (m y v) son los que se obtendrían sin ella.</p>
+<div class="scroll"><table class="tbl chica">
+  <tr><th>t</th><th class="num-col">mₜ</th><th class="num-col">vₜ</th><th class="num-col">m̂ₜ</th><th class="num-col">v̂ₜ</th><th class="num-col">mₜ / √vₜ (sin corregir)</th><th class="num-col">m̂ₜ / √v̂ₜ (corregido)</th></tr>
+  <tr><td>1</td><td class="num-col">0.10000</td><td class="num-col">0.001000</td><td class="num-col">1.0000</td><td class="num-col">1.0000</td><td class="num-col">3.162</td><td class="num-col">1.000</td></tr>
+  <tr><td>2</td><td class="num-col">0.19000</td><td class="num-col">0.001999</td><td class="num-col">1.0000</td><td class="num-col">1.0000</td><td class="num-col">4.250</td><td class="num-col">1.000</td></tr>
+  <tr><td>3</td><td class="num-col">0.27100</td><td class="num-col">0.002997</td><td class="num-col">1.0000</td><td class="num-col">1.0000</td><td class="num-col">4.950</td><td class="num-col">1.000</td></tr>
+  <tr><td>4</td><td class="num-col">0.34390</td><td class="num-col">0.003994</td><td class="num-col">1.0000</td><td class="num-col">1.0000</td><td class="num-col">5.442</td><td class="num-col">1.000</td></tr>
+  <tr><td>5</td><td class="num-col">0.40951</td><td class="num-col">0.004990</td><td class="num-col">1.0000</td><td class="num-col">1.0000</td><td class="num-col">5.797</td><td class="num-col">1.000</td></tr>
+</table></div>
+<p>Cómo leerla: m crece como 1 − 0.9<sup>t</sup> y v como 1 − 0.999<sup>t</sup>, o sea que son «la fracción de historia acumulada» multiplicada por el valor real (1). Al dividir entre exactamente esa fracción, m̂ y v̂ valen 1 desde el primer paso.</p>
+<div class="note fix">
+  <span class="tag">Un detalle que sorprende</span>
+  <p>Se suele decir que «sin corrección, el paso inicial es diminuto». Mira la tabla: <strong>m solo</strong> sí arranca diminuto (0.1 en lugar de 1), pero la actualización usa el cociente m/√v. Como v también arranca bajo, y mucho más (0.001, y su raíz 0.032), el cociente sin corregir <em>sale mayor que 1</em> (3.16 en t = 1 y subiendo a 5.8 en t = 5), un paso demasiado grande. Los dos sesgos no se cancelan. La corrección hace que el cociente valga 1 desde el primer paso: el paso inicial es de tamaño α, ni diminuto ni exagerado.</p>
+</div>
+
+<!-- ============ 12. CARRERA ============ -->
+<h2 id="carrera"><span class="num">Sección 12</span>Laboratorio: carrera de optimizadores</h2>
+
+<p>Ahora los cuatro optimizadores en una misma pista. La superficie es un <strong>valle mal condicionado</strong>: L(u, w) = ½ (u² + κ w²), con κ = 100, girado 30°. Es un valle muy largo (la dirección u, donde la pérdida casi no cambia) y muy angosto (la dirección w, donde cambia 100 veces más rápido). Es la versión 2D del problema de las coordenadas con escalas distintas. El mínimo está en (0, 0).</p>
+<p>Los cuatro salen del mismo punto, cada uno con su color y su camino. Cada método tiene su propia α, porque la α que sirve para uno no sirve para los otros (por ejemplo, la de Adam mide un paso, no un gradiente). La β de momentum y Nesterov es común; Adam usa β₁ = β, β₂ = 0.999 y ε = 10⁻⁸. La casilla de ruido suma al gradiente de cada paso un ruido Normal (semilla fija, el mismo para los cuatro) que imita el de un mini-batch. Es ruido simulado, no mini-batches reales.</p>
+
+<h3 id="lab-carrera" class="lab" data-toc="Lab: carrera de optimizadores">Laboratorio: GD, momentum, Nesterov y Adam</h3>
+<div class="widget" id="labCarrera">
+  <div class="widget-head"><div class="wt">Cuatro optimizadores sobre un valle mal condicionado</div><div class="ws">Clic en el mapa = nuevo punto de salida. Parte de (−2.6, −1.0).</div></div>
+  <div class="widget-body">
+    <div class="legend"><span><i class="cuadro" style="background:var(--g1)"></i>GD</span><span><i class="cuadro" style="background:var(--g2)"></i>Momentum</span><span><i class="cuadro" style="background:var(--g3)"></i>Nesterov</span><span><i class="cuadro" style="background:var(--g4)"></i>Adam</span></div>
+    <div class="lab-grid">
+      <canvas id="carCanvas"></canvas>
+      <div><div id="carCtrl"></div></div>
+    </div>
+    <div class="lab-grid" style="margin-top:12px">
+      <canvas id="carLoss"></canvas>
+      <div><div id="carRead"></div><div class="status info" id="carStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="carPaso">Un paso</button>
+    <button class="btn" id="carCorrer">Correr</button>
+    <button class="btn" id="carReset">Reiniciar</button>
+    <span class="pill" id="carPill">paso 0</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li><strong>GD zigzaguea.</strong> Con su α = 0.019 (cerca del máximo estable, 2/κ = 0.02) rebota de pared a pared del valle y avanza lento a lo largo de él. Su pérdida baja, pero tras 150 pasos sigue en el orden de 10⁻³.</li>
+    <li><strong>Momentum avanza pero se pasa:</strong> las oscilaciones se amortiguan con la inercia y recorre el valle más rápido que GD, pero cruza el fondo varias veces antes de asentarse; su curva de pérdida sube y baja.</li>
+    <li><strong>Nesterov se pasa menos:</strong> mirar adelante frena antes los cruces, y su curva es más lisa. Es muy sensible a α: súbela de 0.1 a 0.15 y el método diverge.</li>
+    <li><strong>Adam avanza parejo</strong> en las dos coordenadas con pasos de tamaño parecido, sin zigzag amplio. Pero con α constante tampoco «aterriza» del todo. Ponle ángulo 0° (valle alineado con los ejes) y verás su mejor momento, porque normaliza por coordenada.</li>
+    <li>Activa el ruido: los caminos se ensucian, y los métodos con promedios (momentum, Adam) lo suavizan mejor que GD.</li>
+  </ol>
+</div>
+<div class="note key">
+  <span class="tag">No hay un campeón universal</span>
+  <p>Ningún optimizador gana siempre. Ajusta α, β y κ y verás que cada uno gana y pierde según las condiciones. La slide lo resume así: Adam suele ser un buen optimizador inicial porque es robusto a diferencias de escala, pero no hay un optimizador universalmente mejor para todos los problemas. Y todos se usan normalmente con mini-batches.</p>
+</div>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 13</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. En el examen real tendrás 40 minutos y un formulario con las distribuciones, así que las fórmulas de la distribución no se memorizan: lo que se evalúa es el procedimiento. Escribe cada paso y nombra la regla que usas, como en las derivaciones de arriba. Para un simulacro completo usa también el examen de práctica de la carpeta <code>Examenes/</code>.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §3 · Bernoulli + sigmoide ⇒ binary cross-entropy</span>
+  <div class="e-enun">Sin mirar la sección 4: parte de que y ∈ {0, 1} sigue una Bernoulli con parámetro λᵢ = σ(f(xᵢ, φ)), y deriva la pérdida de entrenamiento (binary cross-entropy). Comprueba tu resultado con y = 1 y score f = 1.5.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Escribe la Bernoulli en una sola línea con exponentes, aplica −log y usa las reglas del log de un producto y de una potencia.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>1. Bernoulli: P(yᵢ | xᵢ, φ) = (1 − λᵢ)<sup>1−yᵢ</sup> λᵢ<sup>yᵢ</sup>.</p>
+    <p>2. NLL: L(φ) = −Σᵢ log[(1 − λᵢ)<sup>1−yᵢ</sup> λᵢ<sup>yᵢ</sup>].</p>
+    <p>3. Log de un producto: = −Σᵢ [log (1 − λᵢ)<sup>1−yᵢ</sup> + log λᵢ<sup>yᵢ</sup>].</p>
+    <p>4. Log de una potencia: = −Σᵢ [(1 − yᵢ) log(1 − λᵢ) + yᵢ log λᵢ].</p>
+    <p>5. Sustituir λᵢ = σ(f(xᵢ, φ)): L(φ) = −Σᵢ [(1 − yᵢ) log(1 − σ(f(xᵢ, φ))) + yᵢ log σ(f(xᵢ, φ))].</p>
+    <p>Comprobación: y = 1, f = 1.5 ⇒ λ = σ(1.5) = 0.8176 y el costo es −log 0.8176 = 0.2014 (el término con 1 − y se anula).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §3 · diseñar una pérdida para un problema nuevo</span>
+  <div class="e-enun">Quieres predecir la <strong>proporción de votos</strong> de un partido en cada casilla electoral, y ∈ (0, 1), a partir de variables de la casilla. (a) Elige una distribución del formulario y di cómo garantizas que sus parámetros sean válidos. (b) Escribe la NLL. (c) ¿Se cae algún término por no depender de φ? (d) Compara con modelar los votos individuales con una Bernoulli: ¿qué ganas y qué pierdes?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Del formulario, la distribución con soporte en [0, 1] tiene dos parámetros positivos. La red necesita dos salidas.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> Beta(α, β), con soporte [0, 1] y α, β &gt; 0. La red produce dos salidas, f₁ y f₂, y se usa el enlace exponencial: α = e<sup>f₁</sup> y β = e<sup>f₂</sup>, siempre positivos. Si quieres predecir la proporción esperada, la media es α/(α + β).</p>
+    <p><strong>(b)</strong> Con p(y) = Γ(α + β)/(Γ(α)Γ(β)) · y<sup>α−1</sup> (1 − y)<sup>β−1</sup> y la regla del log (de un producto, un cociente y una potencia):</p>
+    <p>L(φ) = Σᵢ [ −log Γ(αᵢ + βᵢ) + log Γ(αᵢ) + log Γ(βᵢ) − (αᵢ − 1) log yᵢ − (βᵢ − 1) log(1 − yᵢ) ], con αᵢ = e<sup>f₁(xᵢ, φ)</sup> y βᵢ = e<sup>f₂(xᵢ, φ)</sup>.</p>
+    <p><strong>(c)</strong> No. Todos los términos dependen de αᵢ o βᵢ, y estos dependen de φ. Solo no depende de φ el hecho de que yᵢ y 1 − yᵢ sean datos, pero aparecen multiplicados por αᵢ y βᵢ. Es una diferencia con Poisson y Normal, donde sí sobraba un término.</p>
+    <p>Comprobación numérica: con α = 2, β = 3, y = 0.6, la densidad es (Γ(5)/(Γ(2)Γ(3))) · 0.6 · 0.4² = 12 · 0.6 · 0.16 = 1.152 y el costo es −log 1.152 = −0.1415. Es negativo porque la densidad pasa de 1; es normal.</p>
+    <p><strong>(d)</strong> Si tienes cada voto individual, una Bernoulli (o una Binomial, si conoces el número m de votantes de la casilla, con parámetro λ = σ(f) y NLL ≃ Σ[−y log λ − (m − y) log(1 − λ)]) usa la información de cuántos votantes hay: las casillas grandes pesan más. La Beta sobre la proporción trata igual a una casilla de 50 votantes que a una de 1 500, aunque la primera es mucho más ruidosa. A cambio, la Beta se aplica cuando <em>solo</em> tienes la proporción y no los conteos, y modela directamente la variabilidad entre casillas, que a veces es mayor que la que daría un modelo binomial.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §3 · Poisson y la NLL simplificada</span>
+  <div class="e-enun">(a) Deriva la NLL de una regresión de Poisson con λᵢ = e<sup>f(xᵢ, φ)</sup> y simplifícala. (b) Explica por qué desaparece log(yᵢ!). (c) Calcula la pérdida simplificada y la completa con yᵢ = (2, 5, 3) y f(xᵢ, φ) = (0.5, 1.5, 1.0).</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Después de aplicar log, el término con yᵢ! no tiene ni f ni φ. Para (c), evalúa e<sup>f</sup> − y·f por ejemplo.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> L(φ) = −Σ log[λᵢ<sup>yᵢ</sup> e<sup>−λᵢ</sup>/yᵢ!] = −Σ[yᵢ log λᵢ − λᵢ − log yᵢ!] (log de producto, de cociente, de potencia y log-exp). Con log λᵢ = f(xᵢ, φ) y λᵢ = e<sup>f</sup>: L(φ) = Σ[e<sup>f(xᵢ, φ)</sup> − yᵢ f(xᵢ, φ) + log yᵢ!] ≃ Σ[e<sup>f</sup> − yᵢ f].</p>
+    <p><strong>(b)</strong> log(yᵢ!) es función solo del dato yᵢ, que está fijo; no cambia al mover φ. Sumar una constante a una función no mueve su mínimo, así que se tira sin cambiar el argmin.</p>
+    <p><strong>(c)</strong> Por ejemplo: e<sup>0.5</sup> − 2·0.5 = 1.6487 − 1 = 0.6487; e<sup>1.5</sup> − 5·1.5 = 4.4817 − 7.5 = −3.0183; e<sup>1</sup> − 3·1 = 2.7183 − 3 = −0.2817. La pérdida simplificada es la suma: −2.6513. Los términos constantes son log 2! + log 5! + log 3! = 0.6931 + 4.7875 + 1.7918 = 7.2724, así que la pérdida completa es −2.6513 + 7.2724 = 4.6211. Dos modelos con distinta φ tienen el mismo término constante, así que comparar con la simplificada o con la completa elige al mismo ganador.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §3 · regresión heteroscedástica y σ²(x) &gt; 0</span>
+  <div class="e-enun">Una colega entrena una regresión heteroscedástica donde la red devuelve μ(x) y también una segunda salida lineal que usa directamente como σ²(x). A las pocas épocas la pérdida se vuelve NaN (no es un número). ¿Qué pasó y cómo lo arreglas?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>La salida lineal de una red puede ser negativa o cero, pero una varianza debe ser estrictamente positiva. La NLL contiene ½ log(2πσ²(x)) y (y − μ)²/(2σ²(x)): con σ² &lt; 0 el logaritmo no existe (NaN), y con σ² = 0 el cociente es infinito. Basta con que unos pocos ejemplos reciban una σ² ≤ 0 durante el entrenamiento para que toda la pérdida se vuelva inválida.</p>
+    <p>Arreglo: pasar la salida por un enlace que siempre dé positivos: σ² = e<sup>f₂</sup> (el más común) o softplus, log(1 + e<sup>f₂</sup>). El cuadrado de la slide (σ² = f₂²) evita los negativos, pero puede llegar exactamente a 0, así que se prefiere exp o softplus.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · cross-entropy multiclase</span>
+  <div class="e-enun">Una red con K = 3 clases devuelve los scores (2, 0, −1) y la clase correcta es la 2. Calcula las probabilidades de softmax y el costo de cross-entropy de ese ejemplo, por las dos formas de la fórmula.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>La clase correcta es la 2, cuyo score es 0, no el más alto. Se espera un costo grande.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>e<sup>2</sup> = 7.389, e<sup>0</sup> = 1, e<sup>−1</sup> = 0.368; la suma es 8.757.</p>
+    <p>Probabilidades: (7.389, 1, 0.368)/8.757 = (0.844, 0.114, 0.042).</p>
+    <p>Forma 1: −log P(y = 2) = −log 0.114 = 2.170.</p>
+    <p>Forma 2: log Σ e<sup>f<sub>k</sub></sup> − f<sub>y</sub> = log 8.757 − 0 = 2.170. Coinciden.</p>
+    <p>Alto porque el modelo le dio solo 11 % a la clase correcta y 84 % a otra.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §3 · cross-entropy y KL</span>
+  <div class="e-enun">Con tus palabras: ¿por qué minimizar D<sub>KL</sub>(q‖p<sub>φ</sub>) es lo mismo que minimizar la cross-entropy H(q, p<sub>φ</sub>), y por qué con etiquetas one-hot esto coincide con la NLL?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>La KL se puede escribir como D<sub>KL</sub>(q‖p<sub>φ</sub>) = −H(q) + H(q, p<sub>φ</sub>) (separando log(q/p) en log q − log p). El término H(q) depende solo de q, que viene de las etiquetas y está fija, no de φ. Una constante respecto a φ no cambia dónde está el mínimo, así que el mismo φ minimiza la KL y la cross-entropy.</p>
+    <p>Con etiquetas one-hot, q le da probabilidad 1 a la clase correcta yᵢ y 0 a las demás. En H(q, p) = −Σ q(y) log p(y) todos los términos con q = 0 se anulan y queda −log p(yᵢ | xᵢ), justo el costo del ejemplo i en la NLL. Sumar sobre los ejemplos da la misma pérdida.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · actualización de momentum</span>
+  <div class="e-enun">Con la forma de momentum de la slide, m ← βm + (1 − β)g, tienes g₁ = 1, g₂ = 1, β = 0.9, α = 0.1 y m₀ = 0. Calcula m₁, m₂ y cuánto se mueve φ en cada uno de los dos pasos. Compara con SGD sin momentum.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Paso 1: m₁ = 0.9 · 0 + 0.1 · 1 = 0.1. Cambio en φ: −α m₁ = −0.1 · 0.1 = −0.01.</p>
+    <p>Paso 2: m₂ = 0.9 · 0.1 + 0.1 · 1 = 0.19. Cambio en φ: −0.1 · 0.19 = −0.019.</p>
+    <p>En total φ baja 0.029. SGD sin momentum bajaría α · g = 0.1 en cada paso (0.2 en total). El momentum arranca <em>más lento</em>, porque m parte de 0 y tarda en «llenarse» (m crece hacia g = 1, con 0.1, 0.19, 0.271…). La ventaja aparece cuando los gradientes siguen apuntando igual muchos pasos: m se acerca a g y suaviza el ruido.</p>
+    <p>Con la forma de PyTorch (m ← βm + g) saldría m₁ = 1 y m₂ = 1.9, diez veces mayor.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · corrección de sesgo de Adam</span>
+  <div class="e-enun">En el primer paso de Adam, g₁ = 4, β₁ = 0.9 y m₀ = 0. Calcula m₁ y m̂₁, y explica para qué sirve la corrección. (Extra: con β₂ = 0.999 y v₀ = 0, calcula v₁ y v̂₁ y el tamaño del primer paso con α = 0.1.)</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>m₁ = 0.9 · 0 + 0.1 · 4 = 0.4. m̂₁ = m₁ / (1 − β₁<sup>1</sup>) = 0.4 / 0.1 = 4.</p>
+    <p>Como m₀ = 0, el promedio arranca sesgado hacia cero: m₁ = 0.4 subestima el gradiente real (4) diez veces. Dividir entre 1 − β₁<sup>t</sup> (la fracción de peso acumulada) devuelve m̂₁ = 4, que es el gradiente real. La corrección importa al inicio y desaparece cuando β₁<sup>t</sup> → 0.</p>
+    <p>Extra: v₁ = 0.001 · 16 = 0.016 y v̂₁ = 0.016 / 0.001 = 16. Paso = α · m̂₁ / (√v̂₁ + ε) = 0.1 · 4 / 4 = 0.1: el primer paso mide exactamente α.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §3 · métodos adaptativos</span>
+  <div class="e-enun">Un modelo tiene dos parámetros, A y B. Los gradientes de A son siempre unas 100 veces más grandes que los de B. (a) ¿Qué hace SGD con una sola α? (b) ¿Qué hace Adam? (c) ¿Qué ingrediente de Adam es responsable?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><strong>(a)</strong> En SGD el paso de cada parámetro es α por su gradiente, así que A se mueve unas 100 veces más que B. Si α es lo bastante chica para que A no oscile ni diverja, B apenas avanza. Si α es lo bastante grande para que B avance, A diverge. No hay una α que sirva para ambos.</p>
+    <p><strong>(b)</strong> Adam divide cada coordenada entre la escala típica de su gradiente, √v̂. En A, m̂ y √v̂ son 100 veces mayores que en B y el cociente es parecido: los dos parámetros dan pasos de tamaño parecido (alrededor de α), sin importar la escala del gradiente.</p>
+    <p><strong>(c)</strong> La <strong>normalización por coordenada</strong> (dividir entre √v̂, el promedio móvil del gradiente al cuadrado). El momentum y la corrección de sesgo ayudan a suavizar y a arrancar bien, pero no son lo que resuelve este problema.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §3 · no convexidad y ruido de SGD</span>
+  <div class="e-enun">Una pérdida no convexa tiene mínimos locales, puntos silla y regiones planas. ¿Qué puede hacer el ruido de SGD que GD determinista no? ¿Qué no garantiza?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>GD completo es determinista: desde un mismo punto de inicio siempre sigue el mismo camino, y si cae en un punto donde el gradiente es 0 (valle poco profundo, punto silla) se queda ahí. El gradiente de un mini-batch es una estimación ruidosa del gradiente total, así que en un punto donde el gradiente completo es casi 0, el mini-batch todavía da una dirección distinta de 0 que lo empuja. Ese ruido puede ayudar a no quedarse mucho tiempo en regiones planas o puntos silla, y a veces a salir de un valle poco profundo.</p>
+    <p>No garantiza llegar al mínimo global (en el laboratorio, con algunas semillas SGD cae en un valle local) ni la convergencia exacta: con tasa constante el ruido nunca desaparece y SGD oscila alrededor de las zonas de baja pérdida. Con una tasa decreciente sí puede converger bajo ciertas condiciones.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 14</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">máxima verosimilitud (maximum likelihood)</div><div class="def">Criterio para elegir parámetros: los que hacen más probables los datos observados. Se resuelve como argmax del producto de las probabilidades de los datos.</div></div>
+  <div class="item"><div class="term">verosimilitud (likelihood)</div><div class="def">La probabilidad (o densidad) que el modelo le asigna a los datos observados, vista como función de los parámetros.</div></div>
+  <div class="item"><div class="term">log-verosimilitud (log-likelihood)</div><div class="def">El logaritmo de la verosimilitud: convierte el producto de probabilidades en una suma. No cambia el argmax porque log es creciente.</div></div>
+  <div class="item"><div class="term">NLL (negative log-likelihood)</div><div class="def">Menos la log-verosimilitud. Es la pérdida que se minimiza: L(φ) = −Σ log P(yᵢ | f(xᵢ, φ)).</div></div>
+  <div class="item"><div class="term">distribución condicional</div><div class="def">P(y | x): la distribución de y una vez que se conoce x. Es lo que predice el modelo en vez de un solo número.</div></div>
+  <div class="item"><div class="term">i.i.d.</div><div class="def">Independientes e idénticamente distribuidas. Permite que la probabilidad conjunta de los datos sea un producto, y que un mismo modelo sirva para todos.</div></div>
+  <div class="item"><div class="term">función de enlace (link function)</div><div class="def">La función que convierte la salida real de la red en un parámetro del rango válido: sigmoide para [0, 1], exp o softplus para positivos, softmax para vectores de probabilidades.</div></div>
+  <div class="item"><div class="term">sigmoide</div><div class="def">σ(z) = 1/(1 + e<sup>−z</sup>). Convierte un score real en una probabilidad entre 0 y 1.</div></div>
+  <div class="item"><div class="term">softmax</div><div class="def">Convierte K scores reales en K probabilidades positivas que suman 1: e<sup>zₖ</sup> dividido entre Σ e<sup>zⱼ</sup>.</div></div>
+  <div class="item"><div class="term">BCE (binary cross-entropy)</div><div class="def">La NLL de una Bernoulli con sigmoide: −[y log λ + (1 − y) log(1 − λ)].</div></div>
+  <div class="item"><div class="term">cross-entropy (entropía cruzada)</div><div class="def">H(q, p) = −Σ q log p. Con etiquetas one-hot es la NLL; con softmax es la pérdida multiclase.</div></div>
+  <div class="item"><div class="term">KL (divergencia de Kullback-Leibler)</div><div class="def">Mide cuánto se aleja p de q: Σ q log(q/p) = −H(q) + H(q, p). No es simétrica y nunca es negativa.</div></div>
+  <div class="item"><div class="term">heteroscedasticidad</div><div class="def">Cuando la varianza del ruido depende de x. Se modela haciendo que la red también prediga σ²(x), con un enlace que garantice que sea positiva.</div></div>
+  <div class="item"><div class="term">convexa</div><div class="def">Una pérdida con forma de tazón: sin mínimos locales malos. Con α adecuada, GD llega al mínimo global.</div></div>
+  <div class="item"><div class="term">mínimo local</div><div class="def">Un valle más bajo que su entorno inmediato pero no el más bajo de todo el paisaje. GD puede quedarse atrapado.</div></div>
+  <div class="item"><div class="term">punto silla (saddle point)</div><div class="def">Punto con gradiente 0 que sube en unas direcciones y baja en otras. No es un mínimo; cerca de él GD avanza lento.</div></div>
+  <div class="item"><div class="term">SGD y mini-batch</div><div class="def">GD con el gradiente estimado en un subconjunto aleatorio de los datos, el mini-batch B<sub>t</sub>. Una época es una pasada completa por los datos.</div></div>
+  <div class="item"><div class="term">momentum</div><div class="def">Usa un promedio móvil de gradientes pasados: m ← βm + (1 − β)g. Suaviza el zigzag y acelera en direcciones consistentes.</div></div>
+  <div class="item"><div class="term">Nesterov</div><div class="def">Momentum que evalúa el gradiente en el punto adelantado φ − αβm, para frenar antes de pasarse.</div></div>
+  <div class="item"><div class="term">método adaptativo</div><div class="def">Optimizador que ajusta el tamaño del paso por coordenada, para que gradientes de escalas distintas avancen parecido.</div></div>
+  <div class="item"><div class="term">Adam</div><div class="def">Momentum (promedio móvil de g) más normalización por coordenada (promedio móvil de g²) más corrección de sesgo.</div></div>
+  <div class="item"><div class="term">corrección de sesgo (bias correction)</div><div class="def">Dividir m y v entre 1 − βᵗ para compensar que arrancan en 0 y están sesgados hacia cero al inicio del entrenamiento.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>. Cuaderno relacionado: <code>notebooks/Optimizadores.ipynb</code>. Tarea relacionada: <code>tareas/Tarea3.ipynb</code> (regresión de Poisson y normalización de targets).</p>
+
+<nav class="serie" data-actual="03"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Entrenamiento.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  /* ===== núcleo numérico (sin DOM) ===== */
+  var Core = (function(){
+    var rngF = (typeof DL !== "undefined") ? DL.rng : require("./rng.js").rng;
+
+    /* --- Gabor --- */
+    function gaborF(p0, p1, x){ var u = p0 + 0.06*p1*x; return Math.sin(u)*Math.exp(-u*u/32); }
+    function gaborDatos(t0, t1, semilla, n, sd){
+      var r = rngF(semilla), X = [], Y = [];
+      for(var i=0;i<n;i++){ var x = -15 + 30*r.u(); X.push(x); Y.push(gaborF(t0, t1, x) + r.normal(0, sd)); }
+      return {X:X, Y:Y, n:n};
+    }
+    function gaborL(D, p0, p1){
+      var s = 0; for(var i=0;i<D.n;i++){ var e = gaborF(p0, p1, D.X[i]) - D.Y[i]; s += e*e; } return s/D.n;
+    }
+    function gaborGrad(D, p0, p1, idx){
+      var g0 = 0, g1 = 0, m = idx ? idx.length : D.n;
+      for(var k=0;k<m;k++){
+        var i = idx ? idx[k] : k, x = D.X[i], u = p0 + 0.06*p1*x;
+        var e = Math.sin(u)*Math.exp(-u*u/32) - D.Y[i];
+        var du = Math.exp(-u*u/32)*(Math.cos(u) - u/16*Math.sin(u));
+        g0 += 2*e*du; g1 += 2*e*du*0.06*x;
+      }
+      return [g0/m, g1/m];
+    }
+    /* mini-batches barajados por época */
+    function nuevoMuestreador(n, b, semilla){
+      var r = rngF(semilla), perm = [], pos = n;
+      return function(){
+        if(pos + b > n){
+          perm = []; for(var i=0;i<n;i++) perm.push(i);
+          for(var j=n-1;j>0;j--){ var k = r.entero(j+1), t = perm[j]; perm[j] = perm[k]; perm[k] = t; }
+          pos = 0;
+        }
+        var idx = perm.slice(pos, pos+b); pos += b; return idx;
+      };
+    }
+
+    /* --- regresión heteroscedástica --- */
+    function hetDatos(){
+      var r = rngF(42), X = [], Y = [], n = 60;
+      for(var i=0;i<n;i++){ var x = 10*(i+0.5)/n; X.push(x); Y.push(2 + 0.8*x + r.normal(0, Math.exp(-1.4 + 0.25*x))); }
+      return {X:X, Y:Y, n:n};
+    }
+    function hetConst(D){
+      var n = D.n, mx = 0, my = 0, i;
+      for(i=0;i<n;i++){ mx += D.X[i]; my += D.Y[i]; } mx /= n; my /= n;
+      var sxy = 0, sxx = 0; for(i=0;i<n;i++){ sxy += (D.X[i]-mx)*(D.Y[i]-my); sxx += (D.X[i]-mx)*(D.X[i]-mx); }
+      var b = sxy/sxx, a = my - b*mx, s2 = 0;
+      for(i=0;i<n;i++){ var e = D.Y[i] - a - b*D.X[i]; s2 += e*e; }
+      return {a:a, b:b, c:0.5*Math.log(s2/n), d:0};
+    }
+    function hetNLL(D, P){
+      var s = 0;
+      for(var i=0;i<D.n;i++){
+        var ls = P.c + P.d*D.X[i], sg = Math.exp(ls), r = D.Y[i] - (P.a + P.b*D.X[i]);
+        s += ls + 0.5*Math.log(2*Math.PI) + r*r/(2*sg*sg);
+      }
+      return s;
+    }
+    function hetAjuste(D){  /* Adam sobre (a, b, c, d): μ = a + b x, log σ = c + d x */
+      var c0 = hetConst(D), p = [c0.a, c0.b, c0.c, 0], m = [0,0,0,0], v = [0,0,0,0];
+      var n = D.n, b1 = 0.9, b2 = 0.999, al = 0.05, t, k, i;
+      for(t=1;t<=4000;t++){
+        var g = [0,0,0,0];
+        for(i=0;i<n;i++){
+          var x = D.X[i], mu = p[0] + p[1]*x, ls = p[2] + p[3]*x, s2 = Math.exp(2*ls), r = D.Y[i] - mu, dl = 1 - r*r/s2;
+          g[0] += -r/s2; g[1] += -r*x/s2; g[2] += dl; g[3] += dl*x;
+        }
+        for(k=0;k<4;k++){
+          g[k] /= n; m[k] = b1*m[k] + (1-b1)*g[k]; v[k] = b2*v[k] + (1-b2)*g[k]*g[k];
+          p[k] -= al*(m[k]/(1-Math.pow(b1,t)))/(Math.sqrt(v[k]/(1-Math.pow(b2,t))) + 1e-8);
+        }
+      }
+      return {a:p[0], b:p[1], c:p[2], d:p[3]};
+    }
+
+    /* --- superficie cuadrática mal condicionada --- */
+    function superficie(k, ang){
+      var c = Math.cos(ang*Math.PI/180), s = Math.sin(ang*Math.PI/180);
+      return {
+        f: function(x, y){ var u = c*x + s*y, w = -s*x + c*y; return 0.5*(u*u + k*w*w); },
+        g: function(x, y){ var u = c*x + s*y, w = -s*x + c*y; return [c*u - s*k*w, s*u + c*k*w]; }
+      };
+    }
+    function nuevoMetodo(tipo, p0){ return {tipo:tipo, p:p0.slice(), m:[0,0], v:[0,0], t:0, rota:false}; }
+    /* un paso; o = {a, b, b2, eps}; nz = ruido sumado al gradiente */
+    function pasoMetodo(M, S, o, nz){
+      var k, g, q;
+      if(M.tipo === "nes") q = [M.p[0] - o.a*o.b*M.m[0], M.p[1] - o.a*o.b*M.m[1]]; else q = M.p;
+      g = S.g(q[0], q[1]); g = [g[0] + nz[0], g[1] + nz[1]];
+      M.t++;
+      for(k=0;k<2;k++){
+        if(M.tipo === "gd") M.p[k] -= o.a*g[k];
+        else if(M.tipo === "mom" || M.tipo === "nes"){ M.m[k] = o.b*M.m[k] + (1-o.b)*g[k]; M.p[k] -= o.a*M.m[k]; }
+        else {
+          M.m[k] = o.b*M.m[k] + (1-o.b)*g[k]; M.v[k] = o.b2*M.v[k] + (1-o.b2)*g[k]*g[k];
+          M.p[k] -= o.a*(M.m[k]/(1-Math.pow(o.b,M.t)))/(Math.sqrt(M.v[k]/(1-Math.pow(o.b2,M.t))) + o.eps);
+        }
+      }
+      if(!isFinite(M.p[0]) || !isFinite(M.p[1]) || Math.abs(M.p[0]) > 1e6 || Math.abs(M.p[1]) > 1e6) M.rota = true;
+    }
+
+    return {gaborF:gaborF, gaborDatos:gaborDatos, gaborL:gaborL, gaborGrad:gaborGrad, nuevoMuestreador:nuevoMuestreador,
+            hetDatos:hetDatos, hetConst:hetConst, hetNLL:hetNLL, hetAjuste:hetAjuste,
+            superficie:superficie, nuevoMetodo:nuevoMetodo, pasoMetodo:pasoMetodo};
+  })();
+  if(typeof module !== "undefined") module.exports = Core;
+
+  var $ = function(id){ return document.getElementById(id); };
+  function selector(cont, opciones, valor, cb){
+    var s = DL.selector(cont, {opciones:opciones, valor:valor, alCambiar:cb});
+    s.poner = function(v){ var bs = s.el.querySelectorAll("button"); opciones.forEach(function(o, i){ bs[i].classList.toggle("sel", o.v === v); }); };
+    return s;
+  }
+  var SUP = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹","-":"⁻","−":"⁻"};
+  function pot10(v){ return "10" + String(Math.round(v)).split("").map(function(c){ return SUP[c] || c; }).join(""); }
+
+  /* =============== LAB: heteroscedasticidad =============== */
+  (function(){
+    var D = Core.hetDatos(), Pc = Core.hetConst(D), Ph = Core.hetAjuste(D), modo = "h";
+    function params(){ return modo === "c" ? Pc : Ph; }
+    var gr = DL.grafica($("hetCanvas"), {x:[0, 10], y:[-6, 18], alto:320, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      var P = params(), c = g.ctx, N = 60, i, x, mu, s;
+      c.save(); c.beginPath();
+      for(i=0;i<=N;i++){ x = 10*i/N; mu = P.a + P.b*x; s = Math.exp(P.c + P.d*x); if(i) c.lineTo(g.sx(x), g.sy(mu + 2*s)); else c.moveTo(g.sx(x), g.sy(mu + 2*s)); }
+      for(i=N;i>=0;i--){ x = 10*i/N; mu = P.a + P.b*x; s = Math.exp(P.c + P.d*x); c.lineTo(g.sx(x), g.sy(mu - 2*s)); }
+      c.closePath(); c.fillStyle = DL.color("accent"); c.globalAlpha = 0.16; c.fill(); c.restore();
+      var arriba = [], abajo = [];
+      for(i=0;i<=N;i++){ x = 10*i/N; mu = P.a + P.b*x; s = Math.exp(P.c + P.d*x); arriba.push([x, mu + 2*s]); abajo.push([x, mu - 2*s]); }
+      g.polilinea(arriba, {color:"accent", ancho:1.3, guiones:true}); g.polilinea(abajo, {color:"accent", ancho:1.3, guiones:true});
+      g.funcion(function(x){ return P.a + P.b*x; }, {color:"accent", ancho:2.4});
+      g.puntos(D.X.map(function(x, k){ return [x, D.Y[k]]; }), {color:"r-dato", radio:3.2});
+    });
+    function leer(){
+      var P = params(), fuera = [0, 0], tot = [0, 0], i;
+      for(i=0;i<D.n;i++){
+        var h = D.X[i] < 5 ? 0 : 1, sg = Math.exp(P.c + P.d*D.X[i]); tot[h]++;
+        if(Math.abs(D.Y[i] - (P.a + P.b*D.X[i])) > 2*sg) fuera[h]++;
+      }
+      var nll = Core.hetNLL(D, P);
+      DL.readout($("hetRead"), [
+        ["μ(x)", DL.fmt(P.a, 2) + " + " + DL.fmt(P.b, 2) + "·x"],
+        ["σ en x = 0", DL.fmt(Math.exp(P.c), 2)], ["σ en x = 10", DL.fmt(Math.exp(P.c + 10*P.d), 2)],
+        ["NLL total", DL.fmt(nll, 2)], ["NLL por punto", DL.fmt(nll/D.n, 3)],
+        ["fuera de ±2σ, x &lt; 5", fuera[0] + " de " + tot[0]], ["fuera de ±2σ, x ≥ 5", fuera[1] + " de " + tot[1]]
+      ]);
+      $("hetStatus").textContent = modo === "c"
+        ? "σ constante: una sola banda. Ancha donde el ruido es poco, y justa o corta donde es mucho."
+        : "σ(x) aprendida: la banda se abre con x, siguiendo al ruido.";
+      gr.redibujar();
+    }
+    var sel = selector($("hetSel"), [{v:"c", t:"σ constante"}, {v:"h", t:"σ(x) aprendida"}], "h", function(v){ modo = v; leer(); });
+    leer();
+  })();
+
+  /* =============== LAB: sigmoide + BCE =============== */
+  (function(){
+    var f = 1.5, yv = 1;
+    var gr = DL.grafica($("bceCanvas"), {x:[0, 1], y:[0, 8], alto:300, etiquetaX:"λ", etiquetaY:"costo"}, function(g){
+      var l = DL.sigmoide(f), costo = yv === 1 ? -Math.log(l) : -Math.log(1 - l);
+      g.funcion(function(t){ return -Math.log(t); }, {color:"g1", ancho:yv === 1 ? 3 : 1.5, guiones:yv !== 1, x:[0.0005, 0.9995], muestras:500});
+      g.funcion(function(t){ return -Math.log(1 - t); }, {color:"g2", ancho:yv === 0 ? 3 : 1.5, guiones:yv !== 0, x:[0.0005, 0.9995], muestras:500});
+      g.texto(0.03, 7.3, "y = 1:  −log λ", {color:"g1", negrita:true});
+      g.texto(0.97, 7.3, "y = 0:  −log(1 − λ)", {color:"g2", negrita:true, alinear:"right"});
+      g.vertical(l, {color:"text-3", guiones:true, ancho:1});
+      g.puntos([[l, Math.min(costo, 7.9)]], {color:"text", radio:6, aro:true});
+    });
+    function leer(){
+      var l = DL.sigmoide(f), costo = yv === 1 ? -Math.log(l) : -Math.log(1 - l);
+      DL.readout($("bceRead"), [["score f", DL.fmt(f, 2)], ["λ = σ(f)", DL.fmt(l, 4)], ["etiqueta y", yv], ["costo", DL.fmt(costo, 3)]]);
+      var st = $("bceStatus");
+      st.className = "status " + (costo > 3 ? "bad" : (costo < 0.3 ? "ok" : "info"));
+      st.textContent = costo > 3 ? "Error muy confiado: el costo es enorme." : (costo < 0.3 ? "Acierto con confianza: costo bajo." : "Costo intermedio.");
+      gr.redibujar();
+    }
+    var ctrl = DL.control($("bceCtrl"), {etiqueta:"score f", min:-10, max:10, paso:0.1, valor:f, alCambiar:function(v){ f = v; leer(); }});
+    var sel = selector($("bceSel"), [{v:1, t:"y = 1"}, {v:0, t:"y = 0"}], 1, function(v){ yv = v; leer(); });
+    $("bceConf").onclick = function(){ yv = 0; sel.poner(0); f = 6; ctrl.fijar(6, true); leer(); };
+    $("bceReset").onclick = function(){ yv = 1; sel.poner(1); f = 1.5; ctrl.fijar(1.5, true); leer(); };
+    leer();
+  })();
+
+  /* =============== LAB: softmax y cross-entropy =============== */
+  (function(){
+    var z = [1, 0, 0, 0], cls = 0, ctrls = [];
+    var gr = DL.grafica($("smxCanvas"), {x:[0, 4], y:[0, 1.08], alto:300, etiquetaY:"probabilidad", opcionesEjes:{ticksX:[], ticksY:[0, 0.25, 0.5, 0.75, 1]}}, function(g){
+      var p = DL.softmax(z);
+      p.forEach(function(v, k){
+        g.rect(k + 0.15, 0, 0.7, v, {color:k === cls ? "accent" : "text-3", relleno:true, alfa:k === cls ? 0.85 : 0.5});
+        g.texto(k + 0.5, v + 0.045, DL.fmt(v, 3), {color:"text", alinear:"center", negrita:k === cls});
+        g.texto(k + 0.5, -0.07, "clase " + (k + 1) + (k === cls ? " ✓" : ""), {color:k === cls ? "accent" : "text-2", alinear:"center", negrita:k === cls});
+      });
+    });
+    function leer(){
+      var p = DL.softmax(z), lse = Math.log(z.reduce(function(a, v){ return a + Math.exp(v); }, 0)), costo = -Math.log(p[cls]);
+      DL.readout($("smxRead"), [["log Σ e^f", DL.fmt(lse, 3)], ["f de la correcta", DL.fmt(z[cls], 2)],
+        ["costo = log Σ e^f − f", DL.fmt(lse - z[cls], 3)], ["costo = −log p", DL.fmt(costo, 3)], ["Σ probabilidades", DL.fmt(p.reduce(function(a, b){ return a + b; }, 0), 3)]]);
+      var st = $("smxStatus"), mx = p.indexOf(Math.max.apply(null, p));
+      st.className = "status " + (mx === cls ? "ok" : "bad");
+      st.textContent = mx === cls ? "El modelo acierta (argmax = clase correcta). Costo " + DL.fmt(costo, 3) + "." : "El modelo se equivoca: su argmax es la clase " + (mx + 1) + ".";
+      gr.redibujar();
+    }
+    for(var k=0;k<4;k++) (function(k){
+      ctrls.push(DL.control($("smxCtrl"), {etiqueta:"score f" + (k + 1), min:-10, max:10, paso:0.1, valor:z[k], alCambiar:function(v){ z[k] = v; leer(); }}));
+    })(k);
+    var sel = selector($("smxSel"), [1, 2, 3, 4].map(function(i){ return {v:i - 1, t:"correcta: " + i}; }), 0, function(v){ cls = v; leer(); });
+    $("smxIgual").onclick = function(){ z = z.map(function(v){ return Math.min(10, v + 2); }); z.forEach(function(v, k){ ctrls[k].fijar(v, true); }); leer(); };
+    $("smxReset").onclick = function(){ z = [1, 0, 0, 0]; cls = 0; sel.poner(0); z.forEach(function(v, k){ ctrls[k].fijar(v, true); }); leer(); };
+    leer();
+  })();
+
+  /* =============== LAB: asistente de diseño =============== */
+  (function(){
+    function lgamma(x){
+      var c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+      var y = x, tmp = x + 5.5; tmp -= (x + 0.5)*Math.log(tmp); var ser = 1.000000000190015;
+      for(var j=0;j<6;j++) ser += c[j]/++y;
+      return -tmp + Math.log(2.5066282746310005*ser/x);
+    }
+    function logFact(n){ return lgamma(n + 1); }
+    var F = DL.fmt, sg = DL.sigmoide;
+    function bce(y, f){ return -(y*Math.log(sg(f)) + (1 - y)*Math.log(1 - sg(f))); }
+    var TIPOS = [
+      {v:"poisson", t:"Conteo", dato:"y ∈ {0, 1, 2, …}", ej:"peatones que pasan por un punto en un minuto; solicitudes recibidas en un día.",
+       dist:"Poisson(λ)", fd:"P(y | λ) = λ<sup>y</sup> e<sup>−λ</sup> / y!", por:"El soporte son los enteros no negativos, sin tope. La Normal daría probabilidad a conteos negativos o fraccionarios.",
+       par:"λ &gt; 0 (la tasa media de eventos).", enl:"λ = e<sup>f(x, φ)</sup> (o softplus). Con exp, log λ = f.",
+       nll:"Σ [ e<sup>f</sup> − y·f ]&nbsp; + constante", cae:"log(y!) depende solo del dato y, no de φ: se tira.", inf:"La media λ = e<sup>f(x, φ)</sup> (o la distribución completa).",
+       num:function(){ var y = 4, f = 1.2, l = Math.exp(f), pm = Math.pow(l, y)*Math.exp(-l)/24, c = logFact(y), pf = l - y*f;
+         return "y = 4, f = 1.2 ⇒ λ = " + F(l, 3) + ", P = " + F(pm, 4) + ", costo = −log P = <b>" + F(-Math.log(pm), 3) + "</b>. Parte que mueve φ: e<sup>f</sup> − y·f = " + F(pf, 3) + "; constante log 4! = " + F(c, 3) + "; suma = " + F(pf + c, 3) + ". ✔"; }},
+      {v:"real", t:"Real", dato:"y ∈ ℝ", ej:"cambio en el puntaje de una prueba (positivo o negativo).",
+       dist:"Normal N(μ, σ²)", fd:"p(y) = (2πσ²)<sup>−1/2</sup> exp( −(y − μ)² / 2σ² )", por:"El soporte es toda la recta real: la Normal es la candidata natural.",
+       par:"μ ∈ ℝ, sin restricción. σ² &gt; 0 la dejamos constante.", enl:"Identidad: μ = f(x, φ). (Si además predices σ², usa e<sup>f₂</sup> para que sea positiva.)",
+       nll:"Σ (y − f)² / (2σ²)&nbsp; + constante", cae:"(n/2) log(2πσ²) no depende de φ: se tira. Queda la pérdida cuadrática.", inf:"La media μ = f(x, φ).",
+       num:function(){ var y = 3, f = 2.5, p = Math.exp(-0.5*(y - f)*(y - f))/Math.sqrt(2*Math.PI), c = 0.5*Math.log(2*Math.PI), q = (y - f)*(y - f)/2;
+         return "y = 3, f = 2.5, σ² = 1 ⇒ costo = −log p = <b>" + F(-Math.log(p), 3) + "</b>. Parte que mueve φ: (y − f)²/2 = " + F(q, 3) + "; constante ½ log(2π) = " + F(c, 3) + "; suma = " + F(q + c, 3) + ". ✔"; }},
+      {v:"laplace", t:"Real con atípicos", dato:"y ∈ ℝ, con algunos valores extremos", ej:"ingreso por hogar, con unos pocos hogares muy ricos.",
+       dist:"Laplace(μ, b)", fd:"p(y) = (1/2b) exp( −|y − μ| / b )", por:"También vive en toda la recta, pero con colas más pesadas que la Normal: perdona más los valores extremos.",
+       par:"μ ∈ ℝ, sin restricción. b &gt; 0 la dejamos constante.", enl:"Identidad: μ = f(x, φ).",
+       nll:"Σ |y − f| / b&nbsp; + constante", cae:"n·log(2b) no depende de φ: se tira. Queda el error <em>absoluto</em>, en vez del cuadrado.", inf:"La media μ = f(x, φ).",
+       num:function(){ var y = 3, f = 2.5, b = 1, p = Math.exp(-Math.abs(y - f)/b)/(2*b);
+         return "y = 3, f = 2.5, b = 1 ⇒ costo = −log p = <b>" + F(-Math.log(p), 3) + "</b>. Parte que mueve φ: |y − f|/b = " + F(Math.abs(y - f)/b, 3) + "; constante log 2b = " + F(Math.log(2*b), 3) + "; suma = " + F(Math.abs(y - f)/b + Math.log(2*b), 3) + ". ✔"; }},
+      {v:"gamma", t:"Real positivo", dato:"y &gt; 0", ej:"monto de una factura de agua.",
+       dist:"Gamma(α, β)", fd:"p(y) = β<sup>α</sup> y<sup>α−1</sup> e<sup>−βy</sup> / Γ(α)", por:"Solo vive en los positivos: la Normal daría probabilidad a montos negativos.",
+       par:"α &gt; 0 y β &gt; 0. Fijamos α como hiperparámetro y dejamos que la red prediga β.", enl:"β = e<sup>f(x, φ)</sup> (o softplus) garantiza β &gt; 0.",
+       nll:"Σ [ y·e<sup>f</sup> − α·f ]&nbsp; + constantes", cae:"(α − 1) log y y log Γ(α) no dependen de φ: se tiran.", inf:"La media α/β = α·e<sup>−f</sup>.",
+       num:function(){ var a = 2, y = 3, f = 0.5, b = Math.exp(f), p = Math.pow(b, a)*Math.pow(y, a - 1)*Math.exp(-b*y)/Math.exp(lgamma(a)), pf = y*b - a*f, c = -(a - 1)*Math.log(y) + lgamma(a);
+         return "α = 2, y = 3, f = 0.5 ⇒ β = " + F(b, 3) + ", costo = −log p = <b>" + F(-Math.log(p), 3) + "</b>. Parte que mueve φ: y·e<sup>f</sup> − α·f = " + F(pf, 3) + "; constantes = " + F(c, 3) + "; suma = " + F(pf + c, 3) + ". ✔"; }},
+      {v:"bern", t:"Binario", dato:"y ∈ {0, 1}", ej:"si un hogar recibe o no el programa social.",
+       dist:"Bernoulli(λ)", fd:"P(y | λ) = (1 − λ)<sup>1−y</sup> λ<sup>y</sup>", por:"Solo hay dos resultados posibles.",
+       par:"λ ∈ [0, 1] (la probabilidad de y = 1).", enl:"Sigmoide: λ = σ(f) = 1 / (1 + e<sup>−f</sup>).",
+       nll:"Σ −[ y log σ(f) + (1 − y) log(1 − σ(f)) ]&nbsp; (BCE)", cae:"Nada: no queda ninguna parte constante respecto a φ.", inf:"La probabilidad λ, o la clase 1 si λ ≥ 0.5.",
+       num:function(){ return "y = 1, f = 1.5 ⇒ λ = " + F(sg(1.5), 4) + ", costo = <b>" + F(bce(1, 1.5), 3) + "</b>. Con y = 0 y el mismo score: " + F(bce(0, 1.5), 3) + "."; }},
+      {v:"cat", t:"K clases", dato:"y ∈ {1, …, K}", ej:"tipo de trámite que solicita una persona (K categorías excluyentes).",
+       dist:"Categórica(λ₁, …, λ<sub>K</sub>)", fd:"P(y = k) = λ<sub>k</sub>", por:"K resultados excluyentes: es la Bernoulli generalizada.",
+       par:"λ<sub>k</sub> ≥ 0 y Σ λ<sub>k</sub> = 1: un vector de probabilidades.", enl:"Softmax sobre K scores: λ<sub>k</sub> = e<sup>f<sub>k</sub></sup> / Σ<sub>j</sub> e<sup>f<sub>j</sub></sup>.",
+       nll:"Σ [ log Σ<sub>k</sub> e<sup>f<sub>k</sub></sup> − f<sub>y</sub> ]&nbsp; (cross-entropy)", cae:"Nada: no queda ninguna parte constante respecto a φ.", inf:"Toda la distribución, o la clase con mayor probabilidad (argmax).",
+       num:function(){ var z = [1, 0, 0], p = DL.softmax(z); return "scores (1, 0, 0), clase correcta 1 ⇒ p = (" + p.map(function(v){ return F(v, 3); }).join(", ") + "), costo = <b>" + F(-Math.log(p[0]), 3) + "</b>."; }},
+      {v:"beta", t:"Proporción en (0, 1)", dato:"y ∈ (0, 1)", ej:"porcentaje de avance de una obra pública.",
+       dist:"Beta(α, β)", fd:"p(y) = Γ(α+β)/(Γ(α)Γ(β)) · y<sup>α−1</sup> (1 − y)<sup>β−1</sup>", por:"Soporte [0, 1] con formas muy flexibles: la Normal se saldría del intervalo.",
+       par:"α &gt; 0 y β &gt; 0: dos parámetros, así que la red tiene dos salidas.", enl:"α = e<sup>f₁(x, φ)</sup> y β = e<sup>f₂(x, φ)</sup>.",
+       nll:"Σ [ −log Γ(α+β) + log Γ(α) + log Γ(β) − (α−1) log y − (β−1) log(1−y) ]", cae:"Nada: todos los términos dependen de α o β, y estos de φ.", inf:"La media α/(α + β).",
+       num:function(){ var a = 2, b = 3, y = 0.6, lp = lgamma(a + b) - lgamma(a) - lgamma(b) + (a - 1)*Math.log(y) + (b - 1)*Math.log(1 - y);
+         return "α = 2 (f₁ = log 2), β = 3 (f₂ = log 3), y = 0.6 ⇒ densidad = " + F(Math.exp(lp), 3) + ", costo = <b>" + F(-lp, 3) + "</b>. Es negativo porque la densidad pasa de 1; es normal en variables continuas."; }},
+      {v:"multi", t:"Varias etiquetas", dato:"y<sub>d</sub> ∈ {0, 1} para cada etiqueta d", ej:"etiquetas de una foto satelital: hay agua, hay construcción, hay cultivo (pueden darse varias a la vez).",
+       dist:"Una Bernoulli por etiqueta", fd:"P(y | x) = Π<sub>d</sub> P(y<sub>d</sub> | λ<sub>d</sub>)", por:"Cada etiqueta es sí/no y pueden coexistir. Se supone independencia condicional dado x (falla si hay etiquetas correlacionadas).",
+       par:"λ<sub>d</sub> ∈ [0, 1] para cada etiqueta.", enl:"Sigmoide por etiqueta: λ<sub>d</sub> = σ(f<sub>d</sub>).",
+       nll:"Σ<sub>d</sub> −[ y<sub>d</sub> log σ(f<sub>d</sub>) + (1 − y<sub>d</sub>) log(1 − σ(f<sub>d</sub>)) ]&nbsp; (suma de BCE)", cae:"Nada: no queda ninguna parte constante respecto a φ.", inf:"Una probabilidad por etiqueta; cada una se compara con su umbral.",
+       num:function(){ var y = [1, 0, 1], f = [2, -1, 0.5], c = y.map(function(v, i){ return bce(v, f[i]); });
+         return "y = (1, 0, 1), f = (2, −1, 0.5) ⇒ costos por etiqueta " + c.map(function(v){ return F(v, 3); }).join(" + ") + " = <b>" + F(c[0] + c[1] + c[2], 3) + "</b>."; }}
+    ];
+    var tipo = TIPOS[0];
+    function carta(tit, html, nueva){ return '<div class="carta' + (nueva ? ' nueva' : '') + '"><div class="ct">' + tit + '</div>' + html + '</div>'; }
+    var pasos = DL.pasos($("labAsist"), {total:6, etiqueta:"paso", render:function(i){
+      var t = tipo, cs = [];
+      cs.push(carta("1 · Tipo de dato", "<b>" + t.t + ".</b> " + t.dato + ". Ejemplo: " + t.ej, i === 0));
+      if(i >= 1) cs.push(carta("2 · Distribución", "<b>" + t.dist + "</b><div class=\"cx\">" + t.fd + "</div>" + t.por, i === 1));
+      if(i >= 2) cs.push(carta("3 · Parámetro y su restricción", t.par, i === 2));
+      if(i >= 3) cs.push(carta("4 · Función de enlace", t.enl, i === 3));
+      if(i >= 4) cs.push(carta("5 · NLL simplificada", "<div class=\"cx\">L(φ) ≃ " + t.nll + "</div>" + t.cae + "<br><b>Con números:</b> " + t.num(), i === 4));
+      if(i >= 5) cs.push(carta("6 · Inferencia", t.inf, i === 5));
+      $("asCartas").innerHTML = cs.join("");
+    }});
+    selector($("asSel"), TIPOS.map(function(t){ return {v:t.v, t:t.t}; }), "poisson", function(v){
+      TIPOS.forEach(function(t){ if(t.v === v) tipo = t; }); pasos.ir(0);
+    });
+  })();
+
+  /* =============== Gabor: datos y funciones comunes =============== */
+  var DG = Core.gaborDatos(0, 16, 7, 30, 0.12);
+  function LG(a, b){ return Core.gaborL(DG, a, b); }
+  function pasoGD(p, eta){ var g = Core.gaborGrad(DG, p[0], p[1]); return [p[0] - eta*g[0], p[1] - eta*g[1]]; }
+  function dibujarPaisaje(g){
+    g.mapaCalor(LG, {res:4, log:true, clave:"gab"});
+    g.contornos(LG, [0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.45], {color:"text-2", ancho:1, clave:"gab"});
+  }
+  var MEJOR = (function(){  /* mejor pérdida entre 81 inicios en malla, GD con α = 2 y 400 pasos */
+    var mejor = Infinity;
+    for(var i=0;i<9;i++) for(var j=0;j<9;j++){
+      var p = [-9 + 18*i/8, 3 + 19*j/8];
+      for(var t=0;t<400;t++) p = pasoGD(p, 2);
+      mejor = Math.min(mejor, LG(p[0], p[1]));
+    }
+    return mejor;
+  })();
+
+  /* =============== LAB: paisaje de Gabor =============== */
+  (function(){
+    var eta = 2, ini = [3, 10], p = ini.slice(), camino = [p.slice()], varios = null;
+    var gm = DL.grafica($("gabCanvas"), {x:[-10, 10], y:[2.5, 22.5], alto:340, etiquetaX:"φ₀", etiquetaY:"φ₁"}, function(g){
+      dibujarPaisaje(g);
+      if(varios) varios.forEach(function(r){
+        g.polilinea(r.cam, {color:"text", ancho:1, alfa:0.45});
+        g.puntos([r.cam[0]], {color:"text", radio:4, hueco:true});
+        g.puntos([r.cam[r.cam.length - 1]], {color:"r-dato", radio:5, aro:true});
+      });
+      g.polilinea(camino, {color:"text", ancho:2});
+      g.puntos([ini], {color:"text", radio:5, hueco:true});
+      g.puntos([p], {color:"r-dato", radio:6, aro:true});
+    });
+    var gf = DL.grafica($("gabFit"), {x:[-15, 15], y:[-1.3, 1.3], alto:190, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.funcion(function(x){ return Core.gaborF(0, 16, x); }, {color:"text-3", ancho:1.3, guiones:true});
+      g.puntos(DG.X.map(function(x, k){ return [x, DG.Y[k]]; }), {color:"r-dato", radio:3});
+      g.funcion(function(x){ return Core.gaborF(p[0], p[1], x); }, {color:"accent", ancho:2.4});
+    });
+    function leer(){
+      var gr = Core.gaborGrad(DG, p[0], p[1]), n = Math.sqrt(gr[0]*gr[0] + gr[1]*gr[1]), L = LG(p[0], p[1]), t = camino.length - 1;
+      var filas = [["paso", t], ["φ₀", DL.fmt(p[0], 2)], ["φ₁", DL.fmt(p[1], 2)], ["L(φ)", DL.fmt(L, 3)], ["‖∇L‖", DL.fmt(n, 3)], ["mejor L (81 inicios)", DL.fmt(MEJOR, 3)]];
+      if(varios){
+        var dest = [], lo = Infinity, hi = -Infinity;
+        varios.forEach(function(r){
+          lo = Math.min(lo, r.L); hi = Math.max(hi, r.L);
+          if(!dest.some(function(q){ return Math.hypot(q[0] - r.fin[0], q[1] - r.fin[1]) < 0.6; })) dest.push(r.fin);
+        });
+        filas.push(["12 inicios: destinos", dest.length], ["L final, mín – máx", DL.fmt(lo, 3) + " – " + DL.fmt(hi, 3)]);
+      }
+      DL.readout($("gabRead"), filas);
+      var st = $("gabStatus");
+      if(n < 1e-3 && t > 0){
+        var bueno = L < 1.5*MEJOR;
+        st.className = "status " + (bueno ? "ok" : "bad");
+        st.textContent = bueno ? "Llegó al mejor valle conocido (L = " + DL.fmt(L, 3) + ")." : "Se quedó en un mínimo local: L = " + DL.fmt(L, 3) + ", y el mejor valle tiene " + DL.fmt(MEJOR, 3) + ".";
+      } else { st.className = "status info"; st.textContent = t === 0 ? "Elige un inicio con un clic y da pasos." : "Descendiendo…"; }
+      $("gabPill").textContent = "paso " + t;
+      gm.redibujar(); gf.redibujar();
+    }
+    function paso(){
+      var gr = Core.gaborGrad(DG, p[0], p[1]);
+      if(Math.sqrt(gr[0]*gr[0] + gr[1]*gr[1]) < 1e-4 || camino.length > 600){ leer(); return false; }
+      p = pasoGD(p, eta); camino.push(p.slice()); leer(); return true;
+    }
+    function reiniciar(nuevo){ bucle.parar(); if(nuevo) ini = nuevo; p = ini.slice(); camino = [p.slice()]; varios = null; leer(); }
+    var bucle = DL.bucle(function(){ var ok = true; for(var k=0;k<3 && ok;k++) ok = paso(); return ok; }, 30);
+    DL.control($("gabCtrl"), {etiqueta:"tasa de aprendizaje α", min:0.1, max:6, paso:0.1, valor:eta, alCambiar:function(v){ eta = v; reiniciar(); }});
+    gm.alPuntero(function(e){ if(e.tipo === "down" || (e.tipo === "move" && e.abajo)){ reiniciar([e.x, e.y]); } });
+    $("gabPaso").onclick = function(){ bucle.parar(); paso(); };
+    $("gabCorrer").onclick = function(){ bucle.corriendo() ? bucle.parar() : bucle.iniciar(); };
+    $("gabReset").onclick = function(){ reiniciar([3, 10]); };
+    $("gabMuchos").onclick = function(){
+      bucle.parar(); varios = [];
+      [-7.5, -2.5, 2.5, 7.5].forEach(function(a){ [6, 12.5, 19].forEach(function(b){
+        var q = [a, b], cam = [q.slice()];
+        for(var t=0;t<400;t++){ q = pasoGD(q, eta); cam.push(q.slice()); }
+        varios.push({cam:cam, fin:q, L:LG(q[0], q[1])});
+      }); });
+      leer();
+    };
+    leer();
+  })();
+
+  /* =============== LAB: GD contra SGD =============== */
+  (function(){
+    var MAX = 300, eta = 2, B = 5, semilla = 2, ini = [3, 10];
+    var pg, ps, cg, cs, hg, hs, muestra, t;
+    function estado(nuevo){
+      if(nuevo) ini = nuevo;
+      pg = ini.slice(); ps = ini.slice(); cg = [pg.slice()]; cs = [ps.slice()];
+      hg = [Math.log(LG(pg[0], pg[1]))/Math.LN10]; hs = hg.slice();
+      muestra = Core.nuevoMuestreador(DG.n, B, semilla); t = 0;
+    }
+    function reiniciar(nuevo){ bucle.parar(); estado(nuevo); leer(); }
+    estado();
+    var gm = DL.grafica($("sgdCanvas"), {x:[-10, 10], y:[2.5, 22.5], alto:320, etiquetaX:"φ₀", etiquetaY:"φ₁"}, function(g){
+      dibujarPaisaje(g);
+      g.polilinea(cg, {color:"g1", ancho:2}); g.polilinea(cs, {color:"g2", ancho:1.5});
+      g.puntos([ini], {color:"text", radio:5, hueco:true});
+      g.puntos([pg], {color:"g1", radio:6, aro:true}); g.puntos([ps], {color:"g2", radio:6, aro:true});
+    });
+    var gl = DL.grafica($("sgdLoss"), {x:[0, MAX], y:[-2.1, 0], alto:190, etiquetaX:"paso", etiquetaY:"pérdida real L(φ)", opcionesEjes:{ticksY:[-2, -1.5, -1, -0.5, 0], fmtY:function(v){ return DL.fmt(Math.pow(10, v), 2); }}}, function(g){
+      g.polilinea(hg.map(function(v, i){ return [i, v]; }), {color:"g1", ancho:2});
+      g.polilinea(hs.map(function(v, i){ return [i, v]; }), {color:"g2", ancho:1.5});
+    });
+    function leer(){
+      var a = LG(pg[0], pg[1]), b = LG(ps[0], ps[1]);
+      DL.readout($("sgdRead"), [["paso", t], ["GD: φ", DL.fmt(pg[0], 2) + ", " + DL.fmt(pg[1], 2)], ["GD: L", DL.fmt(a, 3)], ["SGD: φ", DL.fmt(ps[0], 2) + ", " + DL.fmt(ps[1], 2)], ["SGD: L", DL.fmt(b, 3)], ["|B| / semilla", B + " / " + semilla]]);
+      var st = $("sgdStatus");
+      if(t >= MAX){ var mejor = b < 1.5*MEJOR; st.className = "status " + (mejor ? "ok" : "info");
+        st.textContent = "Fin. GD: L = " + DL.fmt(a, 3) + "; SGD: L = " + DL.fmt(b, 3) + (b < a*0.5 ? ". SGD salió del valle de GD." : (a < b*0.5 ? ". GD quedó mejor." : ". Terminaron en pérdidas parecidas.")); }
+      else { st.className = "status info"; st.textContent = t === 0 ? "Ambos salen del mismo punto." : "Corriendo…"; }
+      $("sgdPill").textContent = "paso " + t + " de " + MAX + " · semilla " + semilla;
+      gm.redibujar(); gl.redibujar();
+    }
+    function paso(){
+      if(t >= MAX) return false;
+      pg = pasoGD(pg, eta);
+      var gr = Core.gaborGrad(DG, ps[0], ps[1], muestra());
+      ps = [ps[0] - eta*gr[0], ps[1] - eta*gr[1]];
+      cg.push(pg.slice()); cs.push(ps.slice());
+      hg.push(Math.max(-2.1, Math.log(LG(pg[0], pg[1]))/Math.LN10)); hs.push(Math.max(-2.1, Math.log(LG(ps[0], ps[1]))/Math.LN10));
+      t++; leer(); return t < MAX;
+    }
+    var bucle = DL.bucle(function(){ var ok = true; for(var k=0;k<3 && ok;k++) ok = paso(); return ok; }, 40);
+    DL.control($("sgdCtrl"), {etiqueta:"tasa de aprendizaje α", min:0.2, max:5, paso:0.1, valor:eta, alCambiar:function(v){ eta = v; reiniciar(); }});
+    selector($("sgdSelB"), [1, 5, 10, 30].map(function(b){ return {v:b, t:"|B| = " + b}; }), B, function(v){ B = v; reiniciar(); });
+    gm.alPuntero(function(e){ if(e.tipo === "down"){ reiniciar([e.x, e.y]); } });
+    $("sgdPaso").onclick = function(){ bucle.parar(); paso(); };
+    $("sgdCorrer").onclick = function(){ if(t >= MAX) reiniciar(); bucle.corriendo() ? bucle.parar() : bucle.iniciar(); };
+    $("sgdSemilla").onclick = function(){ semilla = semilla % 8 + 1; reiniciar(); };
+    $("sgdReset").onclick = function(){ semilla = 2; reiniciar([3, 10]); };
+    reiniciar();
+  })();
+
+  /* =============== LAB: carrera de optimizadores =============== */
+  (function(){
+    var MAX = 200, kap = 100, ang = 30, beta = 0.9, SIGMA = 1, ruido = false;
+    var A = {gd:0.019, mom:0.1, nes:0.1, adam:0.3}, ini = [-2.6, -1.0];
+    var NOMB = [["gd", "GD", "g1"], ["mom", "Momentum", "g2"], ["nes", "Nesterov", "g3"], ["adam", "Adam", "g4"]];
+    var S, M, cam, hist, t, sobre, u0, rr, seq;
+    function proyU(p){ var a = ang*Math.PI/180; return Math.cos(a)*p[0] + Math.sin(a)*p[1]; }
+    function estado(nuevo){
+      if(nuevo) ini = nuevo;
+      S = Core.superficie(kap, ang); M = {}; cam = {}; hist = {}; sobre = {}; t = 0; seq = []; rr = DL.rng(7); u0 = proyU(ini);
+      NOMB.forEach(function(n){ M[n[0]] = Core.nuevoMetodo(n[0], ini); cam[n[0]] = [ini.slice()]; hist[n[0]] = [Math.log(Math.max(S.f(ini[0], ini[1]), 1e-6))/Math.LN10]; sobre[n[0]] = 0; });
+    }
+    function reiniciar(nuevo){ bucle.parar(); estado(nuevo); leer(); }
+    estado();
+    function ruidoEn(k){ while(seq.length <= k) seq.push([rr.normal(0, SIGMA), rr.normal(0, SIGMA)]); return seq[k]; }
+    var gm = DL.grafica($("carCanvas"), {x:[-4.5, 4.5], y:[-3, 3], alto:330, etiquetaX:"φ₀", etiquetaY:"φ₁"}, function(g){
+      var f = function(x, y){ return S.f(x, y); }, clave = "car" + kap + "_" + ang;
+      g.mapaCalor(f, {res:4, log:true, clave:clave});
+      g.contornos(f, [0.1, 0.5, 2, 6, 15, 40], {color:"text-2", ancho:1, clave:clave});
+      g.puntos([[0, 0]], {color:"text", radio:5, hueco:true});
+      NOMB.forEach(function(n){ g.polilinea(cam[n[0]], {color:n[2], ancho:2}); });
+      g.puntos([ini], {color:"text", radio:4, hueco:true});
+      NOMB.forEach(function(n){ g.puntos([M[n[0]].p], {color:n[2], radio:5, aro:true}); });
+    });
+    var gl = DL.grafica($("carLoss"), {x:[0, MAX], y:[-6, 3], alto:200, etiquetaX:"paso", etiquetaY:"pérdida (escala log)", opcionesEjes:{ticksY:[-6, -4, -2, 0, 2], fmtY:pot10}}, function(g){
+      NOMB.forEach(function(n){ g.polilinea(hist[n[0]].map(function(v, i){ return [i, v]; }), {color:n[2], ancho:2}); });
+    });
+    function leer(){
+      var filas = NOMB.map(function(n){
+        var m = M[n[0]], L = S.f(m.p[0], m.p[1]);
+        return ['<span style="color:var(--' + n[2] + ');font-weight:600">● ' + n[1] + '</span>', m.rota ? "diverge" : DL.fmt(L, 4) + " · pasó " + DL.fmt(sobre[n[0]], 2)];
+      });
+      DL.readout($("carRead"), filas);
+      var rotos = NOMB.filter(function(n){ return M[n[0]].rota; }).map(function(n){ return n[1]; });
+      var st = $("carStatus");
+      st.className = "status " + (rotos.length ? "bad" : "info");
+      st.textContent = rotos.length ? "Diverge: " + rotos.join(", ") + ". La α es demasiado grande para ese método." : (t === 0 ? "«pasó» = cuánto se fue más allá del mínimo a lo largo del valle largo." : "Cada fila: pérdida actual · cuánto se pasó del mínimo.");
+      $("carPill").textContent = "paso " + t + " de " + MAX;
+      gm.redibujar(); gl.redibujar();
+    }
+    function paso(){
+      if(t >= MAX) return false;
+      var nz = ruido ? ruidoEn(t) : [0, 0];
+      NOMB.forEach(function(n){
+        var m = M[n[0]];
+        if(!m.rota) Core.pasoMetodo(m, S, {a:A[n[0]], b:beta, b2:0.999, eps:1e-8}, nz);
+        var L = m.rota ? 1e3 : S.f(m.p[0], m.p[1]);
+        cam[n[0]].push(m.rota ? cam[n[0]][cam[n[0]].length - 1] : m.p.slice());
+        hist[n[0]].push(Math.min(3, Math.max(-6, Math.log(Math.max(L, 1e-6))/Math.LN10)));
+        if(!m.rota) sobre[n[0]] = Math.max(sobre[n[0]], (u0 < 0 ? 1 : -1)*proyU(m.p));
+      });
+      t++; leer(); return t < MAX;
+    }
+    var bucle = DL.bucle(paso, 60);
+    var cont = $("carCtrl");
+    function ctrl(et, mn, mx, pa, val, fn, dec){ return DL.control(cont, {etiqueta:et, min:mn, max:mx, paso:pa, valor:val, formato:function(v){ return DL.fmt(v, dec === undefined ? 3 : dec); }, alCambiar:function(v){ fn(v); reiniciar(); }}); }
+    ctrl("α de GD", 0.002, 0.04, 0.001, A.gd, function(v){ A.gd = v; });
+    ctrl("α de momentum", 0.01, 0.3, 0.01, A.mom, function(v){ A.mom = v; }, 2);
+    ctrl("α de Nesterov", 0.01, 0.3, 0.01, A.nes, function(v){ A.nes = v; }, 2);
+    ctrl("α de Adam", 0.05, 1, 0.05, A.adam, function(v){ A.adam = v; }, 2);
+    ctrl("β (momentum, Nesterov; β₁ de Adam)", 0, 0.99, 0.01, beta, function(v){ beta = v; }, 2);
+    ctrl("ángulo del valle (grados)", 0, 45, 5, ang, function(v){ ang = v; }, 0);
+    ctrl("mal condicionamiento κ", 5, 150, 5, kap, function(v){ kap = v; }, 0);
+    selector(cont, [{v:false, t:"sin ruido"}, {v:true, t:"con ruido de mini-batch"}], false, function(v){ ruido = v; reiniciar(); });
+    gm.alPuntero(function(e){ if(e.tipo === "down") reiniciar([e.x, e.y]); });
+    $("carPaso").onclick = function(){ bucle.parar(); paso(); };
+    $("carCorrer").onclick = function(){ if(t >= MAX) reiniciar(); bucle.corriendo() ? bucle.parar() : bucle.iniciar(); };
+    $("carReset").onclick = function(){ reiniciar([-2.6, -1.0]); };
+    reiniciar();
+  })();
+})();
+</script>
+</body>
+</html>

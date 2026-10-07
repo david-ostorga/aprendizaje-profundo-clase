@@ -1,0 +1,1743 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regularización y diagnóstico</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: solo lo que no existe en estilos.css */
+  .diag-grid{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px}
+  .diag-grid .cv{min-width:0}
+  .diag-grid .cv-t{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:650; color:var(--text-2); margin-bottom:3px}
+  .diag-grid canvas{width:100%; display:block}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 12px}
+  .chips button{
+    font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px; padding:6px 10px; border-radius:8px;
+    border:1px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; text-align:left;
+  }
+  .chips button:hover{border-color:var(--accent)}
+  .chips button.sel{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600}
+  .diag-h{font-family:ui-sans-serif,system-ui,sans-serif; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); margin:12px 0 4px}
+  .ctx{font-size:15px; margin:0 0 12px}
+  .fb{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; line-height:1.55}
+  .fb .it{padding:8px 10px; border-radius:8px; margin:6px 0}
+  .fb .it.ok{background:var(--ok-soft); color:var(--text)}
+  .fb .it.mal{background:var(--warn-soft); color:var(--text)}
+  .fb .it.neu{background:var(--surface-2); color:var(--text)}
+  .fb b.v-ok{color:var(--ok)} .fb b.v-mal{color:var(--warn)}
+  .aug-card{border:1px solid var(--border); border-radius:10px; background:var(--surface-2); padding:12px 14px; margin-bottom:10px}
+  .aug-card .caso{font-size:15px}
+  .aug-card .tr{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; margin-top:6px; color:var(--accent); font-weight:600}
+  .tbl td.num-c, .tbl th.num-c{text-align:right; white-space:nowrap}
+  @media (max-width:700px){ .diag-grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Regularización</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 05</div>
+  <h1>Regularización: ganar fuera de muestra, no solo en entrenamiento</h1>
+  <p class="lead">Un modelo que memoriza el entrenamiento no sirve de nada. Aquí aprendes las herramientas para que generalice (penalizaciones, optimizador, BatchNorm, dropout y más) y cierras con un simulador que te entrena a diagnosticar cualquier entrenamiento, que es lo que pide la Parte C del examen.</p>
+  <div class="meta">Fuente: <code>slides/Regularizacion.Rmd</code> · Temario del Examen 1, secciones 5 y 6 · Lectura de unos 55 minutos, sin contar los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+
+<p>Hasta ahora aprendiste a <strong>bajar la pérdida de entrenamiento</strong>: elegir una pérdida, calcular gradientes con backpropagation, inicializar bien y escoger un optimizador. Pero la pregunta que importa es otra: ¿qué tan bien predice el modelo con datos que <em>nunca vio</em>? La slide da tres razones por las que el error de prueba (test) puede ser mucho peor que el de entrenamiento:</p>
+<ol>
+  <li><strong>Sobreajuste.</strong> El modelo se aprende detalles y ruido del conjunto de entrenamiento.</li>
+  <li><strong>Regiones sin ejemplos.</strong> El modelo debe predecir en zonas donde no observó nada, y ahí inventa.</li>
+  <li><strong>Distribución distinta.</strong> El entrenamiento puede no representar bien lo que verá el modelo en producción.</li>
+</ol>
+
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Entrenamiento 1 y 2: pérdidas desde distribuciones, backprop, inicialización, sesgo y varianza. Sabes bajar la pérdida de train.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">¿Cómo hacemos que lo aprendido sirva fuera de muestra? Regularización explícita, implícita y heurísticas. Y cómo diagnosticar.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Las arquitecturas (CNN, RNN, Transformers) son otra forma de regularizar: meten supuestos sobre los datos en la estructura de la red.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p><strong>Regularizar es preferir ciertas soluciones cuando muchas ajustan igual de bien el entrenamiento.</strong> Una red grande tiene millones de combinaciones de parámetros que dejan la pérdida de train casi en cero; cada una predice distinto fuera de muestra. La regularización es el criterio de desempate, y puede venir de un término que tú agregas (explícita), del propio optimizador (implícita) o de un truco de entrenamiento (heurística).</p>
+</div>
+
+<p>Un ejemplo de política pública para tener en mente toda la clase: una secretaría entrena un modelo con 8,000 expedientes de solicitudes para decidir a quién priorizar. Si el modelo solo acierta en esos 8,000, no sirve. Lo que la secretaría necesita es acierto en las solicitudes del año que viene. Todo lo que sigue es una forma de acercar un número al otro.</p>
+
+<!-- ============ 2. EXPLÍCITA ============ -->
+<h2 id="explicita"><span class="num">Sección 2</span>Regularización explícita</h2>
+
+<p>La idea más directa: en lugar de minimizar solo la pérdida, minimizas la pérdida <strong>más un castigo</strong> por tener parámetros «raros». Tú decides qué es raro con una función g(φ) y cuánto te importa con un número λ.</p>
+
+<p>Un caso con números. Un modelo con parámetros φ = (3, −2) tiene pérdida de entrenamiento 2.0. Tomamos como castigo g(φ) = φ₁² + φ₂² = 9 + 4 = 13 y λ = 0.1. El objetivo vale 2.0 + 0.1·13 = <b>3.3</b>. Otro modelo φ′ = (1, −1) ajusta un poco peor (pérdida 2.6), pero su castigo es solo 1 + 1 = 2, así que su objetivo vale 2.6 + 0.1·2 = <b>2.8</b>. El entrenamiento regularizado prefiere φ′: cambia un poco de ajuste por parámetros más chicos.</p>
+
+<div class="formula">
+  <div class="f-head">Objetivo con regularización explícita</div>
+  <div class="f-ejemplo">Σℓᵢ = 2.0,  φ = (3, −2),  g(φ) = 3² + (−2)² = 13,  λ = 0.1  →  2.0 + 0.1 · 13 = 3.3   ·   con φ′ = (1, −1): 2.6 + 0.1 · 2 = 2.8  (gana φ′)</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmin"></span><span class="sub r-param">φ</span> [ <span class="big"><span class="lim r-dato">I</span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="ell"></span><span class="sub">i</span>( <span class="r-dato">x</span><span class="sub">i</span>, <span class="r-dato">y</span><span class="sub">i</span>, <span class="r-param">φ</span> ) + <span class="sym" data-s="lambda"></span> <span class="r-calc">g</span>(<span class="r-param">φ</span>) ]
+    <span class="lbl">la slide escribe I (no n) para el número de observaciones</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Los parámetros que elegimos, φ gorro, son los que hacen mínima la suma de las pérdidas de todos los ejemplos más lambda por g de φ.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">φ̂</dt><dd>Los parámetros resultantes: el mejor compromiso entre ajustar los datos y portarse bien según g.</dd>
+      <dt class="r-calc">ℓᵢ(xᵢ, yᵢ, φ)</dt><dd>La pérdida del ejemplo i. La suma sobre i = 1…I es la pérdida de entrenamiento de siempre.</dd>
+      <dt class="r-calc">g(φ)</dt><dd>La penalización: un número que es grande cuando φ «se porta mal» y chico cuando «se porta bien». Con g(φ) = Σφⱼ² es L2; con g(φ) = Σ|φⱼ| es L1.</dd>
+      <dt class="r-hiper">λ</dt><dd>Cuánto pesa la penalización frente a la pérdida. Lo eliges tú (y se afina con validación). No es la λ de Bernoulli de la clase 3.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…λ = 0: desaparece la penalización y vuelves al entrenamiento normal (puede sobreajustar).</li>
+      <li>…λ crece: la penalización domina, los parámetros se encogen y el modelo se vuelve más simple. Con λ enorme, φ̂ ≈ 0 y el modelo subajusta.</li>
+      <li>…g(φ) es muy grande para un φ dado: ese φ queda descartado aunque ajuste perfecto. Por eso g «decide qué soluciones nos caen mal».</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="optimo-regularizado" data-toc="El óptimo regularizado, a mano">El óptimo regularizado, a mano</h3>
+<p>Con un solo parámetro se puede resolver todo con papel. Supón que los datos piden φ = 3, es decir, la pérdida es (φ − 3)². Compara las dos penalizaciones más comunes.</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">f(φ) = (φ − 3)² + λφ²</div><div class="d-por">El objetivo con penalización L2: g(φ) = φ². Sin la penalización el mínimo estaría en φ = 3.</div></li>
+  <li><div class="d-ex">f′(φ) = 2(φ − 3) + 2λφ</div><div class="d-por"><b>Regla de la potencia y de la cadena</b> (<a href="00_matematicas.html#tabla-derivadas">tabla de derivadas</a>): la derivada de (φ − 3)² es 2(φ − 3) · 1, y la de λφ² es 2λφ.</div></li>
+  <li><div class="d-ex">2(φ − 3) + 2λφ = 0</div><div class="d-por"><b>Mínimo = pendiente cero:</b> igualamos la derivada a 0.</div></li>
+  <li><div class="d-ex">φ − 3 + λφ = 0  ⇒  φ(1 + λ) = 3</div><div class="d-por"><b>Dividir entre 2 y agrupar</b> los términos con φ (factor común).</div></li>
+  <li><div class="d-ex">φ̂ = 3 / (1 + λ)</div><div class="d-por"><b>Despejar</b> φ dividiendo entre (1 + λ).</div></li>
+  <li><div class="d-ex">λ = 0 → 3 · λ = 1 → 1.5 · λ = 3 → 0.75 · λ = 9 → 0.30</div><div class="d-por"><b>Verificación con números:</b> el óptimo se encoge hacia 0 conforme sube λ, pero nunca llega a 0 con un λ finito. Eso es L2: <em>encoge</em> sin eliminar.</div></li>
+</ol>
+
+<p>Con L1, g(φ) = |φ|, el resultado es distinto: φ̂ = 3 − λ/2 mientras λ &lt; 6, y φ̂ = <b>exactamente 0</b> cuando λ ≥ 6. Con λ = 2 sale 2; con λ = 6 sale 0. La razón es la fuerza con la que cada penalización jala hacia cero: la de L2 es proporcional a φ (2λφ), así que se debilita al acercarse a 0 y nunca termina el trabajo; la de L1 es constante (λ cerca de cualquier φ ≠ 0), y llega a 0 en cuanto el jalón supera la fuerza con que los datos empujan. Cuando los datos «empujan» con fuerza 2·|0 − 3| = 6 a φ = 0, L1 con λ ≥ 6 gana. Esa propiedad se llama <strong>esparsidad</strong>: muchos parámetros terminan exactamente en 0, y por eso L1 sirve para <em>eliminar</em> pesos (en la Tarea 5 verás L1 y pruning).</p>
+
+<h3 id="lab-penalizacion" class="lab" data-toc="Lab: pérdida + penalización">Laboratorio: pérdida + penalización</h3>
+<p>Dos parámetros (φ₁, φ₂). Las elipses azules son las curvas de nivel de la pérdida de los datos (su mínimo está en φ* = (2.5, 1)), y los ejes de las elipses están inclinados porque φ₁ y φ₂ están correlacionados. Las curvas amarillas son las de la penalización (círculos de φ₁² + φ₂² para L2, rombos de |φ₁| + |φ₂| para L1). El punto naranja es el óptimo regularizado φ̂ y la línea es su trayectoria al subir λ de 0 a 6. Para L2, la pérdida es (φ − φ*)ᵀA(φ − φ*) + λ‖φ‖² con A = [[1, 0.8], [0.8, 1]], y el óptimo sale en forma cerrada: φ̂ = (A + λI)⁻¹ A φ*. Para L1 no hay fórmula cerrada y el laboratorio lo resuelve numéricamente con descenso por coordenadas y soft-threshold. <strong>Empieza</strong> moviendo λ de 0 a 6 con L2 y luego cambia a L1.</p>
+<div class="widget" id="labPen">
+  <div class="widget-head"><div class="wt">El óptimo regularizado se mueve hacia el origen</div><div class="ws">La elipse y la curva de penalización que pasan por φ̂ se tocan: ahí el compromiso es perfecto.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="penCanvas"></canvas>
+      <div><div id="penSel"></div><div id="penCtrl"></div><div id="penRead"></div><div class="status info" id="penStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="penL0">λ = 0</button>
+    <button class="btn" id="penL1">λ = 1</button>
+    <button class="btn" id="penL4">λ = 4</button>
+    <span class="pill">mínimo sin penalizar: φ* = (2.5, 1)</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con L2 y λ = 0 el óptimo está en φ* = (2.5, 1) y la penalización no hace nada. Con λ = 1 pasa a (1.25, 1.00), con λ = 4 a (0.58, 0.51). La trayectoria se curva hacia el origen sin llegar nunca.</li>
+    <li>Con L2, φ₂ <em>sube</em> al principio (de 1.00 a 1.20 con λ = 0.25) aunque la penalización lo quiere bajar: como φ₁ y φ₂ están correlacionados, al encoger φ₁ el modelo compensa con φ₂. Eso es lo que la slide llama «repartir peso entre variables correlacionadas».</li>
+    <li>Cambia a L1 y pon λ = 4: el óptimo cae sobre el eje φ₁, en (1.30, 0.00). Con λ = 3.6 φ₂ llega justo a cero; desde ahí φ₂ se queda en 0 y solo φ₁ sigue bajando. Eso es esparsidad.</li>
+    <li>En ambos casos, la elipse que pasa por φ̂ toca la curva de penalización que pasa por φ̂: ahí no hay forma de mejorar un criterio sin empeorar el otro.</li>
+  </ol>
+</div>
+
+<!-- ============ 3. MAP ============ -->
+<h2 id="map"><span class="num">Sección 3</span>Interpretación probabilística: la prior</h2>
+
+<p>En la clase 3 construiste pérdidas con <strong>máxima verosimilitud</strong>: elegir φ para que los datos observados sean lo más probables posible (ver <a href="00_matematicas.html#iid">i.i.d. y el producto</a>). Esa receta ignora algo: tú ya tienes una opinión sobre cómo deben verse los parámetros antes de ver un solo dato. La <strong>prior</strong> P(φ) es esa opinión, escrita como una distribución de probabilidad.</p>
+
+<p>Ejemplo sin jerga. Un analista va a estimar cuánto cambia el ingreso de un hogar por cada año adicional de escolaridad. Antes de ver los datos ya sabe que el efecto no puede ser de miles de pesos por año ni negativo y enorme: lo razonable es algo moderado. Esa expectativa, «los parámetros probablemente son pequeños», es una prior. Cuando llegan los datos, combina las dos cosas: lo que los datos dicen (verosimilitud) y lo que ya creía (prior). El resultado es la <strong>posterior</strong>.</p>
+
+<p>Con números. Dos candidatos para φ. El candidato A hace que los datos tengan verosimilitud 0.020 y la prior le da densidad 0.10. El candidato B hace los datos algo más probables (0.025), pero es un valor que la prior considera raro (0.04). Máxima verosimilitud elige B (0.025 &gt; 0.020). Pero la posterior es proporcional al producto: A vale 0.020 · 0.10 = <b>0.0020</b>, B vale 0.025 · 0.04 = <b>0.0010</b>. La estimación MAP (Maximum A Posteriori) elige A.</p>
+
+<div class="formula">
+  <div class="f-head">Estimación MAP: verosimilitud × prior</div>
+  <div class="f-ejemplo">A: 0.020 · 0.10 = 0.0020   ·   B: 0.025 · 0.04 = 0.0010   →   MAP elige A (máxima verosimilitud habría elegido B)</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmax"></span><span class="sub r-param">φ</span> [ <span class="big"><span class="lim r-dato">I</span><span class="o">Π</span><span class="lim">i=1</span></span> <span class="sym" data-s="P">P(y<sub>i</sub> | x<sub>i</sub>, φ)</span> ] · <span class="sym" data-s="prior"></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Elegimos los parámetros que maximizan el producto de las probabilidades de cada dato, multiplicado por la prior de φ.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">Π P(yᵢ | xᵢ, φ)</dt><dd>La verosimilitud: la probabilidad conjunta de todos los datos si los parámetros son φ (producto porque las observaciones son i.i.d.). Es lo que ya usabas.</dd>
+      <dt class="r-calc">P(φ)</dt><dd>La prior: qué tan plausible consideras φ <em>antes</em> de ver los datos. Es el factor nuevo.</dd>
+      <dt class="r-calc">φ̂</dt><dd>El φ que más probabilidad tiene después de ver los datos (el máximo de la posterior).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…la prior es plana (todos los φ igual de plausibles): P(φ) es constante, no cambia el argmax y MAP = máxima verosimilitud.</li>
+      <li>…la prior es muy puntiaguda alrededor de 0: los φ lejos de 0 pierden tanto en el producto que ni datos muy a favor los rescatan.</li>
+      <li>…hay muchísimos datos: la verosimilitud (un producto de muchos factores) crece o cae mucho más rápido que la prior, y la prior pesa cada vez menos.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion-map" data-toc="De MAP a L2">De MAP a L2, paso a paso</h3>
+<p>Aquí está el puente. Tomamos el logaritmo (la <a href="00_matematicas.html#log-argmax">sección sobre log y argmax</a> dice que no cambia el argmax), lo negamos para convertir un máximo en un mínimo, y suponemos una prior Normal centrada en 0 e independiente para cada parámetro φⱼ, con varianza σ<span class="sub">φ</span>².</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">φ̂ = argmax<sub>φ</sub> [ Π<sub>i</sub> P(yᵢ | xᵢ, φ) ] · P(φ)</div><div class="d-por">Punto de partida: la fórmula MAP.</div></li>
+  <li><div class="d-ex">φ̂ = argmax<sub>φ</sub> [ Σ<sub>i</sub> log P(yᵢ | xᵢ, φ) + log P(φ) ]</div><div class="d-por"><b>Log de un producto:</b> log(a·b) = log a + log b, y el producto Π se vuelve suma Σ. Aplicar log no cambia dónde está el máximo (<a href="00_matematicas.html#log-exp">propiedades de log y exp</a>).</div></li>
+  <li><div class="d-ex">φ̂ = argmin<sub>φ</sub> [ − Σ<sub>i</sub> log P(yᵢ | xᵢ, φ) − log P(φ) ]</div><div class="d-por"><b>Maximizar f es minimizar −f</b> (<a href="00_matematicas.html#max-min">sección 9 del artefacto 00</a>). Ahora el primer término es la pérdida de siempre y el segundo es el castigo: λg(φ) ≈ −log P(φ).</div></li>
+  <li><div class="d-ex">P(φ) = Π<sub>j</sub> N(φⱼ; 0, σ<sub>φ</sub>²)  y  N(φⱼ; 0, σ<sub>φ</sub>²) = (2πσ<sub>φ</sub>²)<sup>−1/2</sup> exp( −φⱼ² / (2σ<sub>φ</sub>²) )</div><div class="d-por"><b>Supuesto de la prior:</b> cada parámetro es una Normal con media 0 e independiente de los demás, y esta es la altura de la <a href="00_matematicas.html#normal">Normal</a>.</div></li>
+  <li><div class="d-ex">−log P(φ) = Σ<sub>j</sub> [ ½ log(2πσ<sub>φ</sub>²) + φⱼ² / (2σ<sub>φ</sub>²) ]</div><div class="d-por"><b>Menos-log de la Normal</b> (la derivación de la <a href="00_matematicas.html#normal">sección 8</a>), aplicada a cada φⱼ. El log de un producto sobre j vuelve a ser una suma.</div></li>
+  <li><div class="d-ex">−log P(φ) = (constante) + (1 / (2σ<sub>φ</sub>²)) · Σ<sub>j</sub> φⱼ²</div><div class="d-por"><b>Sacar factor común:</b> ½ log(2πσ<sub>φ</sub>²) no depende de φ, y 1/(2σ<sub>φ</sub>²) multiplica a todos los φⱼ². La constante no cambia el argmin y se descarta.</div></li>
+  <li><div class="d-ex">λ = 1 / (2σ<sub>φ</sub>²),  g(φ) = Σ<sub>j</sub> φⱼ²</div><div class="d-por"><b>Identificar</b> con λg(φ): una prior Normal es exactamente la penalización L2, y σ<sub>φ</sub> chica (prior estrecha) da λ grande.</div></li>
+  <li><div class="d-ex">σ<sub>φ</sub> = 0.5 → λ = 2 · σ<sub>φ</sub> = 1 → λ = 0.5 · σ<sub>φ</sub> = 0.1 → λ = 50</div><div class="d-por"><b>Verificación con números:</b> 1/(2·0.25) = 2, 1/(2·1) = 0.5, 1/(2·0.01) = 50. Una prior estrecha («estoy muy seguro de que los pesos son chicos») equivale a un λ enorme.</div></li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Cuidado con la escala</span>
+  <p>La equivalencia λ = 1/(2σ<sub>φ</sub>²) es exacta cuando la pérdida es la <strong>suma</strong> de −log P(yᵢ | xᵢ, φ) sobre los ejemplos, sin dividir entre n, que es como lo escribe la slide. Si la pérdida es el promedio (con 1/n), λ cambia por un factor n. Y si usas el error cuadrado Σ(y − f)² en lugar del menos-log de una Normal con varianza σ<sub>y</sub>², multiplicar todo por 2σ<sub>y</sub>² da λ = σ<sub>y</sub>²/σ<sub>φ</sub>². La idea no cambia (prior estrecha, λ grande), solo la constante.</p>
+</div>
+
+<p>Y L1 también sale de una prior: si cada φⱼ sigue una distribución de <strong>Laplace</strong> (muy puntiaguda en 0 y con colas largas), el menos-log da |φⱼ|/b en lugar de φⱼ². Esa derivación es la primera pregunta de la <a href="#practica">práctica</a>. La slide solo pide la idea: <em>λg(φ) ≈ −log P(φ)</em>.</p>
+
+<h3 id="lab-prior" class="lab" data-toc="Lab: la prior y λ">Laboratorio: la prior y su λ equivalente</h3>
+<p>La campana es la prior de un peso φⱼ. Con ella puedes ver «qué tan seguro estoy de que los pesos son chicos» y qué λ le corresponde. Cambia a la vista de la penalización para ver −log P(φ) sin la constante: es la parábola λφ².</p>
+<div class="widget" id="labPrior">
+  <div class="widget-head"><div class="wt">Prior Normal N(0, σ<sub>φ</sub>²) y penalización equivalente</div><div class="ws">σ<sub>φ</sub> chica = prior estrecha = λ grande.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="priCanvas"></canvas>
+      <div><div id="priSel"></div><div id="priCtrl"></div><div id="priRead"></div><div class="status info" id="priStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con σ<sub>φ</sub> = 1: λ = 0.50. La prior le da probabilidad ≈ 4.6% a |φ| &gt; 2 y el castigo de φ = 2 es 0.5 · 4 = 2.</li>
+    <li>Baja σ<sub>φ</sub> a 0.5: λ = 2.00. La campana es angosta y alta, |φ| &gt; 2 casi no tiene probabilidad (≈ 0.006%), y la parábola de penalización se cierra: φ = 2 cuesta 8.</li>
+    <li>Sube σ<sub>φ</sub> a 3: λ ≈ 0.056. La campana es ancha y baja, casi plana: la penalización es tan suave que casi no regulariza (MAP ≈ máxima verosimilitud).</li>
+  </ol>
+</div>
+
+<!-- ============ 4. L2 ============ -->
+<h2 id="l2"><span class="num">Sección 4</span>L2 / weight decay en redes</h2>
+
+<p>La penalización L2 de la slide es la que acabas de derivar desde la prior Normal:</p>
+<div class="formula">
+  <div class="f-head">Regularización L2</div>
+  <div class="f-ejemplo">φ = (0.5, −2, 1)  →  Σφⱼ² = 0.25 + 4 + 1 = 5.25  →  con λ = 0.01 el castigo es 0.0525; con λ = 1, es 5.25</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmin"></span><span class="sub r-param">φ</span> [ <span class="big"><span class="lim r-dato">I</span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="ell"></span><span class="sub">i</span>( <span class="r-dato">x</span><span class="sub">i</span>, <span class="r-dato">y</span><span class="sub">i</span>, <span class="r-param">φ</span> ) + <span class="sym" data-s="lambda"></span> <span class="big"><span class="lim">&nbsp;</span><span class="o">Σ</span><span class="lim">j</span></span> <span class="r-param">φ</span><span class="sub r-param">j</span><span class="sup">2</span> ]
+    <span class="lbl">equivale a λ‖φ‖², con ‖φ‖² = la norma al cuadrado, ver <a href="00_matematicas.html#sym-norma">sym-norma</a></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida de entrenamiento más lambda por la suma de los cuadrados de los pesos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">φⱼ</dt><dd>Cada peso de la red, uno por uno. Se eleva al cuadrado, así que pesos grandes (positivos o negativos) cuestan mucho y pesos chicos casi nada.</dd>
+      <dt class="r-hiper">λ</dt><dd>La fuerza de la regularización (en redes se suele llamar «weight decay» y se escribe con otra letra según la librería).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un peso vale 10: cuesta 100λ. Un peso de 1 cuesta solo λ. El cuadrado hace que el castigo se concentre en los pesos grandes.</li>
+      <li>…dos pesos valen lo mismo en el ajuste: L2 prefiere repartir (1 y 1 cuesta 2) a concentrar (2 y 0 cuesta 4).</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="weight-decay" data-toc="Relación con weight decay">Relación con weight decay</h3>
+<p>Ya derivaste esto en el <a href="01_repaso_ml.html#l2">artefacto 01</a>, así que solo lo recordamos en una línea. Con SGD, la penalización λΣφⱼ² agrega 2λφ al gradiente, y la actualización queda <b>φ ← (1 − 2ηλ)·φ − η∇L</b>: en cada paso los pesos se multiplican por un número un poquito menor que 1 (se «decaen») antes de seguir el gradiente. Con η = 0.1 y λ = 0.5, el factor es 1 − 0.1 = 0.9. La slide dice «para SGD estándar» porque con optimizadores como Adam la equivalencia deja de ser exacta. Algunas librerías definen el weight decay sin el 2, y entonces solo cambia la escala de λ.</p>
+
+<h3 id="sesgos" data-toc="Por qué no se regularizan los sesgos">Por qué no se regularizan los sesgos</h3>
+<p>La slide dice: «en redes neuronales normalmente la aplicamos a los pesos, pero no a los biases». La razón, con un caso extremo: un modelo ŷ = wx + b que debe predecir un nivel alto y constante, digamos y = 100 siempre (con x = 0). La pérdida es (100 − b)² y, si penalizas el sesgo, (100 − b)² + λb². El óptimo es b̂ = 100/(1 + λ): con λ = 1, la predicción cae a <b>50</b> para <em>todos</em> los ejemplos. Penalizar b no hizo al modelo «más simple»: lo hizo equivocarse por una constante.</p>
+<ul>
+  <li><strong>Solo desplazan.</strong> Un sesgo mueve la salida de una neurona hacia arriba o hacia abajo, pero no cambia qué tan sensible es la salida a la entrada. La flexibilidad del modelo (cuántas formas distintas puede tomar) viene de los pesos.</li>
+  <li><strong>Penalizarlos sesga el nivel.</strong> Los sesgos se encargan del «nivel promedio» de la predicción. Encogerlos hacia 0 mueve ese nivel sin ninguna ganancia en varianza.</li>
+  <li>Hay muchos menos sesgos que pesos, así que tampoco hay mucho que ganar.</li>
+</ul>
+
+<h3 id="l2-ayuda" data-toc="Por qué puede ayudar (y por qué no está garantizado)">Por qué puede ayudar, y por qué no está garantizado</h3>
+<div class="note good">
+  <span class="tag">La lectura intuitiva</span>
+  <p>Si la red sobreajusta, L2 obliga a equilibrar «ajustar bien el entrenamiento» contra «mantener pesos pequeños». Pesos pequeños significan una función que cambia suavemente: un dato nuevo, algo distinto de los de entrenamiento, no provoca una respuesta salvaje. Eso baja la <strong>varianza</strong> (el modelo cambia menos si cambias los datos de entrenamiento), a costa de subir un poco el <strong>sesgo</strong>.</p>
+</div>
+<p>Además, en redes <strong>sobreparametrizadas</strong> (más parámetros que datos) hay infinitas combinaciones de pesos que ajustan el entrenamiento perfecto. Mira el caso mínimo: una sola observación con x = (1, 1) e y = 2 exige φ₁ + φ₂ = 2. Sirven (2, 0), (1, 1), (0, 2), (3, −1), … Sus normas al cuadrado son 4, 2, 4 y 10. L2 elige la de menor norma: <b>(1, 1)</b>, la que reparte el peso. Es el criterio de desempate de la idea de fondo.</p>
+
+<div class="note fix">
+  <span class="tag">L2 no garantiza mejor generalización</span>
+  <p>La slide lo enmarca en un recuadro. Funciona <em>cuando hay sobreajuste y la fuerza λ es la adecuada</em>. Si el modelo ya subajusta, encoger pesos empeora todo: en el ejemplo (φ − 3)² con λ = 3, el óptimo pasa de 3 a 0.75, un error de 75% si la verdad era 3. Y con un λ muy grande, φ̂ ≈ 0. Si la señal real exige pesos grandes, L2 los castiga justo ahí. Depende de los datos, la arquitectura, el optimizador y el valor de λ.</p>
+</div>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Entonces cómo elijo λ?</div>
+<p>Como cualquier hiperparámetro: pruebas varios valores (por ejemplo 0, 10⁻⁴, 10⁻³, 10⁻², …) y te quedas con el que da mejor pérdida de <em>validación</em>. Nunca con el que da mejor pérdida de train (siempre ganaría λ = 0) ni con el de test (ver el escenario 6 del simulador).</p>
+
+<!-- ============ 5. IMPLÍCITA ============ -->
+<h2 id="implicita"><span class="num">Sección 5</span>Regularización implícita</h2>
+
+<p>Hasta aquí tú agregabas un término a la pérdida. Pero aunque no agregues nada, el algoritmo que usas para minimizar <em>ya prefiere ciertas soluciones</em>. Piensa en dos ríos que bajan de la misma montaña y desembocan en valles distintos: cuál valle encuentra cada gota depende de por dónde cae y con cuánta fuerza. Lo mismo pasa con el optimizador: la tasa de aprendizaje, el tamaño del batch, la inicialización y el schedule determinan <em>cuál</em> de los muchos mínimos con pérdida parecida encuentras. A esto se le llama <strong>regularización implícita</strong>.</p>
+
+<p>Para recordar la actualización de gradient descent (con la α de las slides de esta clase, que es la η del repaso):</p>
+<div class="eq">
+  <span class="r-param">φ</span><span class="sub">t+1</span> = <span class="r-param">φ</span><span class="sub">t</span> − <span class="sym" data-s="alpha"></span> <span class="sym" data-s="grad"></span>( <span class="r-param">φ</span><span class="sub">t</span> )
+  <span class="lbl">el nuevo φ es el viejo, menos un paso (de tamaño α) en contra del gradiente</span>
+</div>
+
+<h3 id="l-gd" data-toc="La pérdida modificada de GD">La pérdida modificada de GD</h3>
+<p>Un resultado aproximado dice que GD con paso α, que da saltos discretos, se comporta como si siguiera de forma continua <em>otra</em> pérdida: la original más un castigo a las zonas empinadas.</p>
+<p>Con números. Dos puntos P y Q tienen la misma pérdida L = 1, pero en P el terreno es casi plano (‖∇L‖ = 1) y en Q es muy empinado (‖∇L‖ = 10). Con α = 0.1: L̃(P) = 1 + (0.1/4)·1² = <b>1.025</b>, pero L̃(Q) = 1 + (0.1/4)·10² = <b>3.5</b>. Para GD, Q «cuesta» más que P aunque L los califique igual.</p>
+
+<div class="formula">
+  <div class="f-head">Pérdida modificada de gradient descent</div>
+  <div class="f-ejemplo">α = 0.1,  L = 1:   P con ‖∇L‖ = 1 → L̃ = 1 + 0.025 · 1 = 1.025   ·   Q con ‖∇L‖ = 10 → L̃ = 1 + 0.025 · 100 = 3.5</div>
+  <div class="eq">
+    <span class="sym" data-s="Ltilde"></span><span class="sub">GD</span>(<span class="r-param">φ</span>) = <span class="sym" data-s="L">L(φ)</span> + <span class="frac"><span class="num"><span class="r-hiper">α</span></span><span class="den">4</span></span> ‖ <span class="frac"><span class="num">∂<span class="r-calc">L</span></span><span class="den">∂<span class="r-param">φ</span></span></span> ‖<span class="sup">2</span>
+    <span class="lbl">‖∂L/∂φ‖² = (∂L/∂φ₁)² + (∂L/∂φ₂)² + …, la norma al cuadrado del gradiente</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida que GD realmente sigue es la pérdida de siempre más alfa sobre cuatro por la norma del gradiente al cuadrado.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">L̃<sub>GD</sub>(φ)</dt><dd>La pérdida «efectiva»: no es la que tú escribiste, es la que GD parece minimizar.</dd>
+      <dt class="r-calc">L(φ)</dt><dd>Tu pérdida original.</dd>
+      <dt class="r-hiper">α</dt><dd>La tasa de aprendizaje. Aquí también controla <em>cuánto</em> regulariza GD.</dd>
+      <dt class="r-calc">‖∂L/∂φ‖²</dt><dd>Qué tan empinado es el terreno en φ: la suma de los cuadrados de todas las derivadas parciales. Vale 0 en un punto plano.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…α → 0: el castigo desaparece y L̃ = L. GD con pasos diminutos sigue la pérdida original.</li>
+      <li>…α crece: las zonas empinadas se vuelven más caras para GD y la trayectoria las evita. Con un α enorme, GD ya no se queda en valles estrechos: rebota y sale.</li>
+      <li>…el terreno es plano (‖∇L‖ pequeña): el castigo casi no cuenta. GD favorece regiones de pérdida baja <em>y</em> pendiente suave.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Una precisión que cae en el examen</span>
+  <p>En un punto donde ∇L = 0 (un mínimo de L), el castigo (α/4)‖∇L‖² también vale 0 y su gradiente también es 0. Es lo que dice la slide: los puntos críticos de L son puntos críticos de L̃. Lo que cambia es la <strong>trayectoria</strong>: el castigo reconfigura el camino y puede hacer que GD se salga de un valle estrecho o se quede en uno ancho. Y recuerda: es una aproximación útil, <strong>no una ley exacta</strong> para cualquier red y cualquier α.</p>
+</div>
+
+<h3 id="l-sgd" data-toc="La pérdida modificada de SGD">La pérdida modificada de SGD</h3>
+<p>SGD calcula cada gradiente con un mini-batch, no con todos los datos, y esos gradientes no coinciden entre sí. La slide muestra cómo medir ese desacuerdo y lo agrega a la pérdida modificada. Por eso L̃<sub>SGD</sub> se escribe en dos renglones equivalentes; el segundo, el expandido, es el que conviene leer:</p>
+<p>Con números. Dos mini-batches (M = 2) con gradiente de un solo parámetro 3 y 1; el gradiente completo es su promedio, 2. Desviaciones: +1 y −1, cuadrados 1 y 1. Con α = 0.1 el término vale (0.1/(4·2))·(1 + 1) = <b>0.025</b>. Si los dos batches casi coincidieran (2.1 y 1.9), valdría (0.1/8)·(0.01 + 0.01) = 0.00025: cien veces menos.</p>
+
+<div class="formula">
+  <div class="f-head">Pérdida modificada de SGD (segundo renglón de la slide)</div>
+  <div class="f-ejemplo">M = 2,  ∇L<sub>1</sub> = 3,  ∇L<sub>2</sub> = 1,  ∇L = 2,  α = 0.1  →  término extra = (0.1 / 8) · ( (3 − 2)² + (1 − 2)² ) = 0.025</div>
+  <div class="eq">
+    <span class="sym" data-s="Ltilde"></span><span class="sub">SGD</span>(<span class="r-param">φ</span>) = <span class="r-calc">L</span>(<span class="r-param">φ</span>) + <span class="frac"><span class="num"><span class="r-hiper">α</span></span><span class="den">4</span></span> ‖ <span class="frac"><span class="num">∂<span class="r-calc">L</span></span><span class="den">∂<span class="r-param">φ</span></span></span> ‖<span class="sup">2</span> + <span class="frac"><span class="num"><span class="r-hiper">α</span></span><span class="den">4<span class="sym" data-s="Mbatches"></span></span></span> <span class="big"><span class="lim">M</span><span class="o">Σ</span><span class="lim">m=1</span></span> ‖ <span class="frac"><span class="num">∂<span class="r-calc">L</span><span class="sub">m</span></span><span class="den">∂<span class="r-param">φ</span></span></span> − <span class="frac"><span class="num">∂<span class="r-calc">L</span></span><span class="den">∂<span class="r-param">φ</span></span></span> ‖<span class="sup">2</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida original, más alfa sobre cuatro por la norma del gradiente al cuadrado, más alfa sobre cuatro eme por la suma, sobre los mini-batches, de cuánto se aleja el gradiente de cada mini-batch del gradiente completo, al cuadrado.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">L<sub>m</sub></dt><dd>La pérdida calculada solo con el mini-batch m. Su gradiente ∂L<sub>m</sub>/∂φ es lo que SGD usa en un paso.</dd>
+      <dt class="r-calc">∂L/∂φ</dt><dd>El gradiente con todos los datos (el «verdadero»). Si los batches son del mismo tamaño y cubren los datos, es el promedio de los ∂L<sub>m</sub>/∂φ.</dd>
+      <dt class="r-calc">M</dt><dd>El número de mini-batches que se consideran. El 1/M convierte la suma en un promedio.</dd>
+      <dt class="r-calc">‖∂L<sub>m</sub>/∂φ − ∂L/∂φ‖²</dt><dd>Qué tanto se aleja el gradiente del batch m del gradiente completo: el «desacuerdo» de ese batch.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…todos los batches dan el mismo gradiente: el tercer término vale 0 y SGD se comporta como GD.</li>
+      <li>…el |B| es chico: cada batch promedia pocos ejemplos, sus gradientes se parecen menos entre sí y el término crece. Con |B| grande, los batches coinciden más y el término se achica.</li>
+      <li>…α sube: ambos términos extra suben. A mayor α, más fuerte la preferencia implícita.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Otra diferencia clave con GD</span>
+  <p>El segundo término (el de GD) vale 0 en un mínimo de L. Pero el tercero <strong>no</strong>: en el mínimo del gradiente completo, los gradientes de cada batch no son cero, simplemente se cancelan al promediar. Así que SGD sí distingue entre un mínimo donde todos los batches están de acuerdo (valle ancho, término chico) y uno donde cada batch tira para su lado (valle estrecho, término grande). Eso es lo que quiere decir la slide con «favorecer regiones donde los gradientes de distintos mini-batches son más consistentes». Y también es una aproximación, no una ley.</p>
+</div>
+
+<p>Resumen de cómo influyen los hiperparámetros: <strong>α</strong> escala los dos castigos (más α, más preferencia por terreno suave y consistente). <strong>|B|</strong> cambia el desacuerdo entre batches (más pequeño, más ruido, más preferencia). La inicialización y el optimizador (momentum, Adam) también cuentan; por eso la slide dice que «el mínimo encontrado puede depender de» todos ellos. Más sobre el ruido de SGD en el <a href="03_entrenamiento1.html#sgd">artefacto 03</a>.</p>
+
+<h3 id="lab-plano" class="lab" data-toc="Lab: mínimo plano contra afilado">Laboratorio: mínimo plano contra mínimo afilado</h3>
+<p>Una pérdida en una dimensión con <strong>dos mínimos de profundidad casi igual</strong>: uno afilado (en x ≈ −1.00, L = −0.962, curvatura ≈ 69) y uno ancho (en x ≈ 1.55, L = −0.894, curvatura ≈ 1.5). La función es L(x) = 0.03(x − 0.2)² − 1.00·exp(−(x + 1)²/(2·0.12²)) − 0.95·exp(−(x − 1.6)²/(2·0.8²)): una parábola suave más dos pozos gaussianos invertidos. Se lanzan <strong>200 corridas</strong> desde inicios aleatorios (uniformes en [−2.5, 3], con semilla fija), cada una con 500 pasos. GD sigue x ← x − α·L′(x). SGD le suma al gradiente un ruido Normal de desviación 3/√|B|, es decir, x ← x − α·(L′(x) + (3/√|B|)·ξ); como cada paso mueve el ruido α·3/√|B|, la «temperatura» efectiva crece con α y decrece con |B|. Las barras dicen en qué punto terminó cada corrida. Una corrida cuenta como «afilado» si termina a la izquierda de la barrera (x = −0.605) y como «ancho» si termina a la derecha.</p>
+<div class="widget" id="labPlano">
+  <div class="widget-head"><div class="wt">200 corridas desde inicios aleatorios: ¿en qué mínimo terminan?</div><div class="ws">Barras vacías: GD. Barras llenas: SGD con el ruido que fija |B|.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div><canvas id="plaCurva"></canvas><canvas id="plaHist" style="margin-top:6px"></canvas></div>
+      <div><div id="plaCtrl"></div><div class="diag-h">tamaño del mini-batch |B|</div><div id="plaSel"></div><div id="plaRead"></div><div class="status info" id="plaStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="plaA3">α = 0.03</button>
+    <button class="btn" id="plaA7">α = 0.07</button>
+    <button class="btn" id="plaA10">α = 0.10</button>
+    <span class="pill">aproximación, no ley exacta</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con α = 0.03 y |B| = 16: casi nada cambia respecto a GD (GD deja 79 de las 200 corridas en el pozo afilado y SGD deja 82). Con paso chico y poco ruido, el resultado lo decide <em>dónde empezaste</em>.</li>
+    <li>Con α = 0.07: GD sigue dejando 79 corridas en el pozo afilado, pero SGD con |B| = 64 deja 81, con |B| = 16 deja 54, con |B| = 8 deja 15 y con |B| = 4 solo 6. Más ruido (|B| chico) expulsa a las corridas del valle estrecho: el mínimo ancho gana. (Con |B| = 1 y 2 el ruido ya es tan grande que el resultado se vuelve más aleatorio: 17 y 7.)</li>
+    <li>Con α = 0.10, el pozo afilado queda en 0 corridas incluso para GD sin ruido (con α = 0.09 aún quedaban 79). El pozo es tan empinado que un paso grande rebota fuera: es el castigo (α/4)‖∇L‖² haciéndose valer.</li>
+    <li>Compara lo que ves con la slide: ni el α ni el |B| agregaron un término a la pérdida, y aun así cambiaron <em>qué mínimo</em> se encuentra. Eso es regularización implícita.</li>
+  </ol>
+</div>
+
+<!-- ============ 6. BATCHNORM ============ -->
+<h2 id="batchnorm"><span class="num">Sección 6</span>Batch Normalization</h2>
+
+<p>Con las heurísticas cambiamos de estilo: ya no hay una fórmula de regularización detrás sino trucos de entrenamiento que, por distintos caminos, mejoran lo que pasa fuera de muestra. Para cada una responde tres preguntas: <strong>qué hace, cuándo ayuda y cuándo no</strong> (el temario lo pide así).</p>
+
+<p><strong>BatchNorm</strong> normaliza las activaciones de una neurona usando las estadísticas del mini-batch. Una analogía: en un examen con tres sinodales, uno califica siempre sobre 10 y otro sobre 100. Antes de promediar, pasas las calificaciones de cada uno a «cuántas desviaciones estándar por encima o por debajo de su propio promedio». BatchNorm hace eso con los valores que una neurona produce, para que la capa siguiente reciba siempre números en una escala parecida.</p>
+
+<p>Un caso con números. Una neurona produce, para los 4 ejemplos de un mini-batch, los valores 2, 4, 6 y 12. Su media es (2 + 4 + 6 + 12)/4 = <b>6</b>. Sus desviaciones al cuadrado son 16, 4, 0 y 36, así que la varianza del batch es 56/4 = <b>14</b> (se divide entre |B|, no entre |B| − 1). Normalizar da (x − 6)/√14: (−1.07, −0.53, 0, 1.60). Ahora tienen media 0 y varianza 1.</p>
+
+<div class="formula">
+  <div class="f-head">BatchNorm, paso 1: normalizar con el mini-batch</div>
+  <div class="f-ejemplo">x = (2, 4, 6, 12)  →  μ<sub>B</sub> = 6,  σ<sub>B</sub>² = 14  →  x̂ = (x − 6) / √(14 + ε) = (−1.07, −0.53, 0, 1.60)</div>
+  <div class="eq">
+    <span class="sym" data-s="xhat"></span> = <span class="frac"><span class="num"><span class="r-dato">x</span> − <span class="sym" data-s="muB">μ<sub>B</sub></span></span><span class="den">√( <span class="sym" data-s="muB">σ<sub>B</sub><sup>2</sup></span> + <span class="sym" data-s="eps"></span> )</span></span>
+    <span class="lbl">μ<sub>B</sub> = promedio de x en el batch,&nbsp; σ<sub>B</sub>² = promedio de (x − μ<sub>B</sub>)² en el batch</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Equis gorro es equis menos la media del batch, entre la raíz de la varianza del batch más epsilon.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">x</dt><dd>La activación de una neurona para un ejemplo (un número del batch). Se normaliza cada neurona por separado.</dd>
+      <dt class="r-calc">μ<sub>B</sub>, σ<sub>B</sub>²</dt><dd>Media y varianza de esa neurona <em>dentro del mini-batch actual</em>. Cambian de batch en batch.</dd>
+      <dt class="r-hiper">ε</dt><dd>Un número diminuto (por ejemplo 10⁻⁵) para no dividir entre cero si la varianza del batch es 0.</dd>
+      <dt class="r-calc">x̂</dt><dd>La activación normalizada: media 0 y varianza 1 dentro del batch.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…todos los valores del batch son iguales: σ<sub>B</sub>² = 0, el numerador es 0 y sin ε sería 0/0. Con ε, x̂ = 0.</li>
+      <li>…el batch tiene un valor extremo (12 en lugar de 8): sube σ<sub>B</sub> y todos los demás x̂ se «aprietan» hacia 0.</li>
+      <li>…el batch es muy pequeño: μ<sub>B</sub> y σ<sub>B</sub>² son estimaciones ruidosas de las de la población (se ve en el laboratorio de abajo).</li>
+    </ul>
+  </div>
+</div>
+
+<p>Normalizar fuerza media 0 y varianza 1, pero tal vez la red <em>necesita</em> otra escala en esa neurona. Por eso se agrega un segundo paso con dos parámetros aprendibles, γ y β. Aquí β es el <em>desplazamiento</em> de BatchNorm, no el vector de sesgos de una capa ni el β de momentum (el mismo símbolo, tres usos).</p>
+
+<div class="formula">
+  <div class="f-head">BatchNorm, paso 2: escala y desplazamiento aprendibles</div>
+  <div class="f-ejemplo">x̂ = (−1.07, −0.53, 0, 1.60),  γ = 2,  β = 1  →  y = 2·x̂ + 1 = (−1.14, −0.07, 1, 4.21)</div>
+  <div class="eq">
+    <span class="r-calc">y</span> = <span class="sym" data-s="gammaBN"></span> <span class="r-calc">x̂</span> + <span class="sym" data-s="beta"></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La salida es gama por equis gorro, más beta.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">γ</dt><dd>Escala aprendible: cuánto se estira o encoge la neurona. Se inicia en 1.</dd>
+      <dt class="r-param">β</dt><dd>Desplazamiento aprendible: dónde queda centrada. Se inicia en 0. (Aquí no es el β de momentum.)</dd>
+      <dt class="r-calc">y</dt><dd>Lo que BatchNorm entrega a la siguiente capa.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…γ = 1 y β = 0: la salida es x̂, normalizada.</li>
+      <li>…γ = σ<sub>B</sub> y β = μ<sub>B</sub>: la red deshace la normalización (y = x). Así BatchNorm nunca le quita capacidad a la red: si normalizar estorba, γ y β lo corrigen.</li>
+      <li>…γ → 0: la neurona se apaga (todas las salidas valen β).</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="bn-train-inf" data-toc="Entrenamiento contra inferencia">Entrenamiento contra inferencia</h3>
+<p>En <strong>entrenamiento</strong>, μ<sub>B</sub> y σ<sub>B</sub>² salen del mini-batch. En <strong>inferencia</strong> eso no se puede hacer igual: a veces predices un solo ejemplo, o el resultado de una persona no debería depender de quién más cayó en su batch. Por eso, durante el entrenamiento se va guardando un <strong>promedio móvil</strong> de las medias y varianzas de todos los batches, y en inferencia se usan esos valores fijos. El resultado es una transformación determinista: el mismo ejemplo siempre da la misma salida.</p>
+
+<h3 id="lab-bn" class="lab" data-toc="Lab: calculadora BN">Laboratorio: calculadora BN</h3>
+<p>Elige un batch, avanza paso a paso y mueve γ y β. El último paso muestra el modo inferencia con promedios móviles que el laboratorio calculó de verdad: 60 batches de 4 valores sacados de una población con media 6 y desviación 4, con un factor de actualización de 0.1 (en cada batch, nuevo = 0.9·viejo + 0.1·del batch).</p>
+<div class="widget" id="labBN">
+  <div class="widget-head"><div class="wt">BatchNorm de una neurona con 4 ejemplos</div><div class="ws">Pulsa «Siguiente» para recorrer las fórmulas.</div></div>
+  <div class="widget-body">
+    <div class="diag-h">batch de entrada</div>
+    <div id="bnSel"></div>
+    <div class="mat-row" id="bnMat"></div>
+    <div class="calcline" id="bnCalc"></div>
+    <div style="margin-top:12px"><div id="bnCtrl"></div></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con el batch (2, 4, 6, 12): μ<sub>B</sub> = 6, σ<sub>B</sub>² = 14, x̂ = (−1.07, −0.53, 0, 1.60). Con γ = 1 y β = 0, y = x̂; con γ = 2 y β = 1 sale (−1.14, −0.07, 1, 4.21).</li>
+    <li>Elige el batch (10, 10, 10, 10): σ<sub>B</sub>² = 0 y todo x̂ = 0. Eso es exactamente lo que ε evita que sea una división entre cero.</li>
+    <li>En el paso de inferencia, las estadísticas guardadas (≈ 5.66 y ≈ 10.36) no coinciden con las del batch (6 y 14), así que las salidas cambian un poco. En inferencia no hay batch del cual calcular nada.</li>
+  </ol>
+</div>
+
+<h3 id="bn-chico" data-toc="Batches pequeños y alternativas">Batches pequeños y alternativas</h3>
+<p>BatchNorm estima media y varianza de la población con solo |B| ejemplos. Con |B| grande la estimación es buena; con |B| pequeño es ruidosa, y esa imprecisión llega a la red como ruido. Un caso extremo y exacto: con |B| = 2 y valores a y b, μ<sub>B</sub> = (a + b)/2 y σ<sub>B</sub>² = ((a − b)/2)², así que x̂ = ±1 <em>siempre</em>, cualesquiera que sean a y b. La red ya no sabe si los dos valores eran 3 y 4 o 3 y 4,000.</p>
+<p>La slide menciona dos alternativas que no dependen del batch: <strong>LayerNorm</strong> calcula μ y σ² con todas las neuronas de la capa para <em>un solo ejemplo</em>, y <strong>GroupNorm</strong> lo hace por grupos de canales dentro de un solo ejemplo. Como cada ejemplo se normaliza solo, funcionan igual con batch 1 y se comportan igual en entrenamiento que en inferencia.</p>
+
+<h3 id="lab-bn-batch" class="lab" data-toc="Lab: ruido de μ_B">Laboratorio: qué tan ruidoso es μ<sub>B</sub></h3>
+<p>Una población con media 6 y desviación estándar 4. Se arman 300 batches y se calcula la media μ<sub>B</sub> de cada uno. El histograma muestra cuánto varía μ<sub>B</sub> entre batches de la misma población. La teoría dice que la desviación de μ<sub>B</sub> es σ/√|B|.</p>
+<div class="widget" id="labBNB">
+  <div class="widget-head"><div class="wt">Distribución de μ<sub>B</sub> en 300 batches</div><div class="ws">Semilla fija. La línea vertical marca la media real, 6.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="bnbCanvas"></canvas>
+      <div><div class="diag-h">tamaño del batch |B|</div><div id="bnbSel"></div><div id="bnbRead"></div><div class="status info" id="bnbStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con |B| = 2, μ<sub>B</sub> se dispersa con desviación ≈ 2.7 (teoría: 2.83): medias de batch tan distintas entre sí que la normalización es muy ruidosa.</li>
+    <li>Sube |B| a 16 y la dispersión baja a ≈ 1.0, y con |B| = 64, a ≈ 0.5. La campana se aprieta alrededor de 6.</li>
+    <li>Con |B| = 2, el x̂ del primer ejemplo vale ±1 en todos los batches (el panel lo dice). Con |B| = 64 toma un rango continuo de valores.</li>
+  </ol>
+</div>
+<div class="note exam">
+  <span class="tag">En el examen</span>
+  <p>«Entrenas con BatchNorm y batch de 2; en validación, la pérdida es errática. ¿Por qué? ¿Qué usarías en su lugar?» Respuesta corta: las estadísticas de un batch tan chico son ruidosas (y los promedios móviles que se usan en validación heredan ese ruido); usa LayerNorm o GroupNorm, o aumenta el batch.</p>
+</div>
+
+<p><strong>Cuándo ayuda:</strong> permite tasas de aprendizaje más grandes, hace la red menos sensible a la inicialización y, al hacer que cada ejemplo dependa un poco de los demás del batch, introduce ruido que actúa como regularizador leve. <strong>Cuándo no:</strong> con batches pequeños o muy desbalanceados, y cuando los ejemplos de un batch no son comparables entre sí. La slide es cuidadosa: lo llama «regularizador implícito <em>en algunos casos</em>».</p>
+
+<!-- ============ 7. EARLY STOPPING ============ -->
+<h2 id="early-stopping"><span class="num">Sección 7</span>Early stopping</h2>
+
+<p>Durante el entrenamiento, la pérdida de train sigue bajando casi siempre, pero la de validación suele bajar, tocar fondo y volver a subir (el modelo empieza a memorizar). <strong>Early stopping</strong> usa la validación como alarma: detiene el entrenamiento cuando deja de mejorar y se queda con el mejor modelo visto. La idea de la slide: <em>paramos antes de optimizar demasiado el training set</em>. Además ahorra tiempo de cómputo.</p>
+
+<p>Un caso con números. Pérdida de validación por época: 0.80, 0.62, 0.55, 0.52, 0.525, 0.53, 0.55. Con <b>paciencia = 3</b> y <b>tolerancia = 0.01</b>: las épocas 1 a 4 mejoran (cada una baja más de 0.01 respecto de la mejor), la mejor es la época 4 (0.52). En las épocas 5, 6 y 7 ninguna mejora a 0.52 − 0.01 = 0.51, así que van tres «sin mejora» seguidas y se detiene en la época 7. El modelo que guardas es el de la época 4.</p>
+
+<div class="formula">
+  <div class="f-head">Regla de paro con paciencia y tolerancia</div>
+  <div class="f-ejemplo">val = 0.80, 0.62, 0.55, 0.52, 0.525, 0.53, 0.55  ·  paciencia 3, tolerancia 0.01  →  mejor = época 4 (0.52); sin mejora en 5, 6, 7  →  se detiene en la época 7 y se restaura la época 4</div>
+  <div class="eq">
+    mejora en la época <span class="r-calc">e</span>&nbsp; ⇔&nbsp; val(<span class="r-calc">e</span>) &lt; mejor − <span class="r-hiper">δ</span> &nbsp;&nbsp;·&nbsp;&nbsp; se detiene cuando hay <span class="r-hiper">p</span> épocas seguidas sin mejora
+    <span class="lbl">δ = tolerancia mínima; p = paciencia (el nombre p aquí no es la probabilidad de dropout)</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cuenta como mejora solo si la validación baja más de delta respecto del mejor valor. Si pasan p épocas seguidas sin mejora, paro y regreso al mejor checkpoint.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">val(e)</dt><dd>La métrica de validación monitoreada en la época e (por ejemplo la pérdida).</dd>
+      <dt class="r-calc">mejor</dt><dd>El menor valor de validación que contó como mejora hasta ahora; el checkpoint guardado es el de esa época.</dd>
+      <dt class="r-hiper">δ</dt><dd>Tolerancia mínima: qué tanto debe bajar para que cuente como mejora. Evita reiniciar la espera por ganancias diminutas o ruido.</dd>
+      <dt class="r-hiper">p</dt><dd>Paciencia: cuántas épocas seguidas sin mejora toleras antes de parar.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…p es muy chica (1): se detiene al primer tropiezo de una curva ruidosa y puede parar antes de tocar el fondo real.</li>
+      <li>…p es muy grande: entrenas muchas épocas de más, pero el checkpoint guardado sigue siendo el mejor (solo pierdes tiempo).</li>
+      <li>…δ es grande: solo cuentan mejoras fuertes; el entrenamiento se detiene antes y puede quedarse con un modelo algo peor.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Los hiperparámetros típicos son cuatro: la <strong>métrica</strong> que monitoreas (pérdida de validación, accuracy…), la <strong>paciencia</strong>, la <strong>tolerancia mínima</strong> y la <strong>frecuencia de evaluación</strong> (cada época, cada cierto número de pasos).</p>
+
+<h3 id="lab-es" class="lab" data-toc="Lab: early stopping">Laboratorio: dónde se detendría</h3>
+<p>Curvas simuladas con semilla fija: la pérdida de train baja siempre; la de validación hace una U con ruido. Mueve la paciencia y la tolerancia y mira dónde para y qué checkpoint se guarda. Pulsa «Otra muestra de ruido» para ver que el resultado depende del ruido.</p>
+<div class="widget" id="labES">
+  <div class="widget-head"><div class="wt">Pérdida de train y de validación por época</div><div class="ws">Línea punteada: época en que se detiene. Círculo hueco: checkpoint guardado.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="esCanvas"></canvas>
+      <div><div id="esCtrl"></div><div id="esRead"></div><div class="status info" id="esStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="esSemilla">Otra muestra de ruido</button>
+    <span class="pill" id="esPill"></span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con la semilla inicial, paciencia 5 y tolerancia 0: el entrenamiento se detiene en la época 23 y se guarda el checkpoint de la época 18 (val ≈ 0.63). Si hubiera seguido hasta la 60, la validación habría terminado en ≈ 1.28, mucho peor, mientras la pérdida de train seguía bajando.</li>
+    <li>Baja la paciencia a 1: se detiene en la época 11 y guarda la época 10 (val ≈ 0.71), todavía lejos del fondo, porque un pequeño tropiezo de ruido bastó. Sube la paciencia a 15: se detiene en la época 33 pero guarda el mismo checkpoint de la época 18. Más paciencia solo cuesta tiempo.</li>
+    <li>Sube la tolerancia a 0.03 con paciencia 5: ahora solo cuentan mejoras grandes, se detiene en la época 21 y guarda la 16 (val ≈ 0.64): un modelo algo peor que el de la época 18.</li>
+    <li>Pulsa «Otra muestra de ruido» una vez (paciencia 5, tolerancia 0): ahora se detiene en la época 26 y guarda la 21. La época de paro y el checkpoint cambian. Early stopping decide con una curva ruidosa, por eso conviene paciencia.</li>
+  </ol>
+</div>
+
+<h3 id="es-vs-l2" data-toc="Parecido y diferencia con L2">Early stopping contra L2</h3>
+<ul>
+  <li><strong>Parecido.</strong> Los dos limitan cuánto se pueden alejar los pesos de su inicialización (que normalmente es cerca de 0). Con pocas épocas los pesos no alcanzan a crecer; con L2 los pesos no pueden crecer porque cuestan. Los dos reducen la complejidad efectiva del modelo y, en casos sencillos, dan soluciones parecidas.</li>
+  <li><strong>Diferencia.</strong> L2 actúa sobre <em>la pérdida</em>: cambia qué se minimiza. Early stopping actúa sobre <em>el tiempo</em>: no cambia la pérdida, solo corta el proceso a mitad. Además L2 necesita elegir λ antes de entrenar, mientras que early stopping necesita un conjunto de validación y decide durante el entrenamiento.</li>
+</ul>
+<div class="note fix">
+  <span class="tag">Cuándo no ayuda</span>
+  <p>La slide aclara: puede mejorar generalización pero <strong>no está garantizado</strong>. Es útil cuando entrenar hasta convergencia degrada la validación. Si la validación sigue mejorando hasta el final, no hay nada que parar. Y si la curva de validación es muy ruidosa o tienes pocos datos de validación, el punto de paro puede ser mala señal.</p>
+</div>
+
+<!-- ============ 8. DROPOUT ============ -->
+<h2 id="dropout"><span class="num">Sección 8</span>Dropout</h2>
+
+<p>Dropout inyecta <strong>ruido en el forward pass</strong>: durante el entrenamiento, cada activación se apaga (se pone en 0) al azar con probabilidad p, y el resto se agranda para compensar. Obliga a la red a no depender de una neurona en particular: si cualquiera puede desaparecer, la información tiene que repartirse. La analogía: un equipo de trabajo donde cada día faltan al azar algunas personas; aprenden a no depender de una sola.</p>
+
+<p>Un caso con números. Con p = 0.25 (se apaga una de cada cuatro en promedio), una capa produce h = (4, 0, 2, 8) y el sorteo da la máscara (1, 1, 0, 1), es decir, la tercera neurona se apaga. Las que sobreviven se dividen entre (1 − p) = 0.75: h′ = (4/0.75, 0, 0, 8/0.75) = <b>(5.33, 0, 0, 10.67)</b>.</p>
+
+<div class="formula">
+  <div class="f-head">Inverted dropout</div>
+  <div class="f-ejemplo">p = 0.25,  h = (4, 0, 2, 8),  máscara = (1, 1, 0, 1)  →  h′ = (4/0.75, 0, 0, 8/0.75) = (5.33, 0, 0, 10.67)</div>
+  <div class="eq">
+    <span class="r-calc">h′</span> = &nbsp;<span class="mono">0</span> &nbsp;con probabilidad <span class="sym" data-s="pdrop"></span> &nbsp;&nbsp;·&nbsp;&nbsp; <span class="frac"><span class="num"><span class="r-calc">h</span></span><span class="den">1 − <span class="r-hiper">p</span></span></span> &nbsp;con probabilidad 1 − <span class="r-hiper">p</span>
+    <span class="lbl">y se mantiene la esperanza:&nbsp; E[h′] = h</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Con probabilidad p la activación se apaga; con probabilidad uno menos p, se queda y se divide entre uno menos p.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">h</dt><dd>La activación de una neurona antes de dropout.</dd>
+      <dt class="r-calc">h′</dt><dd>La activación después de dropout: o 0, o h agrandada.</dd>
+      <dt class="r-hiper">p</dt><dd>La probabilidad de apagar cada neurona (típicamente 0.1 a 0.5). Dropout se aplica solo en entrenamiento.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…p = 0: nunca se apaga nada, 1/(1 − 0) = 1 y h′ = h. No hay dropout.</li>
+      <li>…p = 0.5: se apaga la mitad y las que quedan se duplican (÷ 0.5).</li>
+      <li>…p → 1: casi todo se apaga y lo poco que queda se agranda muchísimo (÷ casi 0): salidas muy ruidosas y casi sin información.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="dropout-esperanza" data-toc="Por qué se divide entre 1 − p">Por qué se divide entre (1 − p)</h3>
+<p>Sin la división, apagar neuronas bajaría la señal promedio y la red vería en inferencia números más grandes que los que vio en entrenamiento. La división compensa exactamente.</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">E[h′] = p · 0 + (1 − p) · h / (1 − p)</div><div class="d-por"><b>Definición de esperanza</b> (<a href="00_matematicas.html#esperanza">valor esperado</a>): cada valor posible por su probabilidad. h′ vale 0 con probabilidad p y h/(1 − p) con probabilidad 1 − p.</div></li>
+  <li><div class="d-ex">E[h′] = 0 + h</div><div class="d-por"><b>Cancelar:</b> el (1 − p) del numerador y el del denominador se van; p · 0 es 0.</div></li>
+  <li><div class="d-ex">E[h′] = h</div><div class="d-por"><b>Interpretación:</b> en promedio, la capa entrega lo mismo con o sin dropout. Por eso esta versión se llama «inverted»: el reescalado se hace al entrenar, no al predecir.</div></li>
+  <li><div class="d-ex">h = 8, p = 0.25:  0.75 · (8 / 0.75) + 0.25 · 0 = 8</div><div class="d-por"><b>Verificación con números:</b> 0.75 · 10.67 = 8 y 0.25 · 0 = 0. Suma: 8. ✔</div></li>
+</ol>
+
+<h3 id="dropout-inferencia" data-toc="Inferencia, ensamble y MC dropout">Inferencia, ensamble y MC dropout</h3>
+<ul>
+  <li><strong>En inferencia se apaga dropout</strong> (no se apaga ninguna neurona) y <strong>no se reescala</strong>. Como el reescalado ya se hizo durante el entrenamiento, las activaciones ya tienen la escala correcta; dividir otra vez entre (1 − p) las inflaría. (En la versión «no invertida», que no usa el curso, el reescalado va en inferencia.)</li>
+  <li><strong>Ensamble de subredes.</strong> Cada máscara define una subred distinta con los mismos pesos compartidos. Entrenar con dropout es entrenar muchísimas subredes a la vez, y la red completa en inferencia es una especie de promedio de todas.</li>
+  <li><strong>MC dropout.</strong> Mantienes dropout <em>activo</em> en inferencia, corres la red varias veces con máscaras distintas y combinas los resultados. Obtienes un ensamble aproximado, y la dispersión entre las salidas es una medida de incertidumbre.</li>
+</ul>
+
+<h3 id="lab-dropout" class="lab" data-toc="Lab: dropout">Laboratorio: máscaras, escala y MC dropout</h3>
+<p>Una capa de 8 neuronas con valores h (arriba) y una salida y = Σ wⱼhⱼ con pesos fijos. Cada clic en «Nueva máscara» sortea qué neuronas se apagan (con la probabilidad p que fijes) y reescala las demás (fila del medio). La fila de abajo es el promedio acumulado de h′ sobre todas las máscaras sorteadas. Hay tres modos: <strong>Entrenamiento</strong> (dropout activo), <strong>Inferencia</strong> (sin máscara ni reescalado) y <strong>MC dropout</strong> (dropout activo, N pasadas, media y dispersión de la salida).</p>
+<div class="widget" id="labDrop">
+  <div class="widget-head"><div class="wt">Dropout sobre una capa de 8 neuronas</div><div class="ws">Arriba h · en medio h′ de la máscara actual · abajo promedio acumulado de h′. Semilla fija.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="drCanvas"></canvas>
+      <div><div id="drSel"></div><div id="drCtrl"></div><div id="drRead"></div><div class="status info" id="drStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="drUna">Nueva máscara</button>
+    <button class="btn" id="drCien">+100 máscaras</button>
+    <button class="btn" id="drReset">Reiniciar</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con p = 0.25 en modo Entrenamiento, pulsa «Nueva máscara» unas veces: las neuronas apagadas valen 0 y las demás aparecen agrandadas por 1/0.75 = 1.33 (4 se vuelve 5.33).</li>
+    <li>Pulsa «+100 máscaras» varias veces: el promedio acumulado de cada neurona (fila de abajo) se acerca a su h original. Con 1,000 máscaras, cada promedio queda a menos de 0.2 de su h. Es E[h′] = h en acción. Una máscara sola es muy distinta de h; el promedio, no.</li>
+    <li>Modo Inferencia: la salida es la de la red completa, sin ruido (y = 8.70). Observa que <em>no</em> hay máscara ni reescalado.</li>
+    <li>Modo MC dropout: con 1,000 pasadas la media de la salida es ≈ 8.69, muy cerca de 8.70 (la salida determinista), pero cada pasada individual varía: esa dispersión (≈ 2.34 con p = 0.25) es la incertidumbre. Sube p a 0.6 y la dispersión crece a ≈ 4.81.</li>
+  </ol>
+</div>
+
+<div class="note fix">
+  <span class="tag">Cuándo no ayuda</span>
+  <p>Dropout es ruido: en un modelo que <strong>subajusta</strong> solo le quita capacidad que ya le faltaba (ver ejercicio de la práctica). La slide además lo ubica como útil «en capas densas grandes»; en CNNs modernas rara vez es la primera herramienta, y se suele combinar con otras técnicas.</p>
+</div>
+
+<!-- ============ 9. OTRAS ============ -->
+<h2 id="otras"><span class="num">Sección 9</span>Ensambles, ruido y augmentation</h2>
+
+<h3 id="ensambles" data-toc="Ensambles">Ensambles</h3>
+<p>Si le preguntas a un solo experto y se equivoca, te equivocas. Si le preguntas a cinco que se equivocan en cosas distintas y promedias, los errores tienden a cancelarse. Un <strong>ensamble</strong> entrena varios modelos y combina sus predicciones: promedia en regresión, promedia probabilidades o vota en clasificación. Los modelos pueden diferir en la inicialización, en el subconjunto de datos o en el checkpoint del entrenamiento.</p>
+<p>Con números: tres modelos predicen 10, 12 y 14 para el mismo caso; el ensamble predice (10 + 12 + 14)/3 = 12. Si los errores de cada modelo son independientes y cada uno tiene varianza σ², el promedio de K modelos tiene varianza <b>σ²/K</b>: con K = 5, la varianza baja a una quinta parte. En la práctica los errores están correlacionados (los modelos se parecen), así que la ganancia es menor. Qué cuesta: entrenar y evaluar K modelos. Cuándo ayuda más: cuando los modelos individuales tienen alta varianza; cuando todos sufren el mismo sesgo, promediarlos no lo arregla.</p>
+
+<h3 id="ruido" data-toc="Ruido en inputs, pesos y etiquetas">Ruido en inputs, pesos y etiquetas</h3>
+<p>Dropout es un caso de ruido (la slide lo dice: ruido Bernoulli multiplicativo sobre las activaciones). También se puede agregar ruido controlado a los pesos, a los inputs, a representaciones intermedias o a las etiquetas. La regla de la slide:</p>
+<ul>
+  <li><strong>Ruido en inputs: ayuda si preserva la etiqueta.</strong> Sumar un poco de ruido a una foto no cambia que sea un gato; obliga al modelo a no depender de píxeles exactos.</li>
+  <li><strong>Ruido en pesos o activaciones:</strong> obliga a la red a ser robusta a perturbaciones pequeñas, parecido en espíritu a L2 y dropout.</li>
+  <li><strong>Ruido en etiquetas: suele dañar.</strong> Si 20% de las etiquetas de un problema binario están mal, la mejor accuracy contra esas etiquetas es 80% aunque el modelo sea perfecto. Un modelo que llega a 100% en train memorizó el error. Solo tiene sentido si está muy controlado (por ejemplo, suavizar un poco las etiquetas, como hace label smoothing).</li>
+</ul>
+
+<h3 id="augmentation" data-toc="Data augmentation">Data augmentation</h3>
+<p>Consiste en fabricar ejemplos nuevos transformando los existentes. La condición, tal cual la slide: ayuda cuando <strong>la transformación preserva la etiqueta relevante</strong>. En imágenes: flips, crops, cambios de color, pequeñas rotaciones. En texto hay que tener cuidado, porque algunas transformaciones cambian el significado. En audio: ruido, cambios de volumen, deformaciones temporales pequeñas. La pregunta de control es: <em>«después de transformar, ¿una persona seguiría dando la misma etiqueta?»</em>. Pruébala tú.</p>
+
+<h3 id="lab-aug" class="lab" data-toc="Lab: ¿preserva la etiqueta?">Laboratorio: ¿preserva la etiqueta?</h3>
+<p>Cada tarjeta trae un caso y una transformación. Decide si la transformación preserva la etiqueta, no la preserva, o depende, y lee la explicación.</p>
+<div class="widget" id="labAug">
+  <div class="widget-head"><div class="wt">Tarjetas de augmentation</div><div class="ws">Responde y luego pasa a la siguiente con los botones.</div></div>
+  <div class="widget-body">
+    <div class="aug-card" id="augCard"></div>
+    <div id="augSel"></div>
+    <div id="augFb" style="margin-top:8px"></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="augPrev">← Anterior</button>
+    <button class="btn primary" id="augNext">Siguiente →</button>
+    <span class="pill" id="augPill"></span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>La misma transformación puede ser buena o mala según el problema: girar 180° un dígito cambia la clase (6 → 9), pero girar 90° una imagen satelital no cambia nada.</li>
+    <li>Con texto, un cambio de una palabra («no») invierte el significado, mientras que un sinónimo no. El riesgo de texto es mayor que el de imágenes.</li>
+    <li>El caso de la radiografía es de «depende»: antes de aplicar una transformación pregunta qué información usa la etiqueta (aquí, la posición de los órganos).</li>
+  </ol>
+</div>
+
+<!-- ============ 10. TRANSFER ============ -->
+<h2 id="transfer"><span class="num">Sección 10</span>Transfer learning, multi-task y self-supervised</h2>
+
+<p>Estas tres técnicas atacan el mismo problema desde otro ángulo: si tienes pocos datos para tu tarea, <strong>trae conocimiento de otra parte</strong>. La idea común es reutilizar representaciones útiles que la red ya aprendió. También se puede ver como una forma de inicialización informativa: en lugar de empezar de pesos aleatorios, empiezas de pesos que ya saben «ver».</p>
+
+<h3 id="transfer-learning" data-toc="Transfer learning">Transfer learning</h3>
+<p>Tomas un modelo preentrenado en otra tarea o dataset (con muchos datos) y lo adaptas a la tuya (con pocos). Las formas comunes, de la más ligera a la más pesada:</p>
+<div class="flow">
+  <div class="node"><div class="t">1 · Preentrenar</div><div class="d">Un modelo se entrena con muchos datos de una tarea fuente (por ejemplo, millones de imágenes).</div></div>
+  <div class="node"><div class="t">2 · Reemplazar la última capa</div><div class="d">Quitas la capa de salida y pones una nueva para tu tarea. Entrenas solo esa parte.</div></div>
+  <div class="node aqui"><div class="t">3 · Fine-tuning</div><div class="d">Ajustas parte de la red (fine-tuning parcial) o toda la red con una tasa pequeña.</div></div>
+</div>
+<p><strong>Cuándo ayuda:</strong> cuando la tarea fuente y la objetivo están suficientemente relacionadas (bordes, texturas y formas sirven para casi cualquier imagen). <strong>Cuándo no:</strong> si los dominios son muy distintos, el beneficio es menor e incluso <strong>negativo</strong> (transferencia negativa): el modelo hereda representaciones que no sirven y que además cuesta desaprender.</p>
+<p>Un ejemplo de política pública es el de la lectura opcional del curso (Jean et al., 2016): medir pobreza con imágenes satelitales. Las encuestas de hogares son caras y escasas, pero hay muchísimas imágenes. En lugar de entrenar desde cero con las pocas zonas encuestadas, se parte de una red preentrenada en ImageNet, se adapta con una tarea con muchos datos (en ese trabajo, la luminosidad nocturna) y esas representaciones se reutilizan para estimar pobreza. Pocos datos de la tarea final, representaciones prestadas.</p>
+
+<h3 id="multitask" data-toc="Multi-task learning">Multi-task learning</h3>
+<p>Entrenas una sola red para resolver varias tareas a la vez (por ejemplo, ante una imagen: segmentarla, estimar profundidad y describirla). La esperanza es que las tareas compartan representaciones útiles, así que cada tarea funciona como una restricción para las demás.</p>
+<div class="flow">
+  <div class="node"><div class="t">Entrada</div><div class="d">Una imagen.</div></div>
+  <div class="node aqui"><div class="t">Tronco compartido</div><div class="d">Capas que aprenden representaciones comunes para todas las tareas.</div></div>
+  <div class="node"><div class="t">Una cabeza por tarea</div><div class="d">Segmentación · profundidad · descripción. Cada una con su pérdida; se suman.</div></div>
+</div>
+<div class="note fix">
+  <span class="tag">No siempre mejora todas las tareas</span>
+  <p>La slide lo enmarca en un recuadro. Si las tareas compiten entre sí por la capacidad del tronco compartido o piden representaciones contradictorias, puede haber <strong>transferencia negativa</strong>: una tarea empeora por estar entrenada junto a otra.</p>
+</div>
+
+<h3 id="selfsup" data-toc="Self-supervised learning">Self-supervised learning</h3>
+<p>Inventas una tarea auxiliar usando los propios datos, así que no necesitas etiquetas humanas para ella. Después adaptas el modelo a la tarea que te interesa con fine-tuning.</p>
+<div class="flow">
+  <div class="node"><div class="t">1 · Tarea auxiliar sin etiquetas</div><div class="d">Predecir una parte escondida (masked prediction), el siguiente token (next-token prediction), o acercar ejemplos relacionados (contrastive learning).</div></div>
+  <div class="node aqui"><div class="t">2 · Preentrenar</div><div class="d">Con muchísimos datos sin etiquetar el modelo aprende representaciones generales.</div></div>
+  <div class="node"><div class="t">3 · Fine-tuning supervisado</div><div class="d">Con pocas etiquetas, lo adaptas a la tarea objetivo.</div></div>
+</div>
+<p>Con números: un texto de 1,000 palabras da 1,000 ejemplos de «dado lo anterior, predice la siguiente palabra» sin que nadie etiquete nada. Cuándo ayuda: cuando hay muchos datos sin etiquetar y pocas etiquetas. Cuándo no: si la tarea auxiliar es muy distinta de la que te interesa, aprendes representaciones que no sirven (el mismo riesgo de transferencia negativa).</p>
+
+<!-- ============ 11. CATÁLOGO ============ -->
+<h2 id="catalogo"><span class="num">Sección 11</span>Catálogo y receta práctica</h2>
+
+<p>La slide agrupa las técnicas en categorías. Úsala como mapa para ubicar cada una. Y recuerda: las categorías no son mutuamente excluyentes, y los modelos modernos las combinan.</p>
+<div class="scroll">
+<table class="tbl">
+  <thead><tr><th>Categoría</th><th>Técnicas</th><th>La idea en una línea</th></tr></thead>
+  <tbody>
+    <tr><td><b>Regularización explícita</b></td><td>L2 / weight decay, L1</td><td>Penalizan la magnitud de los pesos; pueden leerse como priors.</td></tr>
+    <tr><td><b>Ruido / estocasticidad</b></td><td>Dropout, ruido en inputs, ruido en activaciones o pesos, label smoothing</td><td>Inyectan aleatoriedad para que el modelo no memorice.</td></tr>
+    <tr><td><b>Arquitectura</b></td><td>Modelos más pequeños, weight sharing, convoluciones en vez de capas totalmente conectadas</td><td>Menos parámetros libres o supuestos metidos en la estructura.</td></tr>
+    <tr><td><b>Datos</b></td><td>Data augmentation, recolección y curación, datos sintéticos, transfer learning</td><td>Más (y mejores) ejemplos o conocimiento prestado.</td></tr>
+    <tr><td><b>Entrenamiento</b></td><td>Early stopping, schedules de tasa de aprendizaje, batch size, elección del optimizador</td><td>No son «regularización» en sentido explícito, pero afectan la generalización (regularización implícita).</td></tr>
+    <tr><td><b>Post-hoc / ensamblado</b></td><td>Ensambles, model averaging, MC dropout</td><td>Combinar varios modelos para reducir varianza.</td></tr>
+    <tr><td><b>Pretraining / tareas auxiliares</b></td><td>Self-supervised, masked modeling, contrastive learning, multi-task</td><td>Aprender representaciones con otras tareas antes o junto con la tuya.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="receta" data-toc="Receta práctica">Receta práctica</h3>
+<ol>
+  <li><strong>Empieza simple.</strong> Weight decay, más augmentation si las transformaciones preservan la etiqueta, y monitoreo claro de train y validación (pérdida, métricas relevantes y ejemplos cualitativos de errores).</li>
+  <li><strong>Mide antes de intervenir.</strong> Mira las curvas (sección siguiente): si no hay brecha, regularizar más no es lo que necesitas.</li>
+  <li><strong>Un cambio a la vez</strong> y comparando en validación, no en test.</li>
+  <li><strong>Equilibra desempeño con costo computacional e interpretabilidad</strong> (un ensamble de 10 modelos cuesta 10 veces más).</li>
+</ol>
+
+<h3 id="pocos-datos" data-toc="Régimen de pocos datos">Régimen de pocos datos</h3>
+<p>Si tienes pocos datos, la slide prioriza: <strong>data augmentation</strong>, <strong>transfer learning</strong> y <strong>modelos preentrenados</strong>. La razón: las tres introducen información que tus pocos ejemplos no tienen (invariancias o representaciones aprendidas en otro lado).</p>
+<div class="note fix">
+  <span class="tag">Añadir capacidad sin datos ni sesgo inductivo puede empeorar</span>
+  <p>Una red más grande tiene más formas de ajustar el entrenamiento, y con pocos datos casi todas esas formas memorizan. Sin datos nuevos ni supuestos que orienten la búsqueda (sesgo inductivo, como el de las convoluciones), esa capacidad extra se convierte en varianza. Ya viste algo parecido con el fenómeno de double descent (<a href="04_entrenamiento2.html#double-descent">artefacto 04</a>), que además no es una ley universal: depende de datos, ruido, arquitectura y optimización. Por eso el escenario 2 del simulador condena la idea de «duplicar las capas».</p>
+</div>
+
+<!-- ============ 12. DIAGNÓSTICO ============ -->
+<h2 id="diagnostico"><span class="num">Sección 12</span>Diagnóstico: juntar todo (temario §6)</h2>
+
+<p>La Parte C del examen te da un resumen de un entrenamiento (curvas de pérdida de train y validación, accuracy, norma del gradiente, a veces una tabla de experimentos) y te pide cuatro cosas: <strong>clasificar</strong> el problema, proponer <strong>dos intervenciones</strong> y <strong>predecir su efecto</strong> en train y validación, detectar <strong>resultados sospechosos</strong> y <strong>evaluar críticamente</strong> una propuesta («un agente sugiere duplicar las capas»). Aquí integras todo el curso.</p>
+
+<h3 id="familias" data-toc="Las tres familias">Las tres familias de problemas</h3>
+<div class="scroll">
+<table class="tbl">
+  <thead><tr><th>Familia</th><th>Cómo se ve</th><th>Qué atacar</th></tr></thead>
+  <tbody>
+    <tr><td><b>Sesgo (subajuste)</b></td><td>Train alta, val alta y casi igual (brecha chica). Ambas curvas se estancan. El modelo no ajusta ni el entrenamiento.</td><td>Más capacidad (capas o neuronas), mejores características, más épocas, menos regularización.</td></tr>
+    <tr><td><b>Varianza (sobreajuste)</b></td><td>Train muy baja, val mucho más alta, y la val toca fondo y vuelve a subir. Brecha grande y creciente.</td><td>Regularización (L2, dropout), early stopping, más datos o augmentation, un modelo más pequeño.</td></tr>
+    <tr><td><b>Optimización</b></td><td>La pérdida no baja desde el inicio (plana en el valor del azar), oscila o da NaN; la norma del gradiente es ≈ 0 o explota.</td><td>Tasa de aprendizaje, inicialización (He o Xavier), activaciones (ReLU en lugar de sigmoide en redes profundas), normalización.</td></tr>
+  </tbody>
+</table>
+</div>
+<p>Y una cuarta categoría de <strong>resultados sospechosos</strong>, donde el problema no está en el modelo sino en cómo mides: val mucho mejor que train, test usado para elegir hiperparámetros, fuga de información entre train y test.</p>
+
+<div class="note key">
+  <span class="tag">Método</span>
+  <p>1) Mira primero el <strong>nivel</strong> de train (¿baja? ¿hasta dónde? ¿contra el azar?). 2) Mira la <strong>brecha</strong> entre train y val y su tendencia. 3) Mira los <strong>gradientes</strong>: ¿desaparecen, explotan o son normales? 4) Pregúntate si algo en la <strong>medición</strong> es raro. Con eso suele bastar para clasificar, y la clasificación decide las intervenciones. Una intervención «ataca el problema correcto» solo si coincide con la familia que diagnosticaste.</p>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen</span>
+  <p>«Un agente sugiere duplicar las capas.» Contesta en dos líneas: <em>qué diagnosticas</em> y <em>por qué esa propuesta ataca (o no) esa causa</em>. Duplicar capas ataca el sesgo y empeora la varianza; en un problema de optimización no ayuda (y con sigmoides en redes profundas, empeora).</p>
+</div>
+
+<h3 id="lab-diagnostico" class="lab" data-toc="Lab: simulador de diagnóstico">Laboratorio: simulador de diagnóstico</h3>
+<p>Ocho casos, cada uno con sus curvas (generadas con fórmulas y ruido de semilla fija), la norma del gradiente por época y una línea de contexto. Para cada caso: <strong>1)</strong> elige tu diagnóstico, <strong>2)</strong> elige exactamente dos intervenciones de la lista y <strong>3)</strong> pulsa «Evaluar». El simulador dice si el diagnóstico coincide, qué evidencia lo sostiene, y para cada intervención si ataca la causa, si hace poco o si empeora, con la predicción de su efecto en train y validación. En los casos 1 y 2 hay una propuesta de un agente que debes juzgar.</p>
+<div class="widget" id="labDiag">
+  <div class="widget-head"><div class="wt">Simulador de diagnóstico</div><div class="ws">Azul: train · naranja: validación. El gradiente va en escala logarítmica (1e−6 = una millonésima).</div></div>
+  <div class="widget-body">
+    <div class="diag-h">Caso</div>
+    <div id="dgCaso"></div>
+    <p class="ctx" id="dgCtx" style="margin-top:10px"></p>
+    <div class="diag-grid">
+      <div class="cv"><div class="cv-t">Pérdida por época</div><canvas id="dgLoss"></canvas></div>
+      <div class="cv"><div class="cv-t">Accuracy por época</div><canvas id="dgAcc"></canvas></div>
+      <div class="cv"><div class="cv-t">Norma del gradiente (log)</div><canvas id="dgGrad"></canvas></div>
+    </div>
+    <div id="dgRead"></div>
+    <div class="diag-h">1 · Tu diagnóstico</div>
+    <div id="dgDx"></div>
+    <div class="diag-h">2 · Dos intervenciones (toca para elegir)</div>
+    <div class="chips" id="dgInt"></div>
+    <div class="fb" id="dgFb"></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="dgEval">Evaluar</button>
+    <button class="btn" id="dgLimpiar">Limpiar selección</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Caso 1: train 0.87 y val 0.92, casi iguales y estancadas: sesgo. «Duplicar capas» sí ataca el problema; weight decay y dropout lo empeoran.</li>
+    <li>Caso 2: la val toca fondo en la época 12 (0.64) y sube hasta 1.66 mientras train llega a 0.04: varianza. Ahora «duplicar capas» empeora todo, y early stopping, weight decay o más datos ayudan.</li>
+    <li>Casos 3 y 4: ambos son «optimización», pero de forma contraria: en el 3 el gradiente explota (NaN en la época 10, se baja la tasa); en el 4 desaparece (pérdida clavada en 2.30 = ln 10, se cambia a ReLU con He).</li>
+    <li>Caso 5: val mejor que train en todas las épocas. Lo importante no es "arreglarlo" sino sospechar de la medición: dropout activo al medir train, o fuga de información. Caso 6: curvas sanas pero 15 configuraciones elegidas con test.</li>
+    <li>Caso 7: val errática con BatchNorm de batch 2. Caso 8: sano, y la respuesta correcta es no tocar nada.</li>
+  </ol>
+</div>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 13</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. Los números están verificados con un script; si el tuyo no coincide, revisa el procedimiento de la respuesta paso a paso.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §5 · regularización explícita como prior</span>
+  <div class="e-enun">Supón que cada parámetro φⱼ tiene una prior de <b>Laplace</b> con centro 0 y escala b: P(φⱼ) = (1/(2b))·exp(−|φⱼ|/b), independiente de los demás. Deriva la regularización que resulta de la estimación MAP, e indica el valor de λ para b = 0.5.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Igual que con la Normal: toma el menos-log de la prior, suma sobre j, y separa lo que depende de φ de lo que no.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>MAP en forma de pérdida:</b> φ̂ = argmin [ −Σᵢ log P(yᵢ | xᵢ, φ) − log P(φ) ].</li>
+      <li><b>Prior independiente:</b> P(φ) = Π<sub>j</sub> P(φⱼ), y el log de un producto es una suma: −log P(φ) = −Σ<sub>j</sub> log P(φⱼ).</li>
+      <li><b>Menos-log de un factor:</b> −log P(φⱼ) = −log(1/(2b)) − log exp(−|φⱼ|/b) = log(2b) + |φⱼ|/b (log y exp se deshacen).</li>
+      <li><b>Sumar sobre j:</b> −log P(φ) = (número de parámetros)·log(2b) + (1/b)·Σ<sub>j</sub> |φⱼ|. El primer término no depende de φ y se descarta.</li>
+      <li><b>Identificar:</b> g(φ) = Σ<sub>j</sub> |φⱼ| (regularización <b>L1</b>) con λ = 1/b.</li>
+      <li><b>Con b = 0.5:</b> λ = 1/0.5 = 2. (Con b = 2, λ = 0.5: una prior más ancha, menos penalización.)</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §5 · L2 y los biases</span>
+  <div class="e-enun">¿Por qué normalmente no se regularizan los sesgos (biases) de una red? Da un argumento y un ejemplo numérico.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Los sesgos solo <b>desplazan</b> la salida de una neurona; no aumentan la flexibilidad del modelo (esta viene de los pesos, que determinan cuánto responde la salida a cada entrada). Penalizarlos no simplifica el modelo y sí <b>sesga el nivel de las predicciones</b>.</p>
+    <p>Ejemplo: datos con y = 100 siempre y x = 0, así que ŷ = b. Con pérdida (100 − b)² + λb², el óptimo es b̂ = 100/(1 + λ). Con λ = 1, b̂ = 50: la predicción se equivoca por 50 en todos los ejemplos solo por haber penalizado el sesgo.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §5 · inverted dropout</span>
+  <div class="e-enun">Una capa produce h = (4, 0, 2, 8). Aplicas inverted dropout con p = 0.25 y el sorteo da la máscara (1, 1, 0, 1). (a) Calcula h′. (b) ¿Qué sale en inferencia? (c) Verifica que E[h′] = h para la cuarta neurona.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) Se divide entre (1 − p) = 0.75 a las que sobreviven: h′ = (4/0.75, 0, 0, 8/0.75) = <b>(5.33, 0, 0, 10.67)</b>. La tercera se apaga: 0.</p>
+    <p>(b) En inferencia no hay máscara ni reescalado: la salida es <b>(4, 0, 2, 8)</b>. No se reescala porque ya se hizo durante el entrenamiento.</p>
+    <p>(c) E[h′₄] = 0.25·0 + 0.75·(8/0.75) = 0 + 8 = 8 = h₄. ✔</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §5 · BatchNorm</span>
+  <div class="e-enun">Una neurona produce los valores (1, 3, 5, 7) en un mini-batch. Calcula la salida de BatchNorm con γ = 2, β = 1 y ε ≈ 0.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Primero μ<sub>B</sub>, luego σ<sub>B</sub>² (dividiendo entre |B| = 4), luego x̂, y al final γx̂ + β.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>μ<sub>B</sub> = (1 + 3 + 5 + 7)/4 = <b>4</b>.</li>
+      <li>σ<sub>B</sub>² = ((1−4)² + (3−4)² + (5−4)² + (7−4)²)/4 = (9 + 1 + 1 + 9)/4 = 20/4 = <b>5</b>. Entonces σ<sub>B</sub> = √5 = 2.236.</li>
+      <li>x̂ = (x − 4)/2.236 = (−3, −1, 1, 3)/2.236 = <b>(−1.342, −0.447, 0.447, 1.342)</b>.</li>
+      <li>y = 2·x̂ + 1 = <b>(−1.683, 0.106, 1.894, 3.683)</b>.</li>
+    </ol>
+    <p>Verificación: la media de y es 1 (= β) porque x̂ tiene media 0, y la desviación de y es 2·1 = 2 (= γ), porque x̂ tiene desviación 1.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §5 · BatchNorm con batches chicos</span>
+  <div class="e-enun">Entrenas una CNN con BatchNorm y batch de tamaño 2 (la GPU no da para más). ¿Qué esperas ver en validación? ¿Qué usarías en su lugar?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Esperas una pérdida y un accuracy de validación <b>erráticos</b>, que saltan de una época a otra. La media y la varianza de un batch de 2 valores son estimaciones muy ruidosas de las de la población; de hecho con |B| = 2 el valor normalizado es siempre ±1, sin información de magnitud. El entrenamiento puede verse razonable, pero los promedios móviles que se usan en validación heredan ese ruido.</p>
+    <p>En su lugar: <b>LayerNorm</b> o <b>GroupNorm</b> (no dependen del batch), o aumentar el batch si la memoria lo permite.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §5 · early stopping contra L2</span>
+  <div class="e-enun">Compara early stopping con L2: un parecido y una diferencia.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Parecido:</b> ambos limitan cuánto se alejan los pesos de su inicialización y por eso reducen la complejidad efectiva del modelo (menos varianza, algo más de sesgo).</p>
+    <p><b>Diferencia:</b> L2 modifica <i>la pérdida</i> (se minimiza otra función); early stopping no toca la pérdida, actúa sobre <i>el tiempo</i>: corta el entrenamiento cuando la validación deja de mejorar. L2 necesita elegir λ antes; early stopping necesita un conjunto de validación y hiperparámetros propios (métrica, paciencia, tolerancia y frecuencia).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §5 · data augmentation</span>
+  <div class="e-enun">Clasificas fotos de calles en «hay bache» / «no hay bache». ¿Qué augmentations usarías? ¿Cuáles <b>no</b>, y por qué?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>La regla es que la transformación preserve la etiqueta.</p>
+    <p><b>Sí:</b> cambios moderados de brillo y contraste (día, atardecer), flips horizontales (un bache espejado sigue siendo un bache), rotaciones pequeñas (± 10°, inclinación de la cámara), recortes amplios que conserven el bache, ruido o desenfoque leve (cámaras distintas).</p>
+    <p><b>No:</b> recortes agresivos que puedan dejar el bache fuera de la imagen (la etiqueta «hay bache» pasaría a ser falsa); cambios de color o sombras extremas que lo oculten; borrar o pintar regiones que lo tapen; rotaciones de 90°/180° o flips verticales, que no son un cambio de etiqueta pero producen escenas que ninguna cámara de calle va a ver y no ayudan.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §6 · clasificar y proponer intervenciones</span>
+  <div class="e-enun">Tres corridas para clasificar fotos o dígitos, 40 épocas (los casos 7, 4 y 8 del simulador, pero resuélvelo antes de abrirlos):
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Exp</th><th>Modelo</th><th>Tasa</th><th class="num-c">Train loss</th><th class="num-c">Val loss</th><th class="num-c">Val acc</th><th>Observaciones</th></tr></thead>
+      <tbody>
+        <tr><td>A</td><td>CNN con BatchNorm, batch 2 (2 clases)</td><td>0.001</td><td class="num-c">0.37</td><td class="num-c">0.53</td><td class="num-c">81%</td><td>Train baja suave. Val acc oscila entre 59% y 81% de la época 16 a la 40; val loss con picos de hasta 1.15.</td></tr>
+        <tr><td>B</td><td>12 capas ocultas con sigmoide (10 clases)</td><td>0.01</td><td class="num-c">2.30</td><td class="num-c">2.30</td><td class="num-c">10%</td><td>Pérdida plana desde la época 1. Norma del gradiente ≈ 10⁻⁶.</td></tr>
+        <tr><td>C</td><td>2 capas de 64, weight decay 10⁻⁴ (3 clases)</td><td>0.001</td><td class="num-c">0.27</td><td class="num-c">0.34</td><td class="num-c">88%</td><td>Curvas suaves, gradientes decrecientes.</td></tr>
+      </tbody></table></div>
+    (a) Diagnostica cada experimento y da la evidencia. (b) Para A y B, propón dos intervenciones y predice el efecto en train y val.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>A: optimización / normalización.</b> Train va bien pero val salta sin tendencia sostenida a empeorar (no es el patrón de sobreajuste); la causa es el batch de 2, cuyas estadísticas son ruidosas. <i>Intervenciones:</i> (1) cambiar BatchNorm por GroupNorm o LayerNorm, (2) aumentar el batch si la memoria lo permite. <i>Efecto:</i> train casi igual (≈ 0.37); la val deja de saltar y baja suave hacia valores cercanos a los del train, con accuracy estable alrededor de 80%.</p>
+    <p><b>B: optimización (gradientes que desaparecen).</b> 2.30 = ln(10), la pérdida de adivinar al azar entre 10 clases; accuracy 10% = azar; gradiente ≈ 10⁻⁶ desde el principio. <i>Intervenciones:</i> (1) cambiar sigmoide por ReLU con inicialización He, (2) reducir la profundidad. <i>Efecto:</i> la pérdida de train deja de estar plana y baja claramente por debajo de 2.30; val la sigue, y el accuracy sube muy por encima de 10%. Duplicar capas o agregar regularización no ayudan.</p>
+    <p><b>C: sano.</b> Brecha de solo 0.07, curvas suaves y gradientes normales. No hay nada que arreglar; cualquier cambio sin evidencia es arriesgado.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §6 · resultados sospechosos</span>
+  <div class="e-enun">Un equipo reporta «accuracy de validación 92% y accuracy de entrenamiento 81%». ¿Es normal? ¿Qué revisarías?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>No es lo normal: lo habitual es que train sea mayor o igual a val. Revisaría, en este orden:</p>
+    <ol>
+      <li><b>Dropout (o ruido) activo al medir train</b> pero apagado en val: el accuracy de train se mide con la red «lastimada».</li>
+      <li><b>Fuga de información:</b> ejemplos repetidos o personas con varios trámites en train y val, un preprocesamiento ajustado con todos los datos, o una variable que contiene la etiqueta.</li>
+      <li><b>Un val más fácil o muy pequeño:</b> si es chico, el accuracy es ruidoso; si tiene otra distribución, no es comparable.</li>
+      <li><b>Cómo se calculan las métricas:</b> si el accuracy de train es el promedio durante la época (el modelo iba mejorando) y el de val es al final, el de train sale más bajo.</li>
+    </ol>
+    <p>Hasta resolverlo no hay conclusión sobre el modelo.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §5 y §6 · dropout y subajuste</span>
+  <div class="e-enun">Un modelo subajusta (train y val altas, casi iguales). Alguien propone agregar dropout de 0.5. ¿Por qué empeora las cosas?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Dropout es regularización: sirve para reducir la <b>varianza</b> (la brecha entre train y val). Aquí el problema es el <b>sesgo</b>: el modelo no tiene capacidad suficiente ni para ajustar el entrenamiento. Dropout apaga la mitad de las neuronas en cada paso y hace aún más difícil ajustarlo. Esperas que la pérdida de train <b>suba</b> y la de val no mejore (o suba también). Lo que sí ataca el sesgo: más capacidad, mejores características o más épocas si todavía no convergió.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 14</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">regularización</div><div class="def">Cualquier método que busca mejorar el desempeño fuera de muestra, no solo reducir la pérdida de entrenamiento.</div></div>
+  <div class="item"><div class="term">regularización explícita</div><div class="def">Agregar a la pérdida un término λg(φ) que penaliza ciertas soluciones.</div></div>
+  <div class="item"><div class="term">regularización implícita</div><div class="def">El efecto de preferir ciertas soluciones que tiene el propio proceso de optimización (tasa de aprendizaje, batch size, inicialización, optimizador), sin término extra.</div></div>
+  <div class="item"><div class="term">prior</div><div class="def">La distribución P(φ) que representa lo que creemos sobre los parámetros antes de ver los datos.</div></div>
+  <div class="item"><div class="term">posterior</div><div class="def">La distribución de los parámetros después de combinar la prior con la verosimilitud de los datos.</div></div>
+  <div class="item"><div class="term">MAP (Maximum A Posteriori)</div><div class="def">Elegir los parámetros que maximizan la posterior: verosimilitud × prior. Equivale a minimizar la pérdida más −log P(φ).</div></div>
+  <div class="item"><div class="term">L2</div><div class="def">Penalización λΣφⱼ². Encoge los pesos hacia 0 sin llevarlos exactamente a 0. Corresponde a una prior Normal.</div></div>
+  <div class="item"><div class="term">L1</div><div class="def">Penalización λΣ|φⱼ|. Lleva varios pesos exactamente a 0. Corresponde a una prior de Laplace.</div></div>
+  <div class="item"><div class="term">weight decay</div><div class="def">Encoger los pesos un poco en cada paso de SGD; con SGD estándar es equivalente a L2.</div></div>
+  <div class="item"><div class="term">esparsidad</div><div class="def">Que muchos parámetros valgan exactamente 0.</div></div>
+  <div class="item"><div class="term">pérdida modificada</div><div class="def">La pérdida «efectiva» que GD o SGD parecen minimizar: L más (α/4)‖∇L‖² (y, en SGD, la varianza entre mini-batches). Es una aproximación.</div></div>
+  <div class="item"><div class="term">BatchNorm</div><div class="def">Normalizar las activaciones de una neurona con la media y varianza del mini-batch, y luego aplicar γx̂ + β aprendibles. En inferencia usa promedios móviles.</div></div>
+  <div class="item"><div class="term">LayerNorm</div><div class="def">Normalización con la media y varianza de las neuronas de una capa para un solo ejemplo; no depende del batch.</div></div>
+  <div class="item"><div class="term">early stopping</div><div class="def">Detener el entrenamiento cuando la métrica de validación deja de mejorar, y quedarse con el mejor checkpoint.</div></div>
+  <div class="item"><div class="term">paciencia (patience)</div><div class="def">Cuántas épocas seguidas sin mejora se toleran antes de detenerse.</div></div>
+  <div class="item"><div class="term">ensamble</div><div class="def">Combinar las predicciones de varios modelos para reducir la varianza, a costa de entrenar y evaluar varios.</div></div>
+  <div class="item"><div class="term">dropout</div><div class="def">Apagar al azar activaciones (con probabilidad p) durante el entrenamiento.</div></div>
+  <div class="item"><div class="term">inverted dropout</div><div class="def">Versión de dropout donde las activaciones que sobreviven se dividen entre (1 − p) durante el entrenamiento, para que E[h′] = h y no haya que reescalar en inferencia.</div></div>
+  <div class="item"><div class="term">MC dropout</div><div class="def">Mantener dropout activo en inferencia y correr la red varias veces; se parece a un ensamble aproximado y da una medida de incertidumbre.</div></div>
+  <div class="item"><div class="term">data augmentation</div><div class="def">Generar ejemplos nuevos transformando los existentes de modo que la etiqueta se preserve.</div></div>
+  <div class="item"><div class="term">transfer learning</div><div class="def">Reutilizar un modelo preentrenado en otra tarea o dataset y adaptarlo a la tarea objetivo.</div></div>
+  <div class="item"><div class="term">fine-tuning</div><div class="def">Ajustar (parte de o toda) una red preentrenada con los datos de la tarea objetivo.</div></div>
+  <div class="item"><div class="term">multi-task learning</div><div class="def">Entrenar una red para varias tareas a la vez, con representaciones compartidas.</div></div>
+  <div class="item"><div class="term">transferencia negativa</div><div class="def">Cuando traer conocimiento de otra tarea (o entrenar tareas juntas) empeora el desempeño.</div></div>
+  <div class="item"><div class="term">self-supervised learning</div><div class="def">Aprender con una tarea auxiliar construida con los propios datos (masked prediction, next-token, contrastive), sin etiquetas humanas.</div></div>
+  <div class="item"><div class="term">fuga de información (data leakage)</div><div class="def">Que información del conjunto de validación o de test se cuele en el entrenamiento o en la elección del modelo, inflando el desempeño reportado.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>.</p>
+
+<nav class="serie" data-actual="05"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Regularizacion.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+"use strict";
+/* ===== NÚCLEO NUMÉRICO (sin DOM) ===== */
+var NUM = (function(){
+  "use strict";
+  var q = function(x){ return x*x; };
+
+  /* normal: erf (Abramowitz-Stegun 7.1.26) */
+  function erf(x){
+    var s = x < 0 ? -1 : 1; x = Math.abs(x);
+    var t = 1/(1 + 0.3275911*x);
+    var y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-x*x);
+    return s*y;
+  }
+  /* P(|phi| > a) para N(0, sigma^2) */
+  function colaNormal(a, sigma){ return 1 - erf(a/(sigma*Math.SQRT2)); }
+
+  /* ---- regularización explícita: A, phi* ---- */
+  var A = [[1, 0.8], [0.8, 1]], PS = [2.5, 1.0];
+  function datos(p){
+    var d0 = p[0]-PS[0], d1 = p[1]-PS[1];
+    return d0*(A[0][0]*d0 + A[0][1]*d1) + d1*(A[1][0]*d0 + A[1][1]*d1);
+  }
+  function opt2(lam){
+    var a = A[0][0]+lam, b = A[0][1], c = A[1][0], d = A[1][1]+lam, det = a*d - b*c;
+    var r0 = A[0][0]*PS[0] + A[0][1]*PS[1], r1 = A[1][0]*PS[0] + A[1][1]*PS[1];
+    return [(d*r0 - b*r1)/det, (-c*r0 + a*r1)/det];
+  }
+  function opt1(lam){
+    var p = PS.slice();
+    for(var it = 0; it < 400; it++){
+      for(var j = 0; j < 2; j++){
+        var k = 1 - j, r = A[j][k]*(p[k] - PS[k]) - A[j][j]*PS[j], t = lam/2;
+        var s = Math.abs(r) <= t ? 0 : r - (r > 0 ? t : -t);
+        p[j] = -s/A[j][j];
+      }
+    }
+    return p;
+  }
+
+  /* ---- mínimo plano contra afilado ---- */
+  var PL = {m1:-1, s1:0.12, a1:1.0, m2:1.6, s2:0.8, a2:0.95, b:0.03, c:0.2, S0:3, T:500, N:200, XB:-0.605};
+  function pL(x){ return PL.b*q(x-PL.c) - PL.a1*Math.exp(-q(x-PL.m1)/(2*q(PL.s1))) - PL.a2*Math.exp(-q(x-PL.m2)/(2*q(PL.s2))); }
+  function pdL(x){ return 2*PL.b*(x-PL.c) + PL.a1*(x-PL.m1)/q(PL.s1)*Math.exp(-q(x-PL.m1)/(2*q(PL.s1))) + PL.a2*(x-PL.m2)/q(PL.s2)*Math.exp(-q(x-PL.m2)/(2*q(PL.s2))); }
+  function simPlano(alfa, B){
+    var rs = DL.rng(5), rn = DL.rng(11), fin = [];
+    for(var i = 0; i < PL.N; i++){
+      var x = -2.5 + 5.5*rs.u();
+      for(var t = 0; t < PL.T; t++){
+        var g = pdL(x);
+        if(B > 0) g += PL.S0/Math.sqrt(B)*rn.normal();
+        x -= alfa*g;
+      }
+      fin.push(x);
+    }
+    return fin;
+  }
+  function cuentaAfilado(fin){ return fin.filter(function(x){ return x < PL.XB; }).length; }
+
+  /* ---- BatchNorm ---- */
+  function bn(x, g, b, eps){
+    var n = x.length, mu = 0, va = 0, i;
+    for(i = 0; i < n; i++) mu += x[i]; mu /= n;
+    for(i = 0; i < n; i++) va += q(x[i]-mu); va /= n;
+    var xh = x.map(function(v){ return (v-mu)/Math.sqrt(va+eps); });
+    return {mu:mu, va:va, xh:xh, y:xh.map(function(v){ return g*v+b; })};
+  }
+  function bnMovil(){
+    var r = DL.rng(21), rm = 0, rv = 1, mom = 0.1;
+    for(var i = 0; i < 60; i++){
+      var b = [r.normal(6,4), r.normal(6,4), r.normal(6,4), r.normal(6,4)], s = bn(b, 1, 0, 0);
+      rm = (1-mom)*rm + mom*s.mu; rv = (1-mom)*rv + mom*s.va;
+    }
+    return {mu:rm, va:rv};
+  }
+  function bnLotes(B){
+    var r = DL.rng(3), mus = [], xh1 = [];
+    for(var i = 0; i < 300; i++){
+      var b = []; for(var j = 0; j < B; j++) b.push(r.normal(6, 4));
+      var s = bn(b, 1, 0, 1e-5); mus.push(s.mu); xh1.push(s.xh[0]);
+    }
+    var m = 0; mus.forEach(function(v){ m += v; }); m /= mus.length;
+    var sd = 0; mus.forEach(function(v){ sd += q(v-m); }); sd = Math.sqrt(sd/mus.length);
+    return {mus:mus, xh1:xh1, sd:sd, teoria:4/Math.sqrt(B)};
+  }
+
+  /* ---- early stopping ---- */
+  var ES_SEMILLAS = [4, 9, 15];
+  function esCurvas(semilla){
+    var r = DL.rng(semilla), tr = [], va = [];
+    for(var e = 1; e <= 60; e++){
+      tr.push(0.06 + 1.1*Math.exp(-e/11) + r.normal(0, 0.006));
+      va.push(0.50 + 0.85*Math.exp(-e/7) + 0.00022*e*e + r.normal(0, 0.012));
+    }
+    return {tr:tr, va:va};
+  }
+  function esRegla(va, pac, tol){
+    var mejor = Infinity, ep = -1, espera = 0, parada = va.length;
+    for(var e = 0; e < va.length; e++){
+      if(va[e] < mejor - tol){ mejor = va[e]; ep = e; espera = 0; }
+      else { espera++; if(espera >= pac){ parada = e; break; } }
+    }
+    return {parada:parada+1, ckpt:ep+1, mejor:mejor};
+  }
+
+  /* ---- dropout ---- */
+  var DR_H = [4, 0, 2, 8, 1, 5, 3, 6], DR_W = [0.5, -0.3, 0.8, 0.2, -0.6, 0.4, 0.1, 0.3];
+  function drSalida(h){ var s = 0; for(var i = 0; i < h.length; i++) s += DR_W[i]*h[i]; return s; }
+  function drMascara(r, p){
+    return DR_H.map(function(){ return r.u() < p ? 0 : 1; });
+  }
+
+  return {erf:erf, colaNormal:colaNormal, A:A, PS:PS, datos:datos, opt2:opt2, opt1:opt1, PL:PL, pL:pL, pdL:pdL,
+    simPlano:simPlano, cuentaAfilado:cuentaAfilado, bn:bn, bnMovil:bnMovil, bnLotes:bnLotes,
+    ES_SEMILLAS:ES_SEMILLAS, esCurvas:esCurvas, esRegla:esRegla, DR_H:DR_H, DR_W:DR_W, drSalida:drSalida, drMascara:drMascara};
+})();
+
+/* ===== CURVAS DE LOS ESCENARIOS (sin DOM) ===== */
+var SCEN = (function(){
+  "use strict";
+  var E = 40;
+  function ar(f){ var o = []; for(var e = 1; e <= E; e++) o.push(f(e)); return o; }
+  function min2(a){ var k = 0; a.forEach(function(v, i){ if(isFinite(v) && v < a[k]) k = i; }); return k; }
+
+  function gen(id){
+    var seeds = {1:31, 2:42, 3:53, 4:64, 5:75, 6:86, 7:97, 8:108}, r = DL.rng(seeds[id]), n = function(s){ return r.normal(0, s); };
+    var c = {id:id, ep:ar(function(e){ return e; }), nan:null};
+    if(id === 1){
+      c.tr = ar(function(e){ return 0.88 + 0.55*Math.exp(-e/5) + n(0.008); });
+      c.va = ar(function(e){ return 0.91 + 0.55*Math.exp(-e/5) + n(0.012); });
+      c.atr = ar(function(e){ return 0.64 - 0.30*Math.exp(-e/5) + n(0.005); });
+      c.ava = ar(function(e){ return 0.62 - 0.30*Math.exp(-e/5) + n(0.01); });
+      c.gn = ar(function(e){ return 0.9*Math.exp(-e/10) + 0.04 + n(0.008); });
+    } else if(id === 2){
+      var v12 = 0.62 + 1.0*Math.exp(-12/3.2);
+      c.tr = ar(function(e){ return 0.04 + 1.1*Math.exp(-e/5) + n(0.004); });
+      c.va = ar(function(e){ var b = e <= 12 ? 0.62 + 1.0*Math.exp(-e/3.2) : v12 + 0.022*Math.pow(e-12, 1.15); return b + n(0.004); });
+      c.atr = ar(function(e){ return 0.99 - 0.55*Math.exp(-e/5) + n(0.004); });
+      c.ava = ar(function(e){ var b = e <= 12 ? 0.745 - 0.2*Math.exp(-e/3.5) : 0.745 - 0.0025*Math.pow(e-12, 1.15); return b + n(0.006); });
+      c.gn = ar(function(e){ return 1.5*Math.exp(-e/8) + 0.05 + n(0.01); });
+    } else if(id === 3){
+      var L3 = [2.35, 3.9, 2.1, 6.2, 3.1, 13.5, 8.2, 61, 1.4e3];
+      c.tr = ar(function(e){ return e <= 9 ? L3[e-1]*(1 + n(0.02)) : NaN; });
+      c.va = ar(function(e){ return e <= 9 ? L3[e-1]*(1.05 + n(0.03)) : NaN; });
+      c.atr = ar(function(e){ return e <= 9 ? 0.25 + n(0.015) : NaN; });
+      c.ava = ar(function(e){ return e <= 9 ? 0.25 + n(0.015) : NaN; });
+      c.gn = ar(function(e){ return e <= 9 ? 1.2*Math.exp(0.95*e)*(1 + n(0.05)) : NaN; });
+      c.nan = 10;
+    } else if(id === 4){
+      c.tr = ar(function(e){ return 2.3026 - 0.00002*e + n(0.0008); });
+      c.va = ar(function(e){ return 2.3026 + n(0.0012); });
+      c.atr = ar(function(e){ return 0.10 + n(0.004); });
+      c.ava = ar(function(e){ return 0.10 + n(0.004); });
+      c.gn = ar(function(e){ return 3e-6*Math.exp(-e/60)*(1 + n(0.1)); });
+    } else if(id === 5){
+      c.tr = ar(function(e){ return 0.60 + 0.9*Math.exp(-e/6) + n(0.01); });
+      c.va = ar(function(e){ return 0.45 + 0.7*Math.exp(-e/6) + n(0.008); });
+      c.atr = ar(function(e){ return 0.78 - 0.30*Math.exp(-e/6) + n(0.006); });
+      c.ava = ar(function(e){ return 0.85 - 0.30*Math.exp(-e/6) + n(0.006); });
+      c.gn = ar(function(e){ return 0.8*Math.exp(-e/10) + 0.06 + n(0.01); });
+    } else if(id === 6){
+      c.tr = ar(function(e){ return 0.30 + 0.80*Math.exp(-e/7) + n(0.006); });
+      c.va = ar(function(e){ return 0.38 + 0.78*Math.exp(-e/7) + n(0.008); });
+      c.atr = ar(function(e){ return 0.90 - 0.35*Math.exp(-e/7) + n(0.004); });
+      c.ava = ar(function(e){ return 0.86 - 0.35*Math.exp(-e/7) + n(0.006); });
+      c.gn = ar(function(e){ return 1.0*Math.exp(-e/9) + 0.05 + n(0.01); });
+    } else if(id === 7){
+      c.tr = ar(function(e){ return 0.35 + 0.9*Math.exp(-e/8) + n(0.01); });
+      c.va = ar(function(e){ var base = 0.48 + 0.75*Math.exp(-e/8); return base + Math.abs(n(0.30)) * (r.u() < 0.5 ? 1 : 0.2); });
+      c.atr = ar(function(e){ return 0.88 - 0.35*Math.exp(-e/8) + n(0.005); });
+      c.ava = ar(function(e){ return 0.82 - 0.35*Math.exp(-e/8) - Math.abs(n(0.09)) + n(0.01); });
+      c.gn = ar(function(e){ return (0.5*Math.exp(-e/15) + 0.08)*(1 + Math.abs(n(0.6))); });
+    } else {
+      c.tr = ar(function(e){ return 0.27 + 0.8*Math.exp(-e/7) + n(0.005); });
+      c.va = ar(function(e){ return 0.33 + 0.78*Math.exp(-e/7) + n(0.006); });
+      c.atr = ar(function(e){ return 0.92 - 0.37*Math.exp(-e/7) + n(0.004); });
+      c.ava = ar(function(e){ return 0.88 - 0.36*Math.exp(-e/7) + n(0.005); });
+      c.gn = ar(function(e){ return 1.0*Math.exp(-e/9) + 0.03 + n(0.008); });
+    }
+    c.kmin = min2(c.va);
+    return c;
+  }
+  return {gen:gen, E:E};
+})();
+
+/* ===== LABORATORIOS 1: penalización, prior, plano contra afilado, BN, early stopping, dropout ===== */
+var $ = function(id){ return document.getElementById(id); };
+var fmt = DL.fmt;
+
+/* mantiene la misma escala en x y en y (para que los círculos se vean círculos) */
+function igualar(g, cx, cy, hy){
+  var orig = g.redibujar;
+  g.redibujar = function(){
+    var pw = g.W - 60, ph = g.H - 52, hx = hy*pw/ph;
+    g.o.x = [cx - hx, cx + hx]; g.o.y = [cy - hy, cy + hy];
+    orig();
+  };
+  g.redibujar();
+}
+
+/* ---------- LAB 1: pérdida + penalización ---------- */
+(function(){
+  var tipo = "L2", lam = 1, caminos = {};
+  function opt(l){ return tipo === "L2" ? NUM.opt2(l) : NUM.opt1(l); }
+  function pen(p){ return tipo === "L2" ? p[0]*p[0] + p[1]*p[1] : Math.abs(p[0]) + Math.abs(p[1]); }
+  function camino(){
+    if(!caminos[tipo]){ var c = []; for(var l = 0; l <= 6.0001; l += 0.1) c.push(opt(l)); caminos[tipo] = c; }
+    return caminos[tipo];
+  }
+  var g = DL.grafica($("penCanvas"), {x:[-1.5, 4], y:[-1.2, 2.8], alto:360, etiquetaX:"φ₁", etiquetaY:"φ₂"}, function(g){
+    var ph = opt(lam), dh = NUM.datos(ph), gh = pen(ph);
+    g.contornos(function(x, y){ return NUM.datos([x, y]); }, [0.25, 1, 2.25, 4, 6.25, 9, 12], {color:"r-dato", ancho:1, alfa:0.4});
+    if(tipo === "L2") g.contornos(function(x, y){ return x*x + y*y; }, [1, 4, 9, 16], {color:"r-hiper", ancho:1, alfa:0.5});
+    else g.contornos(function(x, y){ return Math.abs(x) + Math.abs(y); }, [1, 2, 3, 4], {color:"r-hiper", ancho:1, alfa:0.5});
+    if(dh > 0.01) g.contornos(function(x, y){ return NUM.datos([x, y]); }, [dh], {color:"r-dato", ancho:2.4});
+    if(gh > 0.01){
+      if(tipo === "L2") g.contornos(function(x, y){ return x*x + y*y; }, [gh], {color:"r-hiper", ancho:2.4});
+      else g.contornos(function(x, y){ return Math.abs(x) + Math.abs(y); }, [gh], {color:"r-hiper", ancho:2.4});
+    }
+    g.polilinea(camino(), {color:"text-2", ancho:1.5, guiones:true});
+    g.puntos([[0, 0]], {color:"text-2", radio:3.5});
+    g.puntos([[NUM.PS[0], NUM.PS[1]]], {color:"r-dato", radio:5, aro:true});
+    g.texto(NUM.PS[0], NUM.PS[1], "φ*", {color:"r-dato", negrita:true, dx:9, dy:-9, tam:13});
+    g.puntos([ph], {color:"accent", radio:6.5, aro:true});
+    g.texto(ph[0], ph[1], "φ̂", {color:"accent", negrita:true, dx:-4, dy:-14, tam:14, alinear:"center"});
+  });
+  igualar(g, 1.25, 0.8, 2.0);
+  var read = $("penRead"), st = $("penStatus");
+  function act(){
+    var p = opt(lam), d = NUM.datos(p), gg = pen(p);
+    DL.readout(read, [["φ̂₁", fmt(p[0], 2)], ["φ̂₂", fmt(p[1], 2)], [tipo === "L2" ? "‖φ̂‖²" : "|φ̂₁| + |φ̂₂|", fmt(gg, 2)],
+      ["pérdida de los datos", fmt(d, 2)], ["λ·g(φ̂)", fmt(lam*gg, 2)], ["objetivo total", fmt(d + lam*gg, 2)]]);
+    if(lam < 0.001) st.textContent = "Sin penalización: el óptimo es el de los datos, φ* = (2.5, 1).";
+    else if(tipo === "L1" && Math.abs(p[1]) < 1e-6) st.textContent = "φ₂ = 0 exactamente: L1 eliminó un parámetro (esparsidad).";
+    else if(tipo === "L2") st.textContent = "L2 encoge φ̂ hacia el origen, pero ninguna coordenada llega a 0.";
+    else st.textContent = "L1 jala con fuerza constante; mira si alguna coordenada llega a 0.";
+    g.redibujar();
+  }
+  var ctrl = DL.control($("penCtrl"), {etiqueta:"λ (fuerza de la penalización)", min:0, max:6, paso:0.05, valor:lam, alCambiar:function(v){ lam = v; act(); }});
+  DL.selector($("penSel"), {opciones:[{v:"L2", t:"L2 (círculos)"}, {v:"L1", t:"L1 (rombos)"}], valor:tipo, alCambiar:function(v){ tipo = v; act(); }});
+  $("penL0").onclick = function(){ ctrl.fijar(0); };
+  $("penL1").onclick = function(){ ctrl.fijar(1); };
+  $("penL4").onclick = function(){ ctrl.fijar(4); };
+  act();
+})();
+
+/* ---------- LAB 2: la prior ---------- */
+(function(){
+  var sig = 1, vista = "campana";
+  var pdf = function(x){ return Math.exp(-x*x/(2*sig*sig))/(sig*Math.sqrt(2*Math.PI)); };
+  var g = DL.grafica($("priCanvas"), {x:[-4, 4], y:[0, 0.5], alto:300, etiquetaX:"φⱼ", etiquetaY:"P(φⱼ)"}, function(g){
+    if(vista === "campana"){
+      g.vertical(-2, {color:"text-3", guiones:true, ancho:1}); g.vertical(2, {color:"text-3", guiones:true, ancho:1});
+      g.funcion(pdf, {color:"accent", ancho:2.5, muestras:600});
+      g.vertical(-sig, {color:"r-hiper", guiones:true, ancho:1.5}); g.vertical(sig, {color:"r-hiper", guiones:true, ancho:1.5});
+      g.texto(sig, g.o.y[1]*0.93, "+σ", {color:"r-hiper", dx:4, tam:12, alinear:"left"});
+      g.texto(2, g.o.y[1]*0.06, "φⱼ = 2", {color:"text-3", dx:4, tam:11});
+    } else {
+      var lam = 1/(2*sig*sig);
+      g.vertical(-2, {color:"text-3", guiones:true, ancho:1}); g.vertical(2, {color:"text-3", guiones:true, ancho:1});
+      g.funcion(function(x){ return lam*x*x; }, {color:"accent", ancho:2.5, muestras:600});
+      g.puntos([[2, lam*4]], {color:"r-param", radio:5, aro:true});
+      g.texto(2, Math.min(lam*4, g.o.y[1]*0.9), "cuesta " + fmt(lam*4, 2), {color:"r-param", dx:-8, dy:-10, tam:12, alinear:"right", negrita:true});
+    }
+  });
+  var read = $("priRead"), st = $("priStatus");
+  function act(){
+    var lam = 1/(2*sig*sig);
+    if(vista === "campana"){ g.o.y = [0, Math.max(0.5, 1.15*pdf(0))]; g.o.etiquetaY = "P(φⱼ)"; }
+    else { g.o.y = [0, 12]; g.o.etiquetaY = "−log P(φⱼ) − constante = λφⱼ²"; }
+    DL.readout(read, [["σ_φ", fmt(sig, 2)], ["λ = 1/(2σ_φ²)", fmt(lam, 2)], ["altura en 0", fmt(pdf(0), 2)],
+      ["P(|φⱼ| > 2)", fmt(100*NUM.colaNormal(2, sig), 3) + " %"], ["castigo de φⱼ = 2", fmt(4*lam, 2)]]);
+    st.textContent = sig < 0.4 ? "Prior muy estrecha: 'estoy muy seguro de que los pesos son chicos'. λ enorme."
+      : (sig > 2 ? "Prior muy ancha: casi no opina. λ pequeño, casi sin regularizar." : "Prior moderada: un compromiso típico.");
+    g.redibujar();
+  }
+  DL.control($("priCtrl"), {etiqueta:"σ_φ (desviación de la prior)", min:0.1, max:3, paso:0.05, valor:sig, alCambiar:function(v){ sig = v; act(); }});
+  DL.selector($("priSel"), {opciones:[{v:"campana", t:"Campana P(φⱼ)"}, {v:"pen", t:"Penalización −log P"}], valor:vista, alCambiar:function(v){ vista = v; act(); }});
+  act();
+})();
+
+/* ---------- LAB 3: mínimo plano contra afilado ---------- */
+(function(){
+  var alfa = 0.07, B = 8, X0 = -3, X1 = 3.5, BIN = 0.1;
+  var gC = DL.grafica($("plaCurva"), {x:[X0, X1], y:[-1.15, 0.5], alto:170, etiquetaX:"x", etiquetaY:"L(x)"}, function(g){
+    g.funcion(NUM.pL, {color:"text-2", ancho:2, muestras:900});
+    g.vertical(NUM.PL.XB, {color:"text-3", guiones:true, ancho:1});
+    g.puntos([[-0.9987, NUM.pL(-0.9987)]], {color:"g1", radio:5, aro:true});
+    g.puntos([[1.5455, NUM.pL(1.5455)]], {color:"g2", radio:5, aro:true});
+    g.texto(-0.9987, -1.07, "afilado", {color:"g1", negrita:true, tam:11.5, alinear:"center"});
+    g.texto(1.5455, -1.07, "ancho", {color:"g2", negrita:true, tam:11.5, alinear:"center"});
+    g.texto(NUM.PL.XB, 0.4, "barrera", {color:"text-3", tam:11, alinear:"center"});
+  });
+  var datosH = {gd:[], sg:[]};
+  var gH = DL.grafica($("plaHist"), {x:[X0, X1], y:[0, 100], alto:210, etiquetaX:"x final", etiquetaY:"corridas"}, function(g){
+    g.vertical(NUM.PL.XB, {color:"text-3", guiones:true, ancho:1});
+    datosH.sg.forEach(function(c, i){ if(c) g.rect(X0 + i*BIN, 0, BIN, c, {color:"accent", relleno:true, alfa:0.45, ancho:1}); });
+    datosH.gd.forEach(function(c, i){ if(c) g.rect(X0 + i*BIN, 0, BIN, c, {color:"text", ancho:1.3}); });
+  });
+  function hist(fin){
+    var n = Math.round((X1 - X0)/BIN), h = []; for(var i = 0; i < n; i++) h.push(0);
+    fin.forEach(function(x){ var k = Math.floor((x - X0)/BIN); if(k >= 0 && k < n) h[k]++; });
+    return h;
+  }
+  var read = $("plaRead"), st = $("plaStatus");
+  function act(){
+    var fg = NUM.simPlano(alfa, 0), fs = NUM.simPlano(alfa, B);
+    datosH.gd = hist(fg); datosH.sg = hist(fs);
+    var mx = Math.max.apply(null, datosH.gd.concat(datosH.sg));
+    gH.o.y = [0, Math.ceil(mx*1.1/10)*10];
+    var a1 = NUM.cuentaAfilado(fg), a2 = NUM.cuentaAfilado(fs), N = NUM.PL.N;
+    DL.readout(read, [["α", fmt(alfa, 2)], ["|B|", B], ["GD en afilado", a1 + " de " + N], ["GD en ancho", (N - a1) + " de " + N],
+      ["SGD en afilado", a2 + " de " + N], ["SGD en ancho", (N - a2) + " de " + N]]);
+    st.className = "status info";
+    st.textContent = a1 === 0 ? "A este α, ni GD sin ruido puede quedarse en el pozo afilado: rebota fuera."
+      : (a2 < a1 - 15 ? "El ruido de SGD sacó corridas del pozo afilado: el mínimo ancho gana." : "Casi igual que GD: el resultado lo decide dónde empezó la corrida.");
+    gC.redibujar(); gH.redibujar();
+  }
+  var ctrlA = DL.control($("plaCtrl"), {etiqueta:"tasa de aprendizaje α", min:0.01, max:0.1, paso:0.01, valor:alfa, alCambiar:function(v){ alfa = v; act(); }});
+  DL.selector($("plaSel"), {opciones:[1, 2, 4, 8, 16, 32, 64].map(function(b){ return {v:b, t:String(b)}; }), valor:B, alCambiar:function(v){ B = v; act(); }});
+  function fijarA(v){ ctrlA.fijar(v); }
+  $("plaA3").onclick = function(){ fijarA(0.03); };
+  $("plaA7").onclick = function(){ fijarA(0.07); };
+  $("plaA10").onclick = function(){ fijarA(0.10); };
+  act();
+})();
+
+/* ---------- LAB 4: calculadora BatchNorm ---------- */
+(function(){
+  var LOTES = [[2, 4, 6, 12], [1, 3, 5, 7], [10, 10, 10, 10]], lote = 0, gam = 1, bet = 0, EPS = 1e-5;
+  var movil = NUM.bnMovil(), P;
+  function lista(v, d){ return "(" + v.map(function(x){ return fmt(x, d === undefined ? 2 : d); }).join(", ") + ")"; }
+  function render(i){
+    var x = LOTES[lote], r = NUM.bn(x, gam, bet, EPS), m = $("bnMat"), html = "";
+    var hl = function(){ return "hl"; };
+    html += DL.matriz([x], {titulo:"x", forma:"(1, 4)", dec:2});
+    if(i >= 3) html += '<span class="op">→</span>' + DL.matriz([r.xh], {titulo:"x̂", forma:"(1, 4)", dec:2, clase:i === 3 ? hl : null});
+    if(i >= 4) html += '<span class="op">→</span>' + DL.matriz([r.y], {titulo:"y", forma:"(1, 4)", dec:2, clase:i === 4 ? hl : null});
+    var calc;
+    if(i === 0) calc = "Un mini-batch de 4 valores de una neurona. Pulsa «Siguiente →».";
+    else if(i === 1) calc = "μ<sub>B</sub> = (" + x.join(" + ") + ") / 4 = <b>" + fmt(r.mu, 2) + "</b>";
+    else if(i === 2) calc = "σ<sub>B</sub>² = (" + x.map(function(v){ return "(" + v + " − " + fmt(r.mu, 0) + ")²"; }).join(" + ") + ") / 4 = " +
+      fmt(x.reduce(function(a, v){ return a + (v - r.mu)*(v - r.mu); }, 0), 0) + " / 4 = <b>" + fmt(r.va, 2) + "</b>";
+    else if(i === 3) calc = "x̂ = (x − " + fmt(r.mu, 2) + ") / √(" + fmt(r.va, 2) + " + 0.00001) = <b>" + lista(r.xh) + "</b>" + (r.va < 1e-9 ? " &nbsp;(la varianza es 0: sin ε sería 0/0)" : "");
+    else if(i === 4) calc = "y = γ·x̂ + β con γ = " + fmt(gam, 2) + ", β = " + fmt(bet, 2) + " → <b>" + lista(r.y) + "</b>";
+    else {
+      var yi = x.map(function(v){ return gam*(v - movil.mu)/Math.sqrt(movil.va + EPS) + bet; });
+      calc = "<b>Inferencia.</b> Estadísticas guardadas (promedio móvil de 60 batches): μ = " + fmt(movil.mu, 2) + ", σ² = " + fmt(movil.va, 2) +
+        ". Cada valor se normaliza con ellas, no con las del batch (" + fmt(r.mu, 2) + " y " + fmt(r.va, 2) + "): y = <b>" + lista(yi) + "</b>";
+      html += '<span class="op">→</span>' + DL.matriz([yi], {titulo:"y (inferencia)", forma:"(1, 4)", dec:2, clase:hl});
+    }
+    m.innerHTML = html; $("bnCalc").innerHTML = calc;
+  }
+  P = DL.pasos($("labBN"), {total:6, etiqueta:"paso", render:render});
+  function re(){ P.ir(P.actual()); }
+  DL.selector($("bnSel"), {opciones:[{v:0, t:"(2, 4, 6, 12)"}, {v:1, t:"(1, 3, 5, 7)"}, {v:2, t:"(10, 10, 10, 10)"}], valor:0, alCambiar:function(v){ lote = v; re(); }});
+  DL.control($("bnCtrl"), {etiqueta:"γ (escala)", min:0, max:3, paso:0.1, valor:gam, alCambiar:function(v){ gam = v; re(); }});
+  DL.control($("bnCtrl"), {etiqueta:"β (desplazamiento)", min:-2, max:2, paso:0.1, valor:bet, alCambiar:function(v){ bet = v; re(); }});
+})();
+
+/* ---------- LAB 5: ruido de μ_B ---------- */
+(function(){
+  var B = 4;
+  var BIN = 0.5, ANCHO = 12;
+  var datos = [];
+  var g = DL.grafica($("bnbCanvas"), {x:[0, ANCHO], y:[0, 60], alto:280, etiquetaX:"μ_B", etiquetaY:"batches"}, function(g){
+    datos.forEach(function(c, i){ if(c) g.rect(i*BIN, 0, BIN, c, {color:"accent", relleno:true, alfa:0.4, ancho:1}); });
+    var s = 4/Math.sqrt(B);
+    g.funcion(function(x){ return 300*BIN*Math.exp(-(x - 6)*(x - 6)/(2*s*s))/(s*Math.sqrt(2*Math.PI)); }, {color:"text-2", ancho:1.5, guiones:true, muestras:400});
+    g.vertical(6, {color:"r-hiper", ancho:1.5});
+  });
+  var read = $("bnbRead"), st = $("bnbStatus");
+  function act(){
+    var l = NUM.bnLotes(B), n = ANCHO/BIN; datos = []; for(var i = 0; i < n; i++) datos.push(0);
+    l.mus.forEach(function(m){ var k = Math.floor(m/BIN); if(k >= 0 && k < n) datos[k]++; });
+    var mx = Math.max.apply(null, datos); g.o.y = [0, Math.ceil(mx*1.15/10)*10];
+    var mn = Math.min.apply(null, l.xh1), mxx = Math.max.apply(null, l.xh1);
+    DL.readout(read, [["|B|", B], ["dispersión de μ_B", fmt(l.sd, 2)], ["teoría σ/√|B|", fmt(l.teoria, 2)], ["x̂ del 1.er ejemplo, mín", fmt(mn, 2)], ["x̂ del 1.er ejemplo, máx", fmt(mxx, 2)]]);
+    st.textContent = B === 2 ? "Con |B| = 2, x̂ vale ±1 siempre: se pierde toda la información de magnitud." : (B <= 8 ? "Estadísticas ruidosas: la normalización cambia mucho de batch en batch." : "Estadísticas estables: cada batch normaliza casi igual.");
+    g.redibujar();
+  }
+  DL.selector($("bnbSel"), {opciones:[2, 4, 8, 16, 32, 64].map(function(b){ return {v:b, t:String(b)}; }), valor:B, alCambiar:function(v){ B = v; act(); }});
+  act();
+})();
+
+/* ---------- LAB 6: early stopping ---------- */
+(function(){
+  var pac = 5, tol = 0, si = 0, cur = NUM.esCurvas(NUM.ES_SEMILLAS[0]);
+  var res;
+  var g = DL.grafica($("esCanvas"), {x:[0, 61], y:[0, 1.5], alto:320, etiquetaX:"época", etiquetaY:"pérdida"}, function(g){
+    var pts = function(a){ return a.map(function(v, i){ return [i + 1, v]; }); };
+    if(res.parada < 60) g.rect(res.parada, 0, 61 - res.parada, 1.5, {color:"text-3", relleno:true, alfa:0.1, borde:false});
+    g.polilinea(pts(cur.tr), {color:"g2", ancho:2});
+    g.polilinea(pts(cur.va), {color:"accent", ancho:2});
+    g.vertical(res.parada, {color:"text-2", guiones:true, ancho:1.5});
+    g.puntos([[res.ckpt, cur.va[res.ckpt - 1]]], {color:"accent", radio:7, hueco:true});
+    g.texto(3, 1.38, "— train", {color:"g2", negrita:true, tam:12});
+    g.texto(3, 1.26, "— validación", {color:"accent", negrita:true, tam:12});
+    g.texto(res.parada, 0.06, "paro", {color:"text-2", tam:11, dx:-4, alinear:"right"});
+  });
+  var read = $("esRead"), st = $("esStatus"), pill = $("esPill");
+  function act(){
+    res = NUM.esRegla(cur.va, pac, tol);
+    var u = cur.va.length - 1;
+    DL.readout(read, [["se detiene en la época", res.parada], ["checkpoint guardado", "época " + res.ckpt], ["val del checkpoint", fmt(cur.va[res.ckpt - 1], 3)],
+      ["train al detenerse", fmt(cur.tr[res.parada - 1], 3)], ["val si siguiera hasta 60", fmt(cur.va[u], 3)]]);
+    st.className = "status " + (res.parada >= 60 ? "bad" : "info");
+    st.textContent = res.parada >= 60 ? "Nunca se activó el paro: la paciencia es mayor que lo que sobra de curva." : "Se guarda la época " + res.ckpt + ", no la última que se corrió.";
+    pill.textContent = "muestra de ruido " + (si + 1) + " de " + NUM.ES_SEMILLAS.length;
+    g.redibujar();
+  }
+  DL.control($("esCtrl"), {etiqueta:"paciencia (épocas)", min:1, max:15, paso:1, valor:pac, formato:function(v){ return String(v); }, alCambiar:function(v){ pac = v; act(); }});
+  DL.control($("esCtrl"), {etiqueta:"tolerancia mínima δ", min:0, max:0.05, paso:0.005, valor:tol, formato:function(v){ return fmt(v, 3); }, alCambiar:function(v){ tol = v; act(); }});
+  $("esSemilla").onclick = function(){ si = (si + 1) % NUM.ES_SEMILLAS.length; cur = NUM.esCurvas(NUM.ES_SEMILLAS[si]); act(); };
+  act();
+})();
+
+/* ---------- LAB 7: dropout ---------- */
+(function(){
+  var p = 0.25, modo = "train", r, N, sumas, ultima, ys;
+  var H = NUM.DR_H, K = H.length;
+  function reiniciar(){
+    r = DL.rng(7); N = 0; sumas = H.map(function(){ return 0; }); ultima = null; ys = [];
+  }
+  function una(){
+    if(modo === "inf") return;
+    var m = NUM.drMascara(r, p), hp = H.map(function(v, i){ return m[i]*v/(1 - p); });
+    ultima = {m:m, hp:hp}; N++;
+    hp.forEach(function(v, i){ sumas[i] += v; });
+    ys.push(NUM.drSalida(hp));
+  }
+  var g = DL.grafica($("drCanvas"), {x:[-1.3, 8.2], y:[0, 3.4], alto:320, ejes:false}, function(g){
+    var pw = g.W - 60, rad = Math.max(10, Math.min(17, pw/9.5/2 - 3)), dec = rad >= 16 ? 2 : 1;
+    var filas = [2.7, 1.7, 0.7], rotulos = ["h", "h′", "media"];
+    filas.forEach(function(y, k){ g.texto(-1.25, y, rotulos[k], {color:"text-2", negrita:true, tam:13, alinear:"left"}); });
+    for(var j = 0; j < K; j++){
+      var x = j + 0.5;
+      g.puntos([[x, 2.7]], {color:"r-calc", radio:rad});
+      g.texto(x, 2.7, fmt(H[j], 0), {color:"surface", negrita:true, tam:12, alinear:"center"});
+      var apag = ultima && modo !== "inf" && ultima.m[j] === 0;
+      if(modo === "inf"){
+        g.puntos([[x, 1.7]], {color:"r-calc", radio:rad}); g.texto(x, 1.7, fmt(H[j], 0), {color:"surface", negrita:true, tam:12, alinear:"center"});
+      } else if(!ultima){
+        g.puntos([[x, 1.7]], {color:"text-3", radio:rad, hueco:true});
+      } else if(apag){
+        g.puntos([[x, 1.7]], {color:"text-3", radio:rad, hueco:true}); g.texto(x, 1.7, "0", {color:"text-3", tam:12, alinear:"center"});
+      } else {
+        g.puntos([[x, 1.7]], {color:"r-calc", radio:rad}); g.texto(x, 1.7, fmt(ultima.hp[j], 1), {color:"surface", negrita:true, tam:11, alinear:"center"});
+      }
+      if(modo === "inf"){
+        g.puntos([[x, 0.7]], {color:"r-calc", radio:rad, hueco:true}); g.texto(x, 0.7, fmt(H[j], 0), {color:"r-calc", tam:12, alinear:"center"});
+      } else if(N > 0){
+        g.puntos([[x, 0.7]], {color:"r-hiper", radio:rad}); g.texto(x, 0.7, fmt(sumas[j]/N, dec), {color:"surface", negrita:true, tam:11, alinear:"center"});
+      } else g.puntos([[x, 0.7]], {color:"text-3", radio:rad, hueco:true});
+    }
+  });
+  var read = $("drRead"), st = $("drStatus");
+  function act(){
+    var yd = NUM.drSalida(H), filas = [["modo", modo === "train" ? "entrenamiento" : (modo === "inf" ? "inferencia" : "MC dropout")], ["p", fmt(p, 2)], ["máscaras sorteadas", modo === "inf" ? "—" : N], ["salida y de la red completa", fmt(yd, 2)]];
+    if(modo !== "inf" && N > 0){
+      var e = 0; sumas.forEach(function(s, i){ e = Math.max(e, Math.abs(s/N - H[i])); });
+      filas.push(["máx |media de h′ − h|", fmt(e, 2)]);
+      if(modo === "mc"){
+        var mu = ys.reduce(function(a, v){ return a + v; }, 0)/ys.length, sd = Math.sqrt(ys.reduce(function(a, v){ return a + (v - mu)*(v - mu); }, 0)/ys.length);
+        filas.push(["MC: media de y", fmt(mu, 2)]); filas.push(["MC: dispersión de y", fmt(sd, 2)]); filas.push(["y de la última pasada", fmt(ys[ys.length - 1], 2)]);
+      }
+    }
+    DL.readout(read, filas);
+    st.textContent = modo === "inf" ? "Inferencia: sin máscara y sin reescalar. La salida es siempre la misma."
+      : (N === 0 ? "Pulsa «Nueva máscara»." : (modo === "mc" ? "Cada pasada da una salida distinta; la dispersión mide la incertidumbre." : "Una máscara sola es muy distinta de h; el promedio, no."));
+    g.redibujar();
+  }
+  DL.selector($("drSel"), {opciones:[{v:"train", t:"Entrenamiento"}, {v:"inf", t:"Inferencia"}, {v:"mc", t:"MC dropout"}], valor:modo, alCambiar:function(v){ modo = v; reiniciar(); act(); }});
+  DL.control($("drCtrl"), {etiqueta:"probabilidad de apagar p", min:0.05, max:0.8, paso:0.05, valor:p, alCambiar:function(v){ p = v; reiniciar(); act(); }});
+  $("drUna").onclick = function(){ una(); act(); };
+  $("drCien").onclick = function(){ for(var i = 0; i < 100; i++) una(); act(); };
+  $("drReset").onclick = function(){ reiniciar(); act(); };
+  reiniciar(); act();
+})();
+
+/* ===== LABORATORIOS 2: augmentation y simulador de diagnóstico ===== */
+
+/* ---------- LAB 8: ¿preserva la etiqueta? ---------- */
+(function(){
+  var CARTAS = [
+    {caso:"Foto de un dígito escrito a mano: un «6».", tr:"Rotación de 180°.", r:"no",
+      exp:"Un 6 girado 180° es un 9: la imagen cambió de clase y la etiqueta «6» ya no es verdadera. Meter ese ejemplo con la etiqueta vieja le enseña al modelo algo falso. (Una rotación de 10° o 15° sí preservaría la etiqueta.)"},
+    {caso:"Radiografía de tórax para detectar neumonía.", tr:"Espejo horizontal (voltear izquierda con derecha).", r:"dep",
+      exp:"Depende. Para detectar neumonía en un pulmón quizá preserve la etiqueta. Pero el corazón normalmente está del lado izquierdo, y el espejo lo pasaría al derecho (una anatomía casi inexistente): si la tarea depende de la posición de los órganos, no preserva. La regla es preguntarte qué información usa la etiqueta."},
+    {caso:"Reseña: «El servicio fue bueno.» (sentimiento positivo).", tr:"Cambiar palabras por sinónimos: «La atención fue excelente.»", r:"si",
+      exp:"Preserva: el significado y el sentimiento siguen siendo positivos. Es el tipo de transformación de texto que la slide considera segura."},
+    {caso:"Reseña: «El servicio fue bueno.» (sentimiento positivo).", tr:"Insertar una negación: «El servicio no fue bueno.»", r:"no",
+      exp:"No preserva: una palabra cambió el significado y ahora el sentimiento es negativo. La slide lo advierte: en texto, algunas transformaciones cambian el significado."},
+    {caso:"Imagen satelital para estimar el nivel de pobreza de una zona.", tr:"Rotación de 90°.", r:"si",
+      exp:"Preserva: en una vista desde arriba no hay un «arriba» natural. Una casa, un camino o un cultivo siguen siendo lo mismo girados, y el nivel de pobreza de la zona no depende de la orientación de la foto."},
+    {caso:"Foto de un bache en la calle (etiqueta: «hay bache»).", tr:"Cambio moderado de brillo y contraste.", r:"si",
+      exp:"Preserva: la foto puede tomarse de día, al atardecer o con sol fuerte y el bache sigue ahí. Es justo la variación que el modelo verá en la calle."},
+    {caso:"Foto de un bache en la calle (etiqueta: «hay bache»).", tr:"Recorte aleatorio muy agresivo (se queda con el 20% de la imagen).", r:"no",
+      exp:"Puede no preservar: si el recorte deja fuera el bache, la imagen resultante ya no lo contiene y la etiqueta «hay bache» es falsa. Los recortes son útiles, pero deben ser lo bastante amplios para conservar el objeto."},
+    {caso:"Audio de una persona diciendo «sí» (reconocimiento de comandos).", tr:"Agregar ruido de fondo leve y cambiar un poco el volumen.", r:"si",
+      exp:"Preserva: el comando sigue siendo «sí». En audio, la slide menciona justo ruido, cambios de volumen y pequeñas deformaciones temporales."}
+  ];
+  var k = 0, aciertos = 0, resp = {}, sel;
+  var cont = $("augSel"), card = $("augCard"), fb = $("augFb"), pill = $("augPill");
+  var NOM = {si:"preserva la etiqueta", no:"no preserva la etiqueta", dep:"depende"};
+  function pintar(){
+    var c = CARTAS[k];
+    card.innerHTML = '<div class="caso"><b>Caso.</b> ' + c.caso + '</div><div class="tr">Transformación: ' + c.tr + '</div>';
+    cont.innerHTML = "";
+    sel = DL.selector(cont, {opciones:[{v:"si", t:"Preserva"}, {v:"no", t:"No preserva"}, {v:"dep", t:"Depende"}], valor:resp[k], alCambiar:function(v){
+      if(resp[k]) return;
+      resp[k] = v;
+      var ok = v === c.r; if(ok) aciertos++;
+      mostrar(ok);
+      pill.textContent = "aciertos " + aciertos + " de " + Object.keys(resp).length;
+    }});
+    if(resp[k]) mostrar(resp[k] === c.r); else fb.innerHTML = "";
+    pill.textContent = "carta " + (k + 1) + " de " + CARTAS.length + " · aciertos " + aciertos + " de " + Object.keys(resp).length;
+  }
+  function mostrar(ok){
+    var c = CARTAS[k];
+    fb.innerHTML = '<div class="status ' + (ok ? "ok" : "bad") + '">' + (ok ? "Correcto." : "No exactamente.") + ' Respuesta de referencia: <b>' + NOM[c.r] + '</b>.</div><p style="margin-top:8px">' + c.exp + '</p>';
+  }
+  $("augPrev").onclick = function(){ k = (k + CARTAS.length - 1) % CARTAS.length; pintar(); };
+  $("augNext").onclick = function(){ k = (k + 1) % CARTAS.length; pintar(); };
+  pintar();
+})();
+
+/* ---------- LAB 9: simulador de diagnóstico ---------- */
+(function(){
+  var f2 = function(v, d){ return DL.fmt(v, d === undefined ? 2 : d); };
+  var pc = function(v){ return DL.fmt(100*v, 0) + "%"; };
+  var DX = [
+    {v:"A", t:"Subajuste (sesgo)"}, {v:"B", t:"Sobreajuste (varianza)"}, {v:"C", t:"Problema de optimización"},
+    {v:"D", t:"Resultado sospechoso (medición o fuga)"}, {v:"E", t:"Sano"}
+  ];
+  var NOMDX = {A:"Subajuste (sesgo)", B:"Sobreajuste (varianza)", C:"Problema de optimización", D:"Resultado sospechoso (medición o fuga)", E:"Sano"};
+  var INT = [
+    ["cap_mas", "Duplicar las capas (más capacidad)"], ["cap_menos", "Reducir el tamaño de la red"], ["wd", "Agregar weight decay (L2)"],
+    ["dropout", "Agregar dropout"], ["es", "Early stopping con el mejor checkpoint"], ["datos", "Más datos o augmentation"],
+    ["lr_baja", "Bajar la tasa de aprendizaje"], ["lr_sube", "Subir la tasa de aprendizaje"], ["mas_ep", "Entrenar más épocas"],
+    ["relu_he", "Cambiar a ReLU con inicialización He"], ["bn_cambio", "Cambiar BatchNorm por GroupNorm o LayerNorm"],
+    ["split", "Elegir hiperparámetros con validación y usar test una sola vez"], ["fuga", "Auditar fuga de información entre train y val"],
+    ["eval_mode", "Medir train y val con la red en modo inferencia"], ["nada", "No cambiar nada"]
+  ];
+  var NOMINT = {}; INT.forEach(function(x){ NOMINT[x[0]] = x[1]; });
+  var DEF = "No ataca la causa de este caso: esperarías poco cambio en train y en val.";
+  /* efectos por familia: [veredicto, texto]. ok = ataca la causa · neu = poco efecto · mal = empeora */
+  var EF = {
+    sesgo: {
+      cap_mas:["ok", "Ataca el sesgo: el modelo gana capacidad para ajustar. Esperas que la pérdida de train baje y la de val baje con ella; la brecha seguirá chica."],
+      cap_menos:["mal", "Empeora: un modelo que ya no puede ajustar el entrenamiento se vuelve todavía más incapaz. Train y val suben."],
+      wd:["mal", "Empeora: penalizar pesos a un modelo que ya subajusta aumenta el sesgo. Train sube y val no mejora (la brecha ya era chica)."],
+      dropout:["mal", "Empeora: dropout quita capacidad a un modelo al que ya le falta. Train sube y val también."],
+      es:["neu", "Poco efecto: no hay ninguna U en val que cortar; las curvas simplemente se estancaron."],
+      datos:["neu", "Poco efecto: más datos no arreglan un modelo que no puede ajustar ni los que ya tiene. Train casi igual, val casi igual."],
+      lr_baja:["neu", "Poco efecto: las curvas ya llegaron a su meseta; un paso más fino no las saca de ahí."],
+      mas_ep:["neu", "Poco efecto: la pérdida está estancada desde hace muchas épocas; más épocas casi no cambian train ni val."]
+    },
+    varianza: {
+      cap_mas:["mal", "Empeora: más capacidad memoriza más. Train baja aún más y val sube más."],
+      cap_menos:["ok", "Reduce la varianza: train sube un poco, val baja y la brecha se cierra."],
+      wd:["ok", "Ataca la varianza: train sube un poco (ajusta menos perfecto), val baja y el mínimo de val se aplana. La brecha se cierra."],
+      dropout:["ok", "Ruido que impide memorizar: train sube un poco, val baja y su subida se retrasa o se suaviza."],
+      es:["ok", "Parar cerca de la época 12 y quedarte con ese checkpoint: val vuelve a su mínimo (≈ 0.64, no 1.66) y train queda en ≈ 0.14, no en 0.04. Es la solución más barata."],
+      datos:["ok", "La solución más sólida si se puede: train sube un poco, val baja y el mínimo de val se desplaza a épocas posteriores. Cuesta recolectar o curar."],
+      lr_baja:["neu", "Poco efecto: cambia la velocidad, no la memorización. El sobreajuste llegaría igual, solo más tarde."],
+      lr_sube:["mal", "Empeora: llega antes al sobreajuste y con más ruido."],
+      mas_ep:["mal", "Empeora: val ya sube desde la época 12 mientras train baja; más épocas ensanchan la brecha."]
+    },
+    lr: {
+      lr_baja:["ok", "Ataca la causa: la pérdida deja de oscilar y baja; train y val bajan juntas y no aparece NaN."],
+      lr_sube:["mal", "Empeora: el paso aún más grande hace que la pérdida explote antes."],
+      cap_mas:["mal", "No ataca la causa y empeora: con la misma tasa, una red más grande también diverge (y más rápido)."],
+      es:["mal", "No ayuda: el mejor checkpoint es de las primeras épocas, cuando la red todavía no había aprendido nada."],
+      mas_ep:["mal", "No sirve: ya hay NaN; los pesos están destruidos y más épocas no los reparan."],
+      relu_he:["neu", "Una buena inicialización ayuda, pero el síntoma principal (oscilación que crece, gradiente exponencial) es de la tasa de aprendizaje."]
+    },
+    desvanece: {
+      relu_he:["ok", "Ataca la causa: ReLU con inicialización He mantiene la señal de los gradientes a lo largo de las capas. La pérdida deja de estar plana y baja; train y val bajan."],
+      cap_menos:["ok", "Ayuda: menos capas sigmoide acortan la cadena de derivadas (cada una ≤ 0.25), y los gradientes llegan más grandes a las primeras capas."],
+      cap_mas:["mal", "Empeora: más capas sigmoide significan más factores ≤ 0.25 multiplicados, y un gradiente aún más chico."],
+      lr_sube:["neu", "Es un parche: multiplicar gradientes de 10⁻⁶ por una tasa algo mayor casi no mueve nada, y una tasa muy grande desestabiliza otras capas. No toca la causa."],
+      mas_ep:["neu", "Poco efecto: con gradientes de 10⁻⁶ la red casi no se mueve; 40 épocas más serían igual de planas."],
+      dropout:["mal", "Empeora: añade ruido a una red que ni siquiera aprende. Train y val siguen planas."]
+    },
+    bn: {
+      bn_cambio:["ok", "Ataca la causa: GroupNorm o LayerNorm no dependen del tamaño del batch. Val deja de saltar y baja suavemente; train casi no cambia."],
+      lr_baja:["neu", "Suaviza un poco el entrenamiento, pero la causa está en las estadísticas ruidosas de BatchNorm que se usan en val. La val seguirá errática."],
+      lr_sube:["mal", "Empeora: más inestabilidad en una red que ya es ruidosa."],
+      dropout:["mal", "Empeora: más ruido encima de un problema que ya es de ruido."],
+      es:["neu", "Poco efecto: guardarías el mejor checkpoint entre valores que saltan, es decir, elegirías por suerte."],
+      cap_mas:["neu", "No ataca la causa: una red más grande con BatchNorm de batch 2 tendría el mismo problema."]
+    },
+    medicion: {
+      fuga:["ok", "Ataca una de las dos causas: si hay duplicados o personas repetidas entre train y val, la validación «ya vio» esos casos. Esperas que, al corregirlo, val acc baje a un nivel creíble."],
+      eval_mode:["ok", "Ataca la otra causa: medir train con dropout activo lo empeora artificialmente. En modo inferencia, train loss baja y se acerca o pasa por debajo de val loss."],
+      split:["ok", "Ayuda a la causa de fuga: separar por persona (todos los trámites de una persona en el mismo conjunto) y volver a medir."],
+      cap_mas:["mal", "No ataca la causa y puede empeorar: el problema es de medición, no de capacidad."],
+      wd:["neu", DEF], lr_sube:["mal", "Empeora sin relación con el problema, que es de medición."]
+    },
+    test: {
+      split:["ok", "Ataca la causa: elegir con validación y tocar test una sola vez al final. Esperas que la cifra reportada baje (≈ lo que ya daba val), pero será honesta."],
+      fuga:["neu", "Es buena higiene, pero aquí la falla es de procedimiento (elegir con test), no de fuga entre conjuntos."],
+      datos:["neu", "Un test más grande reduce el ruido, pero el sesgo de elegir el máximo de 15 estimaciones persiste."],
+      cap_mas:["mal", "No ataca la causa y gasta recursos: las curvas están sanas."]
+    },
+    sano: {
+      nada:["ok", "Correcto: curvas suaves, brecha chica y gradientes normales. Cambiar algo sin evidencia es arriesgado."],
+      datos:["neu", "Podría mejorar un poco, pero no es necesario ni urgente."],
+      es:["neu", "Inofensivo como seguro, pero con curvas sanas no cambia nada importante."],
+      cap_mas:["mal", "Sin evidencia de sesgo, más capacidad solo acerca al modelo al sobreajuste."],
+      wd:["mal", "Con brecha chica, regularizar más puede provocar subajuste: train sube y val también."],
+      dropout:["mal", "Con brecha chica, dropout más bien quita capacidad: train sube y val no mejora."],
+      lr_sube:["mal", "Una red sana con curvas suaves puede volverse inestable con una tasa mayor."]
+    }
+  };
+  var SC = [
+    {fam:"sesgo", dx:"A",
+      ctx:"Un gobierno estatal clasifica solicitudes de apoyo en 4 categorías con 20 variables administrativas (el azar da 25%). Red de 1 capa oculta con 4 neuronas, tasa de aprendizaje 0.01, 40 épocas.",
+      ev:function(c){ return "Train (" + f2(c.tr[39]) + ") y val (" + f2(c.va[39]) + ") son altas y casi iguales, y el accuracy ronda " + pc(c.atr[39]) + ". Las dos curvas se estancan temprano. El modelo no logra ajustar ni siquiera el entrenamiento. Los gradientes son pequeños pero normales (no hay optimización rota)."; },
+      agente:{q:"Un agente de IA propone: «dupliquemos las capas».", ok:true, t:"Sí ataca el problema correcto: el diagnóstico es sesgo (falta de capacidad) y duplicar capas (o neuronas) aumenta la capacidad. La salvedad: confirma antes que no es un problema de optimización. Aquí los gradientes son normales y las curvas convergieron, así que la capacidad es el cuello de botella."}},
+    {fam:"varianza", dx:"B",
+      ctx:"Un modelo de 4 capas y 256 neuronas por capa clasifica quejas ciudadanas en 4 temas (el azar da 25%) con unos 6,000 ejemplos de entrenamiento. Tasa de aprendizaje 0.001, 40 épocas.",
+      ev:function(c){ var k = c.kmin; return "Train baja hasta " + f2(c.tr[39]) + " (accuracy " + pc(c.atr[39]) + "), pero val toca fondo en la época " + (k + 1) + " (" + f2(c.va[k]) + ") y luego sube hasta " + f2(c.va[39]) + ", con accuracy de val cayendo de " + pc(c.ava[k]) + " a " + pc(c.ava[39]) + ". Brecha enorme y creciente: sobreajuste."; },
+      agente:{q:"Un agente de IA propone: «dupliquemos las capas».", ok:false, t:"No: ataca el problema equivocado y lo empeora. Aquí el modelo ya tiene capacidad de sobra (train ≈ 0.04); duplicar capas le da más para memorizar y la brecha crece. Lo correcto es regularizar, parar antes, conseguir datos o reducir el modelo."}},
+    {fam:"lr", dx:"C",
+      ctx:"La misma tarea de 4 clases, red de 4 capas de 256 neuronas. Respecto a una corrida anterior que sí entrenaba, solo se cambió la tasa de aprendizaje, ahora de 0.5.",
+      ev:function(c){ return "La pérdida de train oscila y crece (" + c.tr.slice(0, 4).map(function(v){ return f2(v); }).join(", ") + ", …) hasta que en la época 10 aparece NaN. La norma del gradiente crece de forma exponencial (escala logarítmica) y el accuracy es el del azar (≈ 25%). Pasos demasiado grandes: la tasa de aprendizaje es alta."; }},
+    {fam:"desvanece", dx:"C",
+      ctx:"Clasificación de dígitos escritos a mano en formularios (10 clases; el azar da 10%). Red de 12 capas ocultas con activación sigmoide y pesos iniciales Normal(0, 1). Tasa de aprendizaje 0.01.",
+      ev:function(c){ return "Train y val están clavadas en 2.30, que es ln(10) = la pérdida de adivinar al azar entre 10 clases. Accuracy ≈ 10% y norma del gradiente ≈ 10⁻⁶ desde la época 1. La señal no llega a las primeras capas: gradientes que desaparecen."; }},
+    {fam:"medicion", dx:"D",
+      ctx:"Clasificador de solicitudes duplicadas (2 clases), red de 2 capas con dropout de 0.5 en la capa oculta. Train y val se sortearon al azar de un mismo archivo de expedientes (una fila por trámite; hay personas que hicieron varios trámites).",
+      ev:function(c){ return "La pérdida de val (" + f2(c.va[39]) + ") es menor que la de train (" + f2(c.tr[39]) + ") y el accuracy de val (" + pc(c.ava[39]) + ") es mayor que el de train (" + pc(c.atr[39]) + ") en todas las épocas. Lo normal es lo contrario. Hay dos explicaciones posibles: (1) dropout activo al medir train pero no al medir val, y (2) fuga de información: trámites de una misma persona caen en train y en val, así que val «ya se vio». Ambas son fallas de medición, no de capacidad."; }},
+    {fam:"test", dx:"D",
+      ctx:"Modelo de riesgo de abandono escolar (2 clases). El equipo probó 15 combinaciones de hiperparámetros y reportó la accuracy de test de la mejor.",
+      tabla:true,
+      ev:function(c){ var t = CONF6; return "Las curvas son sanas (brecha de " + f2(c.va[39] - c.tr[39]) + "), pero el procedimiento no: la cifra de test se usó para elegir entre 15 configuraciones. El máximo de 15 estimaciones ruidosas queda sesgado hacia arriba: la configuración elegida da " + pc(t.test) + " en test, pero " + pc(t.val) + " en validación. La cifra honesta es la que no se usó para elegir."; }},
+    {fam:"bn", dx:"C",
+      ctx:"Clasificador de fotos de baches (2 clases) con una CNN pequeña que usa BatchNorm. La memoria de la GPU solo permite batches de 2 imágenes. Tasa de aprendizaje 0.001.",
+      ev:function(c){ var u = c.ava.slice(15), mn = Math.min.apply(null, u), mx = Math.max.apply(null, u); return "Train baja suave (hasta " + f2(c.tr[39]) + "), pero la pérdida de val salta de una época a otra (picos de hasta " + f2(Math.max.apply(null, c.va.slice(15))) + ") y, de la época 16 en adelante, el accuracy de val oscila entre " + pc(mn) + " y " + pc(mx) + " sin tendencia sostenida a empeorar, así que no es el patrón de sobreajuste. La diferencia con otros casos es el batch de 2: las estadísticas de BatchNorm son ruidosas, y los promedios móviles que usa val heredan ese ruido."; }},
+    {fam:"sano", dx:"E",
+      ctx:"Predicción del nivel de demanda (3 niveles) de un trámite. Red de 2 capas con 64 neuronas, weight decay de 10⁻⁴, tasa de aprendizaje 0.001.",
+      ev:function(c){ return "Train (" + f2(c.tr[39]) + ") y val (" + f2(c.va[39]) + ") bajan suaves y juntas, con una brecha de solo " + f2(c.va[39] - c.tr[39]) + ". Accuracy de " + pc(c.atr[39]) + " y " + pc(c.ava[39]) + ", y la norma del gradiente decrece sin picos. No hay síntoma que tratar."; }}
+  ];
+
+  /* configuraciones del caso 6 (semilla fija) */
+  var CONF6 = (function(){
+    var r = DL.rng(3), best = null;
+    for(var i = 0; i < 15; i++){
+      var t = 0.85 + r.normal(0, 0.01), v = t + r.normal(0, 0.012), s = t + r.normal(0, 0.012);
+      if(!best || s > best.test) best = {i:i + 1, val:v, test:s};
+    }
+    return best;
+  })();
+
+  var k = 0, curva = SCEN.gen(1), dx = null, elegidas = [];
+  var cvL, cvA, cvG;
+  function pts(a){ var o = []; a.forEach(function(v, i){ if(isFinite(v)) o.push([i + 1, v]); }); return o; }
+  function mk(id, opts, fn){ return DL.grafica($(id), opts, fn); }
+  cvL = mk("dgLoss", {x:[0, 41], y:[0, 1.5], alto:200, etiquetaX:"época"}, function(g){
+    g.polilinea(pts(curva.tr), {color:"g2", ancho:2}); g.polilinea(pts(curva.va), {color:"accent", ancho:2});
+    g.texto(2, g.o.y[1]*0.92, "— train", {color:"g2", negrita:true, tam:11}); g.texto(2, g.o.y[1]*0.80, "— val", {color:"accent", negrita:true, tam:11});
+    if(curva.nan){ g.vertical(curva.nan, {color:"warn", guiones:true, ancho:1.5}); g.texto(curva.nan, g.o.y[1]*0.5, "NaN", {color:"warn", negrita:true, tam:13, dx:4}); }
+    if(curva.recorte) g.texto(41, g.o.y[1]*0.06, "la pérdida sale de la gráfica ↑", {color:"text-3", tam:10.5, alinear:"right"});
+  });
+  cvA = mk("dgAcc", {x:[0, 41], y:[0, 1], alto:200, etiquetaX:"época"}, function(g){
+    g.polilinea(pts(curva.atr), {color:"g2", ancho:2}); g.polilinea(pts(curva.ava), {color:"accent", ancho:2});
+    if(curva.nan) g.vertical(curva.nan, {color:"warn", guiones:true, ancho:1.5});
+  });
+  cvG = mk("dgGrad", {x:[0, 41], y:[-8, 1], alto:200, etiquetaX:"época", opcionesEjes:{fmtY:function(v){ return "1e" + (v < 0 ? "−" + Math.abs(v) : v); }, decY:0}}, function(g){
+    g.polilinea(pts(curva.gn.map(function(v){ return isFinite(v) ? Math.log(v)/Math.LN10 : NaN; })), {color:"r-calc", ancho:2});
+    if(curva.nan) g.vertical(curva.nan, {color:"warn", guiones:true, ancho:1.5});
+  });
+
+  function cargar(){
+    curva = SCEN.gen(k + 1);
+    var sc = SC[k], fin = curva.tr.filter(isFinite), mx = Math.max.apply(null, fin.concat(curva.va.filter(isFinite)));
+    curva.recorte = false;
+    if(sc.fam === "lr"){ cvL.o.y = [0, 8]; curva.recorte = true; }
+    else cvL.o.y = [0, Math.max(0.5, Math.ceil(mx*12)/10)];
+    cvA.o.y = [0, 1];
+    var lg = curva.gn.filter(isFinite).map(function(v){ return Math.log(v)/Math.LN10; });
+    var lo = Math.floor(Math.min.apply(null, lg)) - 1, hi = Math.ceil(Math.max.apply(null, lg)) + 1;
+    cvG.o.y = [lo, hi]; cvG.o.opcionesEjes.ticksY = [];
+    for(var t = lo; t <= hi; t++) cvG.o.opcionesEjes.ticksY.push(t);
+    $("dgCtx").innerHTML = "<b>Caso " + (k + 1) + ".</b> " + sc.ctx + (sc.agente ? " <em>" + sc.agente.q + "</em>" : "");
+    var kmin = curva.kmin, ult = curva.nan ? curva.nan - 2 : 39;
+    var filas = [["época final", curva.nan ? "NaN en la " + curva.nan : "40"], ["train loss", curva.nan ? "NaN" : f2(curva.tr[39], 3)], ["val loss", curva.nan ? "NaN" : f2(curva.va[39], 3)],
+      ["mejor val loss", f2(curva.va[kmin], 3) + " (época " + (kmin + 1) + ")"], ["accuracy train / val", curva.nan ? "≈ 25% / 25%" : pc(curva.atr[39]) + " / " + pc(curva.ava[39])]];
+    if(sc.tabla) filas.push(["config elegida por test", "#" + CONF6.i + ": test " + pc(CONF6.test) + ", val " + pc(CONF6.val)]);
+    DL.readout($("dgRead"), filas);
+    dx = null; elegidas = []; $("dgFb").innerHTML = "";
+    pintarDx(); pintarInt();
+    cvL.redibujar(); cvA.redibujar(); cvG.redibujar();
+  }
+  var dxSel;
+  function pintarDx(){
+    $("dgDx").innerHTML = "";
+    dxSel = DL.selector($("dgDx"), {opciones:DX, valor:null, alCambiar:function(v){ dx = v; }});
+  }
+  function pintarInt(){
+    var cont = $("dgInt"); cont.innerHTML = "";
+    INT.forEach(function(it){
+      var b = document.createElement("button"); b.type = "button"; b.textContent = it[1]; b.dataset.id = it[0];
+      b.addEventListener("click", function(){
+        var i = elegidas.indexOf(it[0]);
+        if(i >= 0) elegidas.splice(i, 1); else { elegidas.push(it[0]); if(elegidas.length > 2) elegidas.shift(); }
+        cont.querySelectorAll("button").forEach(function(x){ x.classList.toggle("sel", elegidas.indexOf(x.dataset.id) >= 0); });
+      });
+      cont.appendChild(b);
+    });
+  }
+  function mejores(sc){
+    var o = []; INT.forEach(function(it){ var e = EF[sc.fam][it[0]]; if(e && e[0] === "ok") o.push(it[1]); }); return o;
+  }
+  function evaluar(){
+    var sc = SC[k], fb = $("dgFb");
+    if(!dx || elegidas.length < 2){ fb.innerHTML = '<div class="status bad">Elige un diagnóstico y exactamente dos intervenciones antes de evaluar.</div>'; return; }
+    var h = "", okDx = dx === sc.dx;
+    h += '<div class="it ' + (okDx ? "ok" : "mal") + '"><b class="' + (okDx ? "v-ok" : "v-mal") + '">Diagnóstico: ' + (okDx ? "correcto" : "no coincide") + '.</b> ' +
+      (okDx ? "" : "Elegiste «" + NOMDX[dx] + "»; la referencia es «" + NOMDX[sc.dx] + "». ") + "Evidencia: " + sc.ev(curva) + '</div>';
+    var puntos = 0;
+    elegidas.forEach(function(id){
+      var e = (EF[sc.fam] && EF[sc.fam][id]) || (id === "nada" ? ["mal", "Dejar todo igual no atiende el problema que muestran las curvas."] : ["neu", DEF]), cls = e[0], lab = cls === "ok" ? "Ataca la causa" : (cls === "mal" ? "Empeora" : "Poco efecto");
+      if(cls === "ok") puntos++;
+      h += '<div class="it ' + (cls === "ok" ? "ok" : (cls === "mal" ? "mal" : "neu")) + '"><b class="' + (cls === "ok" ? "v-ok" : (cls === "mal" ? "v-mal" : "")) + '">' + NOMINT[id] + ' · ' + lab + '.</b> ' + e[1] + '</div>';
+    });
+    if(sc.agente){
+      h += '<div class="it ' + (sc.agente.ok ? "ok" : "mal") + '"><b>' + sc.agente.q + '</b> ' + sc.agente.t + '</div>';
+    }
+    var m = mejores(sc);
+    h += '<p style="margin-top:8px"><b>Resumen:</b> diagnóstico ' + (okDx ? "acertado" : "fallido") + " y " + puntos + " de 2 intervenciones atacan la causa. Intervenciones que sí atacan la causa en este caso: " + m.join("; ") + ".</p>";
+    fb.innerHTML = h;
+  }
+  DL.selector($("dgCaso"), {opciones:SC.map(function(s, i){ return {v:i, t:"Caso " + (i + 1)}; }), valor:0, alCambiar:function(v){ k = v; cargar(); }});
+  $("dgEval").onclick = evaluar;
+  $("dgLimpiar").onclick = function(){ dx = null; elegidas = []; $("dgFb").innerHTML = ""; pintarDx(); pintarInt(); };
+  cargar();
+})();
+
+})();
+</script>
+</body>
+</html>
