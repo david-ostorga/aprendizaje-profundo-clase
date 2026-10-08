@@ -380,7 +380,7 @@
   <span class="tag">Qué observar</span>
   <ol>
     <li>Con α = 0.03 y |B| = 16: casi nada cambia respecto a GD (GD deja 79 de las 200 corridas en el pozo afilado y SGD deja 82). Con paso chico y poco ruido, el resultado lo decide <em>dónde empezaste</em>.</li>
-    <li>Con α = 0.07: GD sigue dejando 79 corridas en el pozo afilado, pero SGD con |B| = 64 deja 81, con |B| = 16 deja 54, con |B| = 8 deja 15 y con |B| = 4 solo 6. Más ruido (|B| chico) expulsa a las corridas del valle estrecho: el mínimo ancho gana. (Con |B| = 1 y 2 el ruido ya es tan grande que el resultado se vuelve más aleatorio: 17 y 7.)</li>
+    <li>Con α = 0.07: GD sigue dejando 79 corridas en el pozo afilado, pero SGD con |B| = 64 deja 81, con |B| = 16 deja 53, con |B| = 8 deja 19 y con |B| = 4 solo 6. Más ruido (|B| chico) expulsa a las corridas del valle estrecho: el mínimo ancho gana. (Con |B| = 1 y 2 el ruido ya es tan grande que el resultado se vuelve más aleatorio: 16 y 8.)</li>
     <li>Con α = 0.10, el pozo afilado queda en 0 corridas incluso para GD sin ruido (con α = 0.09 aún quedaban 79). El pozo es tan empinado que un paso grande rebota fuera: es el castigo (α/4)‖∇L‖² haciéndose valer.</li>
     <li>Compara lo que ves con la slide: ni el α ni el |B| agregaron un término a la pérdida, y aun así cambiaron <em>qué mínimo</em> se encuentra. Eso es regularización implícita.</li>
   </ol>
@@ -1383,7 +1383,7 @@ function igualar(g, cx, cy, hy){
 /* ---------- LAB 6: early stopping ---------- */
 (function(){
   var pac = 5, tol = 0, si = 0, cur = NUM.esCurvas(NUM.ES_SEMILLAS[0]);
-  var res;
+  var res = NUM.esRegla(cur.va, pac, tol);
   var g = DL.grafica($("esCanvas"), {x:[0, 61], y:[0, 1.5], alto:320, etiquetaX:"época", etiquetaY:"pérdida"}, function(g){
     var pts = function(a){ return a.map(function(v, i){ return [i + 1, v]; }); };
     if(res.parada < 60) g.rect(res.parada, 0, 61 - res.parada, 1.5, {color:"text-3", relleno:true, alfa:0.1, borde:false});
