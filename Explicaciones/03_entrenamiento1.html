@@ -702,7 +702,7 @@
 <p>En el laboratorio, los datos se generan a partir de unos parámetros verdaderos, φ* = (0, 16), con 30 puntos y ruido Normal de desviación 0.12 (semilla fija). Como la pérdida es la <em>media</em> de los errores cuadrados (la suma de la slide dividida entre n, para que α no dependa de n), el mejor ajuste está cerca de φ* y la pérdida ahí es chica. Hay además al menos siete valles secundarios dentro de la ventana que se dibuja.</p>
 
 <h3 id="lab-gabor" class="lab" data-toc="Lab: paisaje de Gabor">Laboratorio: el paisaje de Gabor</h3>
-<p>Haz clic en el mapa para elegir el punto de inicio. Después da pasos de GD con la α que quieras. Más oscuro = pérdida más baja (escala logarítmica); las líneas son curvas de nivel. Abajo se ve la curva del modelo en el φ actual contra los datos.</p>
+<p>Haz clic en el mapa para elegir el punto de inicio. Después da pasos de GD con la α que quieras. Más claro = pérdida más baja; más oscuro = más alta (escala logarítmica); las líneas son curvas de nivel. Abajo se ve la curva del modelo en el φ actual contra los datos.</p>
 <div class="widget" id="labGabor">
   <div class="widget-head"><div class="wt">Pérdida L(φ₀, φ₁) y descenso de gradiente</div><div class="ws">Clic = nuevo inicio. Parte de (3, 10) con α = 2.</div></div>
   <div class="widget-body">
@@ -1665,9 +1665,9 @@
     function leer(){
       var filas = NOMB.map(function(n){
         var m = M[n[0]], L = S.f(m.p[0], m.p[1]);
-        return ['<span style="color:var(--' + n[2] + ');font-weight:600">● ' + n[1] + '</span>', m.rota ? "diverge" : DL.fmt(L, 4) + " · pasó " + DL.fmt(sobre[n[0]], 2)];
+        return ['<span style="color:var(--' + n[2] + ');font-weight:600;white-space:nowrap">● ' + n[1] + '</span>', m.rota ? "diverge" : DL.fmt(L, 3) + " / " + DL.fmt(sobre[n[0]], 2)];
       });
-      DL.readout($("carRead"), filas);
+      DL.readout($("carRead"), [["método", "L / pasó"]].concat(filas));
       var rotos = NOMB.filter(function(n){ return M[n[0]].rota; }).map(function(n){ return n[1]; });
       var st = $("carStatus");
       st.className = "status " + (rotos.length ? "bad" : "info");

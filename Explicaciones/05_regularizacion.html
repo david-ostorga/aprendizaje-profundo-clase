@@ -236,7 +236,7 @@
   <div class="f-ejemplo">φ = (0.5, −2, 1)  →  Σφⱼ² = 0.25 + 4 + 1 = 5.25  →  con λ = 0.01 el castigo es 0.0525; con λ = 1, es 5.25</div>
   <div class="eq">
     <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmin"></span><span class="sub r-param">φ</span> [ <span class="big"><span class="lim r-dato">I</span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="ell"></span><span class="sub">i</span>( <span class="r-dato">x</span><span class="sub">i</span>, <span class="r-dato">y</span><span class="sub">i</span>, <span class="r-param">φ</span> ) + <span class="sym" data-s="lambda"></span> <span class="big"><span class="lim">&nbsp;</span><span class="o">Σ</span><span class="lim">j</span></span> <span class="r-param">φ</span><span class="sub r-param">j</span><span class="sup">2</span> ]
-    <span class="lbl">equivale a λ‖φ‖², con ‖φ‖² = la norma al cuadrado, ver <a href="00_matematicas.html#sym-norma">sym-norma</a></span>
+    <span class="lbl">equivale a λ‖φ‖², donde ‖φ‖² es la <a href="00_matematicas.html#sym-norma">norma al cuadrado</a></span>
   </div>
   <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida de entrenamiento más lambda por la suma de los cuadrados de los pesos.»</p></div>
   <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
@@ -819,7 +819,7 @@
     <li>Caso 1: train 0.87 y val 0.92, casi iguales y estancadas: sesgo. «Duplicar capas» sí ataca el problema; weight decay y dropout lo empeoran.</li>
     <li>Caso 2: la val toca fondo en la época 12 (0.64) y sube hasta 1.66 mientras train llega a 0.04: varianza. Ahora «duplicar capas» empeora todo, y early stopping, weight decay o más datos ayudan.</li>
     <li>Casos 3 y 4: ambos son «optimización», pero de forma contraria: en el 3 el gradiente explota (NaN en la época 10, se baja la tasa); en el 4 desaparece (pérdida clavada en 2.30 = ln 10, se cambia a ReLU con He).</li>
-    <li>Caso 5: val mejor que train en todas las épocas. Lo importante no es "arreglarlo" sino sospechar de la medición: dropout activo al medir train, o fuga de información. Caso 6: curvas sanas pero 15 configuraciones elegidas con test.</li>
+    <li>Caso 5: val mejor que train en todas las épocas. Lo importante no es «arreglarlo» sino sospechar de la medición: dropout activo al medir train, o fuga de información. Caso 6: curvas sanas pero 15 configuraciones elegidas con test.</li>
     <li>Caso 7: val errática con BatchNorm de batch 2. Caso 8: sano, y la respuesta correcta es no tocar nada.</li>
   </ol>
 </div>
@@ -1383,7 +1383,7 @@ function igualar(g, cx, cy, hy){
 /* ---------- LAB 6: early stopping ---------- */
 (function(){
   var pac = 5, tol = 0, si = 0, cur = NUM.esCurvas(NUM.ES_SEMILLAS[0]);
-  var res;
+  var res = NUM.esRegla(cur.va, pac, tol);
   var g = DL.grafica($("esCanvas"), {x:[0, 61], y:[0, 1.5], alto:320, etiquetaX:"época", etiquetaY:"pérdida"}, function(g){
     var pts = function(a){ return a.map(function(v, i){ return [i + 1, v]; }); };
     if(res.parada < 60) g.rect(res.parada, 0, 61 - res.parada, 1.5, {color:"text-3", relleno:true, alfa:0.1, borde:false});

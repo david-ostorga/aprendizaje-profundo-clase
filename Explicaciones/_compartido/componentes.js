@@ -590,9 +590,47 @@
     });
   }
 
+  /* ---------------- notación dentro de etiquetas en MAYÚSCULAS ----------------
+     text-transform: uppercase convierte σ en Σ, x en X, f₂ en F₂: cambia el significado.
+     Envuelve cada «palabra» con notación (griega, sub/superíndices, ∂ ∇) en un span que
+     anula la transformación. Corre después de que cada laboratorio pinte su contenido. */
+  var NOTA = /[Ͱ-Ͽἀ-῿⁰-ₜ²³¹ᵢ-ᵪ∂∇‖]/;
+  var PALABRA = /[^\s,;:]*[Ͱ-Ͽἀ-῿⁰-ₜ²³¹ᵢ-ᵪ∂∇‖][^\s,;:]*/g;
+  DL.protegerMayusculas = function(raiz){
+    (raiz || document.body).querySelectorAll("*").forEach(function(el){
+      if(el.closest("script,style,canvas,.dl-recto")) return;
+      if(getComputedStyle(el).textTransform !== "uppercase") return;
+      el.querySelectorAll("sub,sup").forEach(function(s){
+        s.style.textTransform = "none";
+        /* la letra pegada antes del subíndice (f en f_k, x en x²) también es notación */
+        var prev = s.previousSibling;
+        if(prev && prev.nodeType === 3 && /(^|[\s(·=,])[A-Za-z]$/.test(prev.nodeValue)){
+          var letra = prev.nodeValue.slice(-1);
+          prev.nodeValue = prev.nodeValue.slice(0, -1);
+          var sp = document.createElement("span"); sp.className = "dl-recto"; sp.style.textTransform = "none"; sp.textContent = letra;
+          s.parentNode.insertBefore(sp, s);
+        }
+      });
+      var nodos = [], w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      while(w.nextNode()){
+        var t0 = w.currentNode;
+        if(NOTA.test(t0.nodeValue) && !t0.parentNode.closest(".dl-recto")) nodos.push(t0);
+      }
+      nodos.forEach(function(t){
+        var f = document.createElement("span");
+        f.innerHTML = t.nodeValue.replace(/&/g,"&amp;").replace(/</g,"&lt;")
+          .replace(PALABRA, function(m){ return '<span class="dl-recto" style="text-transform:none">' + m + '</span>'; });
+        t.parentNode.replaceChild(f, t);
+      });
+    });
+  };
+
   function init(){
     initTema(); initTablaNotacion(); initSerie(); initToc(); initSimbolos();
     initLeyendas(); initDerivaciones(); initPasosDeclarativos(); initCodigo();
+    DL.protegerMayusculas();
+    /* los laboratorios terminan de pintar después; segunda pasada al cargar todo */
+    window.addEventListener("load", function(){ setTimeout(function(){ DL.protegerMayusculas(); }, 50); });
   }
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();

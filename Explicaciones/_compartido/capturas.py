@@ -35,7 +35,7 @@ def main():
     sonda = ('<script>setTimeout(function(){var o=[];document.querySelectorAll("main h2[id]").forEach(function(h){'
              'o.push(h.id+":"+Math.round(h.getBoundingClientRect().top+scrollY));});'
              'console.log("POS|"+o.join(",")+"|"+document.body.scrollHeight);},2000);</script></body>')
-    tmp = os.path.join(EXPL, "_tmp_capturas.html")
+    tmp = os.path.join(EXPL, "_tmp_capturas_%s_%d.html" % (nombre[:-5], os.getpid()))
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(html.replace("</body>", sonda))
