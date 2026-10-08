@@ -790,7 +790,7 @@
 
 <div class="note exam">
   <span class="tag">2 · Más profundidad ⇏ entrenamiento más fácil</span>
-  <p>Una red más profunda es más expresiva, pero también puede ser más difícil de optimizar: en redes muy profundas pueden aparecer gradientes que desaparecen o explotan. Aun así, las redes sobreparametrizadas suelen optimizarse sorprendentemente bien con métodos de gradiente, y técnicas como buena inicialización, ReLU, normalización y conexiones residuales permiten entrenar redes de decenas o cientos de capas (en el artefacto <a href="04_entrenamiento2.html">04</a>, «próximamente» en la slide). Moraleja: la profundidad no hace la optimización «automáticamente» más fácil ni más difícil.</p>
+  <p>Una red más profunda es más expresiva, pero también puede ser más difícil de optimizar: en redes muy profundas pueden aparecer gradientes que desaparecen o explotan. Aun así, las redes sobreparametrizadas suelen optimizarse sorprendentemente bien con métodos de gradiente, y técnicas como buena inicialización, ReLU, normalización y conexiones residuales permiten entrenar redes de decenas o cientos de capas (la slide lo deja como «próximamente»; la inicialización está en el artefacto <a href="04_entrenamiento2.html">04</a> y la normalización en el <a href="05_regularizacion.html#batchnorm">05</a>). Moraleja: la profundidad no hace la optimización «automáticamente» más fácil ni más difícil.</p>
 </div>
 
 <div class="note exam">
@@ -1127,7 +1127,7 @@
       /* ReLU */
       var regs = regiones();
       st.className = "status ok";
-      st.innerHTML = "<b>ReLU:</b> " + (regs.length - 1) + " articulación" + (regs.length - 1 === 1 ? "" : "es") + " visible" + (regs.length - 1 === 1 ? "" : "s") + " en y → <b>" + regs.length + " región" + (regs.length === 1 ? "" : "es") + " lineal" + (regs.length === 1 ? "" : "es") + "</b> (máximo posible con 3 neuronas: 4).";
+      st.innerHTML = "<b>ReLU:</b> " + (regs.length - 1) + (regs.length - 1 === 1 ? " articulación" : " articulaciones") + " visible" + (regs.length - 1 === 1 ? "" : "s") + " en y → <b>" + regs.length + (regs.length === 1 ? " región" : " regiones") + " lineal" + (regs.length === 1 ? "" : "es") + "</b> (máximo posible con 3 neuronas: 4).";
       h = '<div class="mini">Articulaciones de cada neurona</div><div class="scroll"><table class="tbl chica"><tr><th>Neurona</th><th>Recta ℓ<sub>d</sub></th><th>Articulación x = −θ<sub>d0</sub>/θ<sub>d1</sub></th><th>Encendida</th><th>¿Se ve en y?</th></tr>';
       for(d = 0; d < 3; d++){
         var t0 = S.t[d][0], t1 = S.t[d][1], xa = t1 !== 0 ? -t0/t1 : null, enc, vis;
