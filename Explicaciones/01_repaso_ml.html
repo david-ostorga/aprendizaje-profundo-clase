@@ -1,0 +1,1284 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Del aprendizaje supervisado al aprendizaje profundo</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: cuadrícula de mini-batches y tablas compactas */
+  .bgrid{display:flex; flex-wrap:wrap; gap:8px 6px; margin:12px 0 4px}
+  .bgrp{display:inline-flex; gap:2px; padding:3px; border-radius:7px; border:1.5px solid transparent}
+  .bgrp.act{border-color:var(--text); background:var(--surface-2)}
+  .bgrp.corto{border-style:dashed; border-color:var(--text-3)}
+  .bgrp.act.corto{border-color:var(--text)}
+  .bgrp i{display:flex; align-items:center; justify-content:center; width:21px; height:21px; border-radius:4px; font-style:normal; font-size:10px; font-weight:650; color:var(--bg); font-family:ui-sans-serif,system-ui,sans-serif}
+  .b0 i{background:var(--g1)} .b1 i{background:var(--g2)} .b2 i{background:var(--g3)} .b3 i{background:var(--g4)} .b4 i{background:var(--g5)} .b5 i{background:var(--g6)}
+  .tbl.chica{font-size:13.5px}
+  .tbl.chica td, .tbl.chica th{padding:7px 9px}
+  .tbl td.nw{white-space:nowrap}
+  .dos-col{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .sub-lab{margin:14px 0 6px; font-size:13px; color:var(--text-2)}
+  .gran{font-size:22px; font-weight:650; font-family:ui-serif,Georgia,serif; text-align:center; padding:10px 6px}
+  @media (max-width:620px){ .dos-col{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Intro y repaso de ML</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 01</div>
+  <h1>Del aprendizaje supervisado al aprendizaje profundo</h1>
+  <p class="lead">Qué es el aprendizaje profundo y, sobre todo, el esqueleto que no cambia: modelo, pérdida, gradiente y actualización. Lo estudiamos con la regresión lineal porque cabe en una hoja de papel, que es justo donde lo vas a tener que escribir en el examen.</p>
+  <div class="meta">Fuente: <code>slides/Intro.Rmd</code> y <code>slides/Repaso.Rmd</code> · Temario del Examen 1, sección 1 (Repaso) · Lectura de unos 50 minutos, más los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+
+<p>Un <strong>aprendizaje supervisado</strong> parte de ejemplos con respuesta: entradas <span class="sym" data-s="x">x</span> y salidas <span class="sym" data-s="y">y</span>. Buscamos una función con parámetros que, dada una entrada, adivine la salida. <strong>Aprendizaje profundo (deep learning)</strong> es lo mismo, pero con una familia de funciones muy flexible: una red neuronal con al menos dos capas ocultas (entre la entrada y la salida). Todo lo que cambia entre una regresión lineal y un modelo de lenguaje gigante es <em>qué función</em> usamos; el procedimiento para entrenarla es el mismo.</p>
+
+<div class="flow">
+  <div class="node"><div class="t">Antes (ML 1)</div><div class="d">Regresión, clasificación y redes neuronales superficiales. Sabes qué es una pérdida y un optimizador.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">El problema de entrenamiento, escrito con precisión: modelo, pérdida, gradiente, mini-batches y generalización.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Redes superficiales y profundas (<a href="02_redes_neuronales.html">artefacto 02</a>), y cómo entrenarlas (artefactos <a href="03_entrenamiento1.html">03</a> y <a href="04_entrenamiento2.html">04</a>).</div></div>
+</div>
+
+<p>La regresión lineal es el «puente»: una estructura de cuatro piezas que reaparece idéntica en cada red neuronal del curso.</p>
+
+<div class="flow">
+  <div class="node"><div class="t">1 · Modelo</div><div class="d">ŷ = f(x, φ)<br>¿qué predigo?</div></div>
+  <div class="node"><div class="t">2 · Pérdida</div><div class="d">L(φ)<br>¿qué tan mal predigo?</div></div>
+  <div class="node"><div class="t">3 · Gradiente</div><div class="d">∇L<br>¿hacia dónde empeora?</div></div>
+  <div class="node"><div class="t">4 · Actualización</div><div class="d">φ ← φ − η∇L<br>muévete al revés</div></div>
+</div>
+
+<h3 id="que-es-dl" data-toc="Qué es y qué lo hace posible">Qué es el aprendizaje profundo y qué lo hace posible</h3>
+
+<p>Una <strong>red neuronal profunda</strong> es una red con <strong>profundidad ≥ 2 capas ocultas</strong>. Sus <strong>parámetros</strong> (lo que se aprende) son pesos y sesgos (biases); las <strong>activaciones</strong> (ReLU, sigmoide, softmax…) son funciones fijas que la red aplica entre capas. <em>Ajustar</em> una red profunda es lo que llamamos aprendizaje profundo. Hoy funciona tan bien porque coinciden tres pilares:</p>
+<ol>
+  <li><strong>Datos masivos.</strong> Internet y los sensores generan billones de ejemplos al día.</li>
+  <li><strong>Cómputo acelerado.</strong> Las GPU hacen en horas lo que antes tomaba meses.</li>
+  <li><strong>Autodiferenciación.</strong> Los marcos de trabajo (PyTorch, TensorFlow) calculan los gradientes por ti. Para entrenar una red necesitas derivadas de funciones con millones de parámetros; nadie las escribe a mano.</li>
+</ol>
+
+<p>Un proyecto típico de aprendizaje profundo sigue seis pasos. Esta clase cubre la mayoría de los pasos 2 al 5, con la regresión lineal como modelo de juguete:</p>
+<table class="tbl chica">
+  <tr><th>Paso del pipeline</th><th>Qué se hace</th><th>Dónde está en este artefacto</th></tr>
+  <tr><td>1 · Definir el modelo</td><td>Arquitectura, capas, activaciones</td><td><a href="#regresion">Sección 3</a> (una capa lineal); redes en el <a href="02_redes_neuronales.html">artefacto 02</a></td></tr>
+  <tr><td>2 · Preparar los datos</td><td>Mini-batches, normalización</td><td><a href="#minibatch">Sección 5</a></td></tr>
+  <tr><td>3 · Pérdida y optimizador</td><td>Qué minimizar y cómo moverse</td><td><a href="#problema">Secciones 2</a>, <a href="#descenso">4</a> y <a href="#verosimilitud">7</a></td></tr>
+  <tr><td>4 · Entrenar</td><td>Pasada hacia adelante (forward) y hacia atrás (backward)</td><td><a href="#descenso">Sección 4</a>; el backward completo en el <a href="04_entrenamiento2.html">artefacto 04</a></td></tr>
+  <tr><td>5 · Evaluar y ajustar</td><td>Validación, regularización, hiperparámetros</td><td><a href="#generalizacion">Secciones 8</a>, <a href="#train-val-test">9</a> y <a href="#l2">10</a></td></tr>
+  <tr><td>6 · Desplegar</td><td>Exportar el modelo, APIs, monitoreo</td><td>Fuera del examen</td></tr>
+</table>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>Entrenar es un ciclo de cuatro piezas: <b>(1)</b> un modelo con parámetros hace una predicción, <b>(2)</b> una pérdida mide qué tan mal quedó, <b>(3)</b> el gradiente dice en qué dirección empeora, <b>(4)</b> movemos los parámetros en la dirección contraria. En deep learning solo cambia la pieza 1 (una composición de muchas capas) y la pieza 3 se calcula con autodiferenciación. El resto del curso es esta página con piezas más grandes.</p>
+</div>
+
+<!-- ============ 2. PROBLEMA ============ -->
+<h2 id="problema"><span class="num">Sección 2</span>El problema de entrenamiento</h2>
+
+<p>Para escribir el problema de entrenamiento hacen falta tres cosas: datos, una medida de error por dato y una medida de error total. Empecemos con un caso concreto. Queremos predecir la estatura <span class="sym" data-s="y">y</span> (en cm) de un niño a partir de su edad <span class="sym" data-s="x">x</span> (en años). Nuestro modelo es una recta con dos parámetros: <b>ŷ = φ₀ + φ₁·x</b>. Con φ₀ = 80 y φ₁ = 6, un niño de 10 años recibe la predicción ŷ = 80 + 6·10 = 140 cm. Si en realidad mide 138, nos pasamos por 2 cm.</p>
+
+<p>Los tres ingredientes, en notación de la slide:</p>
+<ul>
+  <li>un <strong>conjunto de entrenamiento</strong> <span class="sym" data-s="Dtrain">𝒟<sub>train</sub></span> = {(x₁, y₁), …, (x<span class="sub"><span class="sym" data-s="n">n</span></span>, y<span class="sub"><span class="sym" data-s="n">n</span></span>)}: n pares de entrada y respuesta;</li>
+  <li>una <strong>pérdida por observación</strong> <span class="sym" data-s="ell">ℓ</span>: un número no negativo que dice qué tan mal predijimos <em>ese</em> ejemplo;</li>
+  <li>una <strong>pérdida total</strong> <span class="sym" data-s="L">L(φ)</span>: el promedio de las pérdidas individuales.</li>
+</ul>
+
+<div class="formula">
+  <div class="f-head">Pérdida total sobre el conjunto de entrenamiento</div>
+  <div class="f-ejemplo">Tres niños: (6 años, 115 cm), (10, 138), (14, 160). Con φ₀ = 80, φ₁ = 6 predecimos 116, 140 y 164 cm. Los errores son 1, 2 y 4 cm; con ℓ = (error)² quedan ℓ₁ = 1, ℓ₂ = 4, ℓ₃ = 16. Entonces L = (1 + 4 + 16) / 3 = <b>7</b>.</div>
+  <div class="eq">
+    <span class="sym" data-s="L">L(φ)</span> = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="n"></span></span></span> <span class="big"><span class="lim"><span class="r-dato">n</span></span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="ell">ℓ</span>( <span class="sym" data-s="f">f(x<span class="sub">i</span>, φ)</span> , <span class="r-dato">y<span class="sub">i</span></span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida total de los parámetros φ es el promedio, sobre las n observaciones, de la pérdida que cada una produce cuando comparo lo que el modelo predice para xᵢ con lo que realmente valió yᵢ.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">L(φ)</dt><dd>La pérdida total: <em>un solo número</em> que resume qué tan mal le va al modelo con todos los datos. Depende de φ porque los datos están fijos (ver <a href="00_matematicas.html#sumas">sumas y promedios</a>).</dd>
+      <dt class="r-dato">n</dt><dd>Cuántos pares (entrada, respuesta) hay en el entrenamiento.</dd>
+      <dt>Σ, i = 1 … n</dt><dd>«Suma con el contador i desde 1 hasta n.» Un ciclo <code>for</code> sobre las observaciones.</dd>
+      <dt class="r-calc">ℓ(·, ·)</dt><dd>La pérdida de <em>una</em> observación; recibe la predicción y el valor real. En regresión suele ser el error al cuadrado.</dd>
+      <dt class="r-calc">f(xᵢ, φ)</dt><dd>La predicción del modelo para la observación i. Antes de la coma, el dato; después, los parámetros.</dd>
+      <dt class="r-dato">yᵢ</dt><dd>El valor real de la observación i.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un solo niño tiene un error enorme: su ℓ domina el promedio. Con ℓ = (error)², un error de 10 cm pesa 100, cien veces más que uno de 1 cm.</li>
+      <li>…duplicas el conjunto repitiendo cada niño: la suma se duplica pero n también, así que L no cambia. Por eso se promedia en lugar de sumar.</li>
+      <li>…cambias φ: cambian las predicciones y, con ellas, L. <b>L es la única cosa que el entrenamiento mueve</b>: los datos nunca cambian.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Ahora la pregunta que define todo el curso: ¿qué parámetros usar? Los que minimicen L.</p>
+
+<div class="formula">
+  <div class="f-head">El problema de entrenamiento</div>
+  <div class="f-ejemplo">Con los mismos tres niños probamos tres rectas: φ = (80, 6) da L = 7; φ = (85, 5.5) da L = 5.67; φ = (70, 7) da L = 25.67. De las tres, la segunda es la mejor. La «mejor de todas» es el φ que da el L más bajo posible entre <em>todos</em> los φ.</div>
+  <div class="eq">
+    <span class="sym" data-s="phihat">φ̂</span> = <span class="sym" data-s="argmin">argmin</span><span class="sub r-param">φ</span> <span class="sym" data-s="L">L(φ)</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«φ gorro es el valor de φ que hace más pequeña a L.» El gorrito significa «estimado»: es el φ que encontró el entrenamiento.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">φ̂</dt><dd>Los parámetros que sale a buscar el entrenamiento.</dd>
+      <dt>argmin<sub>φ</sub></dt><dd>«El argumento que minimiza.» No devuelve el valor mínimo de L, sino <em>el punto</em> φ donde se alcanza (ver <a href="00_matematicas.html#optimizar">argmin y argmax</a>). Entre las tres rectas de arriba, el argmin es la pareja (85, 5.5), no el número 5.67.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…la pérdida cambia de escala (por ejemplo, la multiplicas por 2): el valor mínimo cambia, pero <b>el argmin es el mismo φ̂</b>. Lo usaremos en cuanto veamos las dos versiones de L en la slide.</li>
+      <li>…hay varios φ con la misma pérdida mínima: cualquiera de ellos es un argmin válido.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen</span>
+  <p>«Escribe el problema de entrenamiento» significa estas cuatro cosas, en este orden: el modelo f(x, φ), la pérdida por observación ℓ, la pérdida total L(φ) = (1/n) Σ ℓ(f(xᵢ, φ), yᵢ) y φ̂ = argmin L(φ). Y recuerda el reparto: entrenas con 𝒟<sub>train</sub>, eliges hiperparámetros con validación y evalúas al final con datos que nunca viste (<a href="#train-val-test">sección 9</a>).</p>
+</div>
+
+<h3 id="sup-nosup" data-toc="Supervisado y no supervisado">Supervisado y no supervisado</h3>
+<p>Todo lo anterior supone que cada ejemplo trae su respuesta <span class="sym" data-s="y">y</span>. Es el aprendizaje supervisado. La otra gran familia no la trae, y esta clase solo las contrasta:</p>
+<table class="tbl chica">
+  <tr><th></th><th>Supervisado</th><th>No supervisado</th></tr>
+  <tr><td><b>Datos</b></td><td>Pares (xᵢ, yᵢ) con etiqueta</td><td>Solo xᵢ, sin etiquetas</td></tr>
+  <tr><td><b>Qué se aprende</b></td><td>Una función f(x, φ) que mapea entradas a salidas</td><td>La estructura de los datos: cómo son las entradas «normales»</td></tr>
+  <tr><td><b>Ejemplos</b></td><td>Regresión (edad → estatura), clasificación de texto, música o imágenes</td><td>Agrupar (clustering), detectar valores atípicos, llenar datos faltantes, <em>generar</em> ejemplos nuevos</td></tr>
+  <tr><td><b>Modelos típicos</b></td><td>Regresión, redes neuronales</td><td>GAN, autoencoders variacionales, normalizing flows, modelos de difusión</td></tr>
+</table>
+<p>¿Por qué importa el segundo bloque? Tareas como traducir, poner subtítulos a una imagen o generar una imagen a partir de texto tienen <strong>muchas respuestas correctas</strong>, pero tanto las entradas como las salidas siguen reglas (la gramática, o que los píxeles formen algo con sentido). Aprender esas reglas con millones de datos sin etiquetas es lo que hace el aprendizaje no supervisado. En el curso veremos primero lo supervisado.</p>
+
+<!-- ============ 3. REGRESIÓN ============ -->
+<h2 id="regresion"><span class="num">Sección 3</span>Regresión lineal: el puente</h2>
+
+<p>¿Por qué volvemos a la regresión lineal? Porque ya la conoces, la puedes implementar desde cero, y contiene todos los componentes básicos del aprendizaje automático. La estructura <b>modelo → pérdida → gradiente → optimización</b> se mantiene tal cual en deep learning.</p>
+
+<h3 id="recta" data-toc="La recta y su versión multivariada">La recta y su versión con muchas entradas</h3>
+<p>Con una sola entrada el modelo es la recta ŷ = f(x, φ) = φ₀ + φ₁x, con <span class="sym" data-s="phi">φ</span> = [φ₀ φ₁]ᵀ. Cada pareja (φ₀, φ₁) es una recta distinta. Tomando x = 1.8, la recta de φ = (0, 1) predice 1.8; la de φ = (1.2, −0.1) predice 1.2 + (−0.1)(1.8) = 1.02, y la de φ = (1, −0.4) predice 0.28. Mismos datos, tres predicciones: «entrenar» es escoger entre rectas.</p>
+
+<p>Con varias entradas (edad, peso, ingreso…), x es un vector y el modelo pasa a ser <b>f(x) = wᵀx + b</b>. Es la recta de siempre: b hace de φ₀ y los pesos w hacen de φ₁, uno por característica. Con x = (2, 3), w = (0.5, −1) y b = 1:</p>
+
+<div class="formula">
+  <div class="f-head">Modelo lineal: el ladrillo de toda red neuronal</div>
+  <div class="f-ejemplo">x = (2, 3), w = (0.5, −1), b = 1  →  wᵀx = 0.5·2 + (−1)·3 = −2  →  z = −2 + 1 = <b>−1</b></div>
+  <div class="eq">
+    <span class="sym" data-s="z">z</span> = <span class="sym" data-s="w">w</span><span class="sup"><span class="sym" data-s="transp">ᵀ</span></span><span class="sym" data-s="x">x</span> + <span class="sym" data-s="b">b</span> = <span class="big"><span class="lim">D</span><span class="o">Σ</span><span class="lim">j=1</span></span> <span class="r-param">w<span class="sub">j</span></span> <span class="r-dato">x<span class="sub">j</span></span> + <span class="r-param">b</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«z es el producto punto de los pesos con la entrada, más el sesgo.» Es decir: multiplica cada característica por su peso, suma todo, y súmale una constante.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">z</dt><dd>El resultado: un solo número. En una regresión lineal es directamente la predicción; en una red, es lo que entra a la función de activación.</dd>
+      <dt class="r-param">w</dt><dd>El vector de pesos: un peso por característica. Se aprende.</dd>
+      <dt class="r-dato">x</dt><dd>El vector de entrada, con D números (ver <a href="00_matematicas.html#producto-punto">producto punto</a>).</dd>
+      <dt class="r-param">b</dt><dd>El sesgo (bias): sube o baja toda la predicción por igual. Se aprende.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un peso wⱼ vale 0: esa característica no influye en nada.</li>
+      <li>…subes xⱼ en 1 unidad: z cambia en wⱼ unidades, sin importar los valores de las demás características. Esa es la linealidad.</li>
+      <li>…b sube en 1: todas las predicciones suben en 1.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note good">
+  <span class="tag">Por qué importa</span>
+  <p>La operación z = wᵀx + b aparecerá constantemente en el curso. Una red profunda es, en esencia, <b>muchas de estas operaciones encadenadas, con funciones no lineales entre ellas</b>. Si entiendes bien esta línea, entiendes la mitad de la red.</p>
+</div>
+
+<h3 id="perdida-cuadratica" data-toc="Pérdida cuadrática">Pérdida cuadrática</h3>
+<p>Para regresión, la pérdida por observación más común es el error al cuadrado. Promediada sobre los datos, con el factor ½ que usa la slide:</p>
+
+<div class="formula">
+  <div class="f-head">Pérdida cuadrática (la L de la slide)</div>
+  <div class="f-ejemplo">Tres puntos (1, 2), (2, 3), (3, 7) y el modelo w = 2, b = 0. Predicciones 2, 4, 6; errores 0, 1, −1; cuadrados 0, 1, 1; suma = 2. Entonces L = 2 / (2·3) = <b>0.333</b>.</div>
+  <div class="eq">
+    <span class="sym" data-s="L">L(w, b)</span> = <span class="frac"><span class="num">1</span><span class="den">2<span class="sym" data-s="n"></span></span></span> <span class="big"><span class="lim"><span class="r-dato">n</span></span><span class="o">Σ</span><span class="lim">i=1</span></span> ( <span class="r-param">w</span><span class="sup">ᵀ</span><span class="sym" data-s="xi">x<span class="sub">i</span></span> + <span class="r-param">b</span> − <span class="sym" data-s="y">y<span class="sub">i</span></span> )<span class="sup">2</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida de w y b es un medio de n por la suma, sobre todas las observaciones, del cuadrado de (predicción menos valor real).»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">L(w, b)</dt><dd>La pérdida total; ahora los parámetros son w y b.</dd>
+      <dt class="r-dato">1/(2n)</dt><dd>El «1/n» convierte la suma en promedio. El «½» extra es una comodidad: al derivar el cuadrado sale un 2 que se cancela con él.</dd>
+      <dt class="r-calc">wᵀxᵢ + b − yᵢ</dt><dd>El <b>residuo</b> (o error) de la observación i: predicción menos valor real. Positivo si el modelo se pasa, negativo si se queda corto.</dd>
+      <dt>( · )²</dt><dd>Elevar al cuadrado borra el signo y castiga mucho más los errores grandes.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un residuo se duplica: su contribución se multiplica por 4.</li>
+      <li>…todos los residuos valen 0: L = 0, el mínimo posible. Rara vez ocurre con datos reales.</li>
+      <li>…omites el ½ o el 1/n: L cambia de escala, pero <b>el mejor (w, b) es el mismo</b>. Cambia el tamaño del gradiente y, con él, la tasa de aprendizaje que conviene usar.</li>
+    </ul>
+  </div>
+</div>
+
+<p>El objetivo, entonces, es <b>min<sub>w,b</sub> L(w, b)</b>. Cada pareja (w, b) da una recta distinta y una pérdida distinta; en el laboratorio puedes ver esa pérdida <em>como una suma de áreas</em>.</p>
+
+<h3 id="lab-recta" class="lab" data-toc="Lab: ajusta la recta a mano">Laboratorio: ajusta la recta a mano</h3>
+<p>Son los 11 puntos del panel azul de la slide (x = 0, 0.2, …, 2). Mueve φ₀ (ordenada) y φ₁ (pendiente). Cada punto tiene un cuadrado cuyo lado es su residuo, así que <b>su área es lo que ese punto aporta a la suma de cuadrados</b>. Tu meta: que los cuadrados casi desaparezcan.</p>
+<div class="widget" id="labRecta">
+  <div class="widget-head"><div class="wt">Residuos como cuadrados</div><div class="ws">Puntos azules = datos. Línea = tu recta. Cuadrados = (residuo)².</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="rectaCanvas"></canvas>
+      <div><div id="rectaCtrl"></div><div id="rectaRead"></div><div class="status info" id="rectaStatus">Mueve los controles.</div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="rectaMejor">Mostrar la mejor recta</button>
+    <button class="btn" id="rectaSlide">Recta de la slide (0.84, 0.50)</button>
+    <button class="btn" id="rectaInicio">Volver al inicio</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Arranca en φ₀ = 1, φ₁ = 0 (una recta horizontal en y = 1): Σ eᵢ² = 5.075 y L = 0.231. Verás cuadrados grandes a la derecha, donde los datos suben, y pequeños a la izquierda.</li>
+    <li>Sube φ₁ poco a poco hasta ≈ 0.8 y baja φ₀ hasta ≈ 0.66. Los cuadrados se encogen. Ojo con la pendiente: <b>φ₀ y φ₁ se compensan</b>; si subes una, la otra tiene que bajar. Por eso es difícil ajustar a ojo.</li>
+    <li>Pulsa «Mostrar la mejor recta»: φ₀ = 0.664 y φ₁ = 0.791, con Σ eᵢ² = 0.0499 y L = 0.00227. Es la solución de mínimos cuadrados (sección <a href="#por-que-iterar">6</a>).</li>
+    <li>Pulsa «Recta de la slide» (0.84, 0.50): L = 0.0258. Es buena, pero no óptima. La slide rotula ese panel con «L = 0.19»: ese número no sale de ninguna convención de la pérdida (la suma da 0.567 y el promedio 0.0515), así que tómalo como ilustración.</li>
+  </ol>
+</div>
+
+<!-- ============ 4. DESCENSO ============ -->
+<h2 id="descenso"><span class="num">Sección 4</span>Gradient descent</h2>
+
+<p>Queremos el φ que minimiza L(φ). Imagina L como un terreno: φ₀ y φ₁ son las coordenadas en el mapa y L es la altura. El <strong>gradiente</strong> <span class="sym" data-s="grad">∇<sub>φ</sub>L</span> es un vector con una derivada parcial por parámetro; apunta hacia donde el terreno <em>sube</em> más rápido (repasa <a href="00_matematicas.html#parciales">derivadas parciales y gradiente</a>). Para bajar, caminamos en sentido contrario. Primero necesitamos el gradiente de la regresión lineal; derivarlo a mano es el primer ejercicio del temario.</p>
+
+<h3 id="derivacion-gradiente" data-toc="Derivar el gradiente a mano">Derivar el gradiente de la regresión lineal</h3>
+<p>Trabajamos con la recta ŷ = φ₀ + φ₁x y con la pérdida <b>L = (1/n) Σ (φ₀ + φ₁xᵢ − yᵢ)²</b>. (Más abajo vemos qué pasa con la versión de la slide, que lleva 1/(2n).) Para no perdernos, bautizamos el residuo de cada punto: eᵢ = φ₀ + φ₁xᵢ − yᵢ.</p>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">L(φ₀, φ₁) = (1/n) Σ (φ₀ + φ₁xᵢ − yᵢ)²</div><div class="d-por">Partimos de la pérdida. Los datos xᵢ, yᵢ son números fijos; las únicas variables son φ₀ y φ₁.</div></li>
+  <li><div class="d-ex">eᵢ = φ₀ + φ₁xᵢ − yᵢ,&nbsp;&nbsp; así que&nbsp;&nbsp; L = (1/n) Σ eᵢ²</div><div class="d-por"><b>Nombrar el interior:</b> es el truco de la <a href="00_matematicas.html#regla-cadena">regla de la cadena</a>. Ahora L es una suma de cuadrados «simples».</div></li>
+  <li><div class="d-ex">∂L/∂φ₀ = (1/n) Σ ∂(eᵢ²)/∂φ₀</div><div class="d-por"><b>La derivada de una suma es la suma de las derivadas, y la constante 1/n sale de la suma</b> (ver <a href="00_matematicas.html#props-suma">propiedades de Σ</a>). Lo mismo vale para ∂L/∂φ₁.</div></li>
+  <li><div class="d-ex">∂(eᵢ²)/∂φ₀ = 2eᵢ · ∂eᵢ/∂φ₀</div><div class="d-por"><b>Regla de la cadena:</b> la derivada de «algo al cuadrado» es 2 · (ese algo) · (la derivada de ese algo).</div></li>
+  <li><div class="d-ex">∂eᵢ/∂φ₀ = 1</div><div class="d-por"><b>Derivada parcial respecto a φ₀:</b> φ₁xᵢ y yᵢ no dependen de φ₀, así que cuentan como constantes y su derivada es 0. Solo φ₀ deriva, y vale 1.</div></li>
+  <li><div class="d-ex">∂eᵢ/∂φ₁ = xᵢ</div><div class="d-por"><b>Derivada parcial respecto a φ₁:</b> ahora φ₀ y yᵢ son constantes. El término φ₁xᵢ es «φ₁ por un número fijo xᵢ», y derivar eso da xᵢ.</div></li>
+  <li><div class="d-ex">∂L/∂φ₀ = (2/n) Σ eᵢ&nbsp;&nbsp;&nbsp;&nbsp; ∂L/∂φ₁ = (2/n) Σ eᵢ xᵢ</div><div class="d-por"><b>Juntamos los pasos 3, 4, 5 y 6.</b> La derivada respecto a φ₀ promedia los residuos; la de φ₁ los promedia pesados por xᵢ.</div></li>
+  <li><div class="d-ex">con L = (1/(2n)) Σ eᵢ²:&nbsp; ∂L/∂φ₀ = (1/n) Σ eᵢ,&nbsp;&nbsp; ∂L/∂φ₁ = (1/n) Σ eᵢ xᵢ</div><div class="d-por"><b>La versión de la slide:</b> el ½ cancela el 2 que bajó la regla de la cadena. Por eso se escribe así; el gradiente queda a la mitad y apunta en la misma dirección.</div></li>
+  <li><div class="d-ex">puntos (1, 2), (2, 3), (3, 7) y φ = (0, 1):&nbsp; e = (−1, −1, −4);&nbsp; ∂L/∂φ₀ = (2/3)(−6) = −4,&nbsp; ∂L/∂φ₁ = (2/3)(−1·1 − 1·2 − 4·3) = (2/3)(−15) = −10</div><div class="d-por"><b>Verificación con números.</b> Si muevo φ₀ de 0 a 0.001, L pasa de 6 a 5.996001, y (5.996001 − 6) / 0.001 = −3.999 ≈ −4. ✔ El gradiente es negativo en ambas entradas: conviene <em>subir</em> φ₀ y φ₁.</div></li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Trampas comunes</span>
+  <p><b>(1)</b> Olvidar el factor xᵢ en ∂L/∂φ₁: la derivada respecto a la pendiente sí depende de x, la de la ordenada no. <b>(2)</b> Escribir el 2 en una versión y no en la otra: si tu pérdida lleva 1/(2n), el 2 ya se canceló; si lleva 1/n, el 2 queda. <b>(3)</b> Derivar «hacia φ₀» tratando φ₁ como variable; en una parcial, todo lo demás es constante.</p>
+</div>
+
+<h3 id="actualizacion" data-toc="La actualización">La regla de actualización</h3>
+<p>Con el gradiente en la mano, el paso es corto: tomar los parámetros actuales y restar un múltiplo del gradiente. Con los mismos tres puntos y φ₀ = 0, φ₁ = 1 (∇L = (−4, −10)), elegimos η = 0.05. El nuevo φ₀ es 0 − 0.05·(−4) = 0.2 y el nuevo φ₁ es 1 − 0.05·(−10) = 1.5. La pérdida bajó de 6 a 1.807.</p>
+
+<div class="formula">
+  <div class="f-head">Actualización de gradient descent</div>
+  <div class="f-ejemplo">φ actual = (0, 1), ∇L = (−4, −10), η = 0.05  →  φ siguiente = (0, 1) − 0.05·(−4, −10) = (0.2, 1.5)  →  L baja de 6 a 1.807.</div>
+  <div class="eq">
+    <span class="r-param">φ</span><span class="sub"><span class="sym" data-s="indice_t">t</span>+1</span> = <span class="r-param">φ</span><span class="sub">t</span> − <span class="sym" data-s="eta">η</span> <span class="sym" data-s="grad">∇<sub>φ</sub>L</span>( <span class="r-param">φ</span><span class="sub">t</span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Los parámetros del paso siguiente son los de ahora, menos eta por el gradiente evaluado en los de ahora.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">φₜ</dt><dd>Los parámetros en el paso t (el contador de iteraciones). φ₀ aquí sería el valor inicial; ojo, no es el φ₀ de la recta. Lo escribiremos con paréntesis cuando haya riesgo de confusión.</dd>
+      <dt class="r-hiper">η</dt><dd>La <b>tasa de aprendizaje (learning rate)</b>: qué tan grande es el paso. La eliges tú; no se aprende. Las slides de Repaso la llaman η; las de Entrenamiento y Regularización la llaman α, y es lo mismo.</dd>
+      <dt class="r-calc">∇L(φₜ)</dt><dd>El gradiente de L evaluado en el punto actual: hacia dónde <em>sube</em> L. Por eso se resta.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…η es muy pequeña: cada paso casi no se mueve; converge, pero lentísimo.</li>
+      <li>…η es moderada: la pérdida baja de forma sostenida.</li>
+      <li>…η es demasiado grande: el paso se pasa del valle, cae del otro lado a una altura <em>mayor</em>, y cada paso empeora. La pérdida <b>diverge</b>.</li>
+      <li>…η = 0: nunca te mueves. Y si el gradiente vale 0, tampoco (estás en un punto plano: mínimo, máximo o silla).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Por qué se resta el gradiente y no se suma?</div>
+<p>Porque el gradiente apunta hacia donde L <em>sube</em>. En el ejemplo, ∂L/∂φ₀ = −4 es negativo: un aumento pequeño de φ₀ <em>baja</em> la pérdida. Restar −4 es sumar 4, que es justo lo que queremos. Si quisiéramos maximizar, sumaríamos el gradiente (<em>gradient ascent</em>).</p>
+
+<h3 id="lab-gd" class="lab" data-toc="Lab: GD sobre la superficie">Laboratorio: gradient descent sobre la superficie</h3>
+<p>El mapa de colores es L(φ₀, φ₁) para los mismos 11 puntos: más oscuro = pérdida más alta; las líneas son curvas de nivel. <b>Haz clic en el mapa para elegir el punto de partida</b>, ajusta η y da pasos. A la derecha ves cómo se mueve la recta sobre los datos. Con el selector puedes cambiar la convención de L (la de la slide, con 1/(2n), o la de la derivación, con 1/n) y comprobar que el mínimo está en el mismo sitio.</p>
+<div class="widget" id="labGD">
+  <div class="widget-head"><div class="wt">Descenso por el gradiente en la regresión lineal</div><div class="ws">Línea naranja = camino de φ. Círculo verde = mínimo exacto (mínimos cuadrados).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="gdSup"></canvas>
+      <div>
+        <canvas id="gdMini"></canvas>
+        <div id="gdRead"></div>
+      </div>
+    </div>
+    <div class="lab-grid" style="margin-top:12px">
+      <div><div id="gdCtrl"></div><div class="sub-lab">Convención de la pérdida</div><div id="gdSel"></div></div>
+      <div class="status ok" id="gdStatus">Listo.</div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="gdPaso">Un paso</button>
+    <button class="btn" id="gdCorrer">Correr</button>
+    <button class="btn" id="gdReset">Reiniciar</button>
+    <span class="pill" id="gdPill">paso 0</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con η = 0.30 desde (0, 1.8), con la L de la slide, la pérdida baja suave y llega a menos de 0.001 sobre el mínimo en <b>44 pasos</b>. Con η = 0.05 tarda 265; con η = 0.10, 132. Un paso chico es seguro pero lento.</li>
+    <li>Con η = 0.60 llegan en 21 pasos, <em>más rápido</em> que con 0.30, pero el camino hace zigzag: cada paso se pasa del fondo del valle estrecho y vuelve. El zigzag aparece cuando η supera 1/λmáx ≈ 0.45.</li>
+    <li>Sube η a 0.95: <b>diverge</b>. El umbral exacto es η* = 2/λmáx ≈ 0.901 (el lab lo calcula y lo muestra). Con η = 0.90 casi no avanza, justo en el borde.</li>
+    <li>Cambia a la convención 1/n: la L y el gradiente se duplican, así que el umbral cae a ≈ 0.450. <b>El mismo η que funcionaba (0.60) ahora diverge</b>; el mínimo, en cambio, no se movió. Escalar L cambia la tasa de aprendizaje útil, no la solución.</li>
+  </ol>
+</div>
+
+<details>
+  <summary>Para profundizar: de dónde sale el umbral 2/λmáx</summary>
+  <div class="dbody">
+    <p>La pérdida de la regresión lineal es una parábola (en varias dimensiones, un «cuenco»). Cerca del mínimo, un paso de gradient descent multiplica la distancia al mínimo, a lo largo de cada dirección principal del cuenco, por (1 − η·λ), donde λ mide qué tan curvo es el cuenco en esa dirección. Converge si todos esos factores caen entre −1 y 1, es decir, si η·λ &lt; 2 para la dirección <em>más curva</em> (λmáx). De ahí η* = 2/λmáx. Si η·λmáx &gt; 1 el factor es negativo: el paso cruza al otro lado del valle (zigzag), pero mientras no pase de 2 sigue achicando la distancia. Para los 11 puntos, con la L de la slide, λmáx = 2.22 (la curvatura en la dirección empinada) y λmín = 0.18 (la dirección larga y plana del valle); su cociente, ≈ 12, es por qué el camino es lento en una dirección y rebota en la otra.</p>
+  </div>
+</details>
+
+<!-- ============ 5. MINIBATCH ============ -->
+<h2 id="minibatch"><span class="num">Sección 5</span>SGD, mini-batches y épocas</h2>
+
+<p>Gradient descent calcula, antes de <em>cada</em> actualización, el gradiente con <b>todas</b> las observaciones:</p>
+<div class="eq">
+  <span class="sym" data-s="grad">∇L(φ)</span> = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="n"></span></span></span> <span class="big"><span class="lim"><span class="r-dato">n</span></span><span class="o">Σ</span><span class="lim">i=1</span></span> ∇<span class="sub r-param">φ</span> <span class="sym" data-s="ell">ℓ<span class="sub">i</span></span>(φ)
+  <span class="lbl">gradiente completo = promedio de los gradientes por observación</span>
+</div>
+<p>Si n es grande (millones de imágenes), cada paso cuesta muchísimo. Hay dos extremos y un punto medio:</p>
+<ul>
+  <li><strong>Todos los datos</strong> (gradient descent): gradiente exacto, pero un paso carísimo.</li>
+  <li><strong>Un solo dato</strong> (SGD, stochastic gradient descent): el gradiente ∇ℓᵢ de una observación. Paso baratísimo, pero ruidoso, y no aprovecha el hardware.</li>
+  <li><strong>Un mini-batch</strong>: un subconjunto <span class="sym" data-s="Bt">B<span class="sub">t</span></span> ⊂ {1, …, n} de varias observaciones. Es lo que se usa en la práctica.</li>
+</ul>
+
+<p>Un ejemplo con un parámetro. Seis observaciones aportan gradientes de 2, −1, 4, 0, 3 y −2. El gradiente completo es (2 − 1 + 4 + 0 + 3 − 2)/6 = <b>1</b>. Un mini-batch con las observaciones 1, 3 y 5 da (2 + 4 + 3)/3 = 3; otro con las observaciones 2, 4 y 6 da (−1 + 0 − 2)/3 = −1. Cada estimación está lejos del 1 verdadero (es ruidosa), pero no tiene sesgo: en promedio dan 1.</p>
+
+<div class="formula">
+  <div class="f-head">Actualización de mini-batch SGD</div>
+  <div class="f-ejemplo">φₜ = 5, η = 0.1, mini-batch con tres gradientes 2, 4 y 3  →  suma = 9, promedio = 3  →  φₜ₊₁ = 5 − 0.1·3 = <b>4.7</b></div>
+  <div class="eq">
+    <span class="r-param">φ</span><span class="sub">t+1</span> = <span class="r-param">φ</span><span class="sub">t</span> − <span class="frac"><span class="num"><span class="sym" data-s="eta">η</span></span><span class="den"><span class="r-hiper">&#124;B<span class="sub">t</span>&#124;</span></span></span> <span class="big"><span class="lim"></span><span class="o">Σ</span><span class="lim">i∈B<span class="sub">t</span></span></span> ∇<span class="sub r-param">φ</span> <span class="r-calc">ℓ<span class="sub">i</span></span>( <span class="r-param">φ</span><span class="sub">t</span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El nuevo φ es el actual menos eta por el <em>promedio</em> de los gradientes de las observaciones del mini-batch.» El 1/&#124;B&#124; convierte la suma en promedio: tamaño de paso comparable sin importar cuántos datos metas al batch.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">Bₜ</dt><dd>El mini-batch del paso t: los <em>índices</em> de las observaciones elegidas (por ejemplo {1, 3, 5}). Se muestrea de nuevo en cada iteración.</dd>
+      <dt class="r-hiper">|Bₜ|</dt><dd>Las barras significan «cuántos elementos tiene». Es el <b>tamaño del batch</b> (batch size), un hiperparámetro.</dd>
+      <dt>Σ, i ∈ Bₜ</dt><dd>Suma solo sobre las observaciones que cayeron en el batch, no sobre las n.</dd>
+      <dt class="r-calc">∇ℓᵢ(φₜ)</dt><dd>El gradiente de la pérdida de <em>una</em> observación.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…&#124;B&#124; = n: es gradient descent completo; el gradiente es exacto y no hay ruido de muestreo.</li>
+      <li>…&#124;B&#124; = 1: es SGD puro; cada paso es muy ruidoso, el camino zigzaguea.</li>
+      <li>…&#124;B&#124; crece: el ruido baja, el costo por paso sube, y cada paso aprovecha mejor el paralelismo de la GPU hasta que se llena la memoria.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Cada tamaño de batch es un compromiso entre cuatro cosas. No hay una respuesta universal; valores como 32, 64, 128 o 256 son comunes en algunos problemas.</p>
+<table class="tbl chica">
+  <tr><th></th><th>Todos los datos (GD)</th><th>Un dato (SGD)</th><th>Mini-batch</th></tr>
+  <tr><td><b>Costo por paso</b></td><td>Alto (recorre todo)</td><td>Mínimo</td><td>Medio</td></tr>
+  <tr><td><b>Ruido del gradiente</b></td><td>Ninguno</td><td>Mucho</td><td>Moderado</td></tr>
+  <tr><td><b>Paralelización (GPU/TPU)</b></td><td>Se aprovecha, si cabe</td><td>Casi nada</td><td>Buena</td></tr>
+  <tr><td><b>Memoria</b></td><td>Todo el conjunto a la vez</td><td>Mínima</td><td>La de un batch</td></tr>
+</table>
+<div class="note key">
+  <span class="tag">No hay un tamaño universal</span>
+  <p>El tamaño de batch depende de la memoria y el hardware, de la arquitectura, del tamaño de cada observación y de las propiedades de la optimización. Es un hiperparámetro: se elige con el conjunto de validación (sección <a href="#train-val-test">9</a>), no con intuición universal.</p>
+</div>
+
+<h3 id="epocas" data-toc="La aritmética de épocas">Épocas: la aritmética</h3>
+<p>Una <strong>época (epoch)</strong> es una pasada completa por los n datos de entrenamiento. Si cada iteración usa &#124;B&#124; datos, una época tarda n/&#124;B&#124; iteraciones. Esta aritmética aparece en el examen.</p>
+<div class="formula">
+  <div class="f-head">Épocas completadas</div>
+  <div class="f-ejemplo">n = 600 observaciones, &#124;B&#124; = 20, k = 300 iteraciones  →  pasos por época = 600/20 = 30  →  épocas = 300 / 30 = <b>10</b>. Otra forma: 300·20 = 6 000 observaciones procesadas, y 6 000 / 600 = 10.</div>
+  <div class="eq">
+    pasos por época = <span class="frac"><span class="num"><span class="r-dato">n</span></span><span class="den"><span class="r-hiper">&#124;B&#124;</span></span></span> &nbsp;&nbsp;&nbsp;&nbsp; épocas = <span class="frac"><span class="num"><span class="sym" data-s="indice_k">k</span>·<span class="r-hiper">&#124;B&#124;</span></span><span class="den"><span class="r-dato">n</span></span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Una época son n entre &#124;B&#124; iteraciones. Las épocas son las iteraciones, por el tamaño del batch, entre n.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">n</dt><dd>Observaciones de entrenamiento.</dd>
+      <dt class="r-hiper">&#124;B&#124;</dt><dd>Tamaño del mini-batch.</dd>
+      <dt>k</dt><dd>Número de iteraciones (actualizaciones de φ) que has hecho. Ojo: aquí k no es número de capas ni de clases.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…duplicas &#124;B&#124; sin cambiar k: procesas el doble de datos y completas el doble de épocas.</li>
+      <li>…n no es múltiplo de &#124;B&#124; (por ejemplo, n = 1 000, &#124;B&#124; = 64): n/&#124;B&#124; = 15.625. Hay 15 batches completos y uno de 40: <b>16 iteraciones por época</b>, ⌈n/&#124;B&#124;⌉ con el último batch más chico. La fórmula k·&#124;B&#124;/n sale ligeramente alta.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="lab-epocas" class="lab" data-toc="Lab: calculadora de épocas">Laboratorio: calculadora de épocas</h3>
+<p>Cada casilla es una observación. Los grupos de un mismo color forman un mini-batch; el grupo con borde grueso es el que usa tu iteración k. Si n no es múltiplo de &#124;B&#124;, el último grupo es más corto (borde punteado).</p>
+<div class="widget" id="labEp">
+  <div class="widget-head"><div class="wt">Una época, partida en mini-batches</div><div class="ws">Prueba n = 26, &#124;B&#124; = 8, k = 7, o los valores de tus ejercicios.</div></div>
+  <div class="widget-body">
+    <div class="bgrid" id="epGrid"></div>
+    <div class="lab-grid" style="margin-top:12px">
+      <div id="epCtrl"></div>
+      <div><div id="epRead"></div><div class="status info" id="epStatus">—</div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con n = 24, &#124;B&#124; = 8: tres grupos de 8, sin residuo. Con k = 12 son 12/3 = 4 épocas, y k·&#124;B&#124;/n da exactamente lo mismo.</li>
+    <li>Con n = 26, &#124;B&#124; = 8, k = 7: la época tiene 4 grupos (8, 8, 8 y 2). En 7 iteraciones procesaste 50 observaciones = 1.92 épocas exactas, mientras que k·&#124;B&#124;/n = 2.15. La fórmula sobreestima cuando hay residuo.</li>
+    <li>Pon &#124;B&#124; = n: un solo grupo, una iteración = una época. Pon &#124;B&#124; = 1: n grupos de una casilla, n iteraciones por época.</li>
+  </ol>
+</div>
+
+<h3 id="init-cero" data-toc="Inicializar en cero">Inicialización en cero</h3>
+<p>Para empezar a iterar hace falta un punto de partida φ₀. En regresión lineal podemos empezar con w = 0 y b = 0, y gradient descent funciona bien. Mira por qué: con los puntos (1, 2), (2, 3), (3, 7) y φ = (0, 0), los residuos son −2, −3, −7 y el gradiente (con 1/n) es (2/3)(−12) = −8 en φ₀ y (2/3)(−2 − 6 − 21) = −19.33 en φ₁. Son distintos, así que cada parámetro recibe una señal propia y se mueve de forma diferente.</p>
+<p>En una <b>red neuronal</b> esto <em>no</em> funciona: si todos los pesos de una capa empiezan igual, todas sus neuronas calculan lo mismo, reciben el mismo gradiente y se quedan idénticas para siempre. La razón completa (ruptura de simetría) está en el <a href="04_entrenamiento2.html">artefacto 04</a>.</p>
+
+<!-- ============ 6. POR QUÉ ITERAR ============ -->
+<h2 id="por-que-iterar"><span class="num">Sección 6</span>¿Por qué no la fórmula cerrada ni la búsqueda exhaustiva?</h2>
+
+<p>Quizá te hayas preguntado: si la regresión lineal tiene una fórmula directa, ¿para qué iteramos? Y si basta con probar muchos φ, ¿para qué calcular gradientes? El temario pide dar <b>dos razones</b>, una para cada atajo.</p>
+
+<h3 id="formula-cerrada" data-toc="La fórmula cerrada">La solución analítica</h3>
+<div class="formula">
+  <div class="f-head">Mínimos cuadrados: la solución cerrada</div>
+  <div class="f-ejemplo">Puntos (0, 1), (1, 2), (2, 2). La matriz X tiene una columna de unos y una de x. Entonces XᵀX = [[3, 3], [3, 5]], Xᵀy = (5, 6), y (XᵀX)⁻¹ = (1/6)[[5, −3], [−3, 3]]. Resultado: ŵ = (1/6)(25 − 18, −15 + 18) = (<b>1.167, 0.5</b>): la recta ŷ = 1.167 + 0.5x.</div>
+  <div class="eq">
+    <span class="r-param">ŵ</span> = ( <span class="r-dato">X</span><span class="sup"><span class="sym" data-s="transp">ᵀ</span></span><span class="r-dato">X</span> )<span class="sup">−1</span> <span class="r-dato">X</span><span class="sup">ᵀ</span><span class="r-dato">y</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Los pesos óptimos son la inversa de (X transpuesta por X), por X transpuesta, por y.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">X</dt><dd>La matriz de datos: una fila por observación, una columna por característica. Se le agrega una columna de unos para absorber el sesgo b.</dd>
+      <dt class="r-dato">y</dt><dd>El vector con todas las respuestas.</dd>
+      <dt>( · )⁻¹</dt><dd>La inversa de una matriz: la que «deshace» a la original. Solo existe si XᵀX es invertible.</dd>
+      <dt class="r-calc">ŵ</dt><dd>Los pesos que minimizan la pérdida cuadrática.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…dos columnas de X son idénticas (o una es combinación de otras): XᵀX no es invertible y no hay una única solución.</li>
+      <li>…hay millones de parámetros: XᵀX tiene d × d entradas. Con d = 10⁶, son 10¹² números; no cabe en memoria.</li>
+    </ul>
+  </div>
+</div>
+<p>En la práctica ni siquiera se calcula la inversa explícita; se resuelve el sistema con métodos numéricos como QR, SVD o Cholesky. La conclusión importante es otra: <b>esta fórmula existe porque el modelo es lineal en los parámetros</b>. Si igualas el gradiente a cero (∇L = 0), con una recta obtienes ecuaciones lineales que se despejan. Con una red, el modelo es una composición de funciones no lineales y esas ecuaciones <em>no tienen despeje</em>. Los modelos de deep learning, en general, no tienen una solución analítica equivalente.</p>
+
+<h3 id="busqueda-exhaustiva" data-toc="Búsqueda exhaustiva">Búsqueda exhaustiva: k elevado a la d</h3>
+<p>El otro atajo sería probar todas las combinaciones. Si hay d parámetros y cada uno puede tomar k valores, existen <b>kᵈ combinaciones</b>. Con una recta (d = 2) y k = 10 valores por parámetro, son 100: trivial. Con d = 1 000 parámetros, son 10<span class="sup">1000</span>. Además, los parámetros son continuos: no hay «k valores», hay infinitos.</p>
+
+<h3 id="lab-kd" class="lab" data-toc="Lab: k a la d">Laboratorio: la explosión de combinaciones</h3>
+<div class="widget" id="labKD">
+  <div class="widget-head"><div class="wt">¿Cuántas combinaciones hay?</div><div class="ws">Para comparar: se estima que el universo observable tiene del orden de 10⁸⁰ átomos.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div id="kdCtrl"></div>
+      <div><div class="gran" id="kdGran">—</div><div id="kdRead"></div><div class="status info" id="kdStatus">—</div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con d = 2 y k = 10: 100 combinaciones. Sube d a 80 con k = 10: 10⁸⁰, ya igualas los átomos del universo. Con d = 81 los superas.</li>
+    <li>Con solo k = 2 valores por parámetro (un «sí o no»), basta d = 266 para pasar de 10⁸⁰ (2<span class="sup">266</span> ≈ 10<span class="sup">80.07</span>).</li>
+    <li>Con d = 1 000 y k = 10: 10<span class="sup">1000</span>. Una red moderna tiene millones o miles de millones de parámetros.</li>
+  </ol>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen: las dos razones</span>
+  <p><b>Razón 1 (contra la fórmula cerrada):</b> las redes no tienen solución analítica; el modelo no es lineal en φ y ∇L = 0 no se puede despejar. Además, aunque se pudiera, matrices del tamaño de los parámetros no caben en memoria. <b>Razón 2 (contra la búsqueda exhaustiva):</b> kᵈ crece exponencialmente con el número de parámetros y los parámetros son continuos. El gradiente es la alternativa: usa información sobre la forma local de L para decidir hacia dónde moverse, en lugar de adivinar.</p>
+</div>
+
+<!-- ============ 7. VEROSIMILITUD ============ -->
+<h2 id="verosimilitud"><span class="num">Sección 7</span>De dónde sale la pérdida cuadrática</h2>
+
+<p>Elevar el error al cuadrado parece una elección arbitraria. No lo es: sale de una suposición sobre cómo se generan los datos. Supón que cada respuesta es «la parte que el modelo explica» más un ruido aleatorio:</p>
+<div class="eq">
+  <span class="sym" data-s="y">y<span class="sub">i</span></span> = <span class="r-param">w</span><span class="sup">ᵀ</span><span class="sym" data-s="xi">x<span class="sub">i</span></span> + <span class="r-param">b</span> + <span class="sym" data-s="epsruido">ε<span class="sub">i</span></span> &nbsp;&nbsp;con&nbsp;&nbsp; ε<span class="sub">i</span> <span class="sym" data-s="dist">~</span> <span class="sym" data-s="normal">N(0, σ²)</span>, independientes
+  <span class="lbl">modelo con ruido gaussiano de varianza constante</span>
+</div>
+<p>Dicho de otra forma, dado xᵢ la respuesta yᵢ se distribuye como una campana centrada en la recta: yᵢ | xᵢ, w, b ~ N(wᵀxᵢ + b, σ²). Ejemplo con una observación: la recta predice 2, el ruido tiene σ = 1. La <strong>densidad</strong> (qué tan «esperable» es un valor) de ver y = 2 es 0.399; de ver y = 2.5, 0.352; de ver y = 4, apenas 0.054. Un valor lejos de la recta es poco verosímil.</p>
+
+<div class="formula">
+  <div class="f-head">Densidad Normal de una observación</div>
+  <div class="f-ejemplo">Predicción wᵀx + b = 2, σ = 1, y = 2.5: exponente = −(0.5)²/(2·1) = −0.125; e<sup>−0.125</sup> = 0.8825; 1/√(2π) = 0.3989; densidad = 0.3989 · 0.8825 = <b>0.352</b>.</div>
+  <div class="eq">
+    <span class="sym" data-s="P">p(y<span class="sub">i</span> | x<span class="sub">i</span>, w, b)</span> = <span class="frac"><span class="num">1</span><span class="den">√(2π<span class="sym" data-s="sigma">σ</span><span class="sup">2</span>)</span></span> <span class="sym" data-s="exp">e</span><span class="sup">−<span class="frac"><span class="num">1</span><span class="den">2σ<span class="sup">2</span></span></span>( <span class="r-dato">y<span class="sub">i</span></span> − <span class="r-param">w</span><span class="sup">ᵀ</span><span class="r-dato">x<span class="sub">i</span></span> − <span class="r-param">b</span> )<span class="sup">2</span></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La densidad de yᵢ dado xᵢ es una campana: tiene su altura máxima cuando yᵢ coincide con la predicción, y cae rápido conforme yᵢ se aleja de ella, a una velocidad que fija σ.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">p(yᵢ | xᵢ, w, b)</dt><dd>La densidad de yᵢ si los parámetros fueran w y b. La barra | se lee «dado».</dd>
+      <dt class="r-calc">σ²</dt><dd>La varianza del ruido; σ es su desviación estándar. Aquí se supone <b>constante</b> (igual para todo x). Ojo: σ sin paréntesis no es la sigmoide σ(z).</dd>
+      <dt class="r-calc">yᵢ − wᵀxᵢ − b</dt><dd>El residuo: cuánto se aleja el dato de la recta.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el residuo vale 0: el exponente es 0 y la densidad es máxima, 1/√(2πσ²).</li>
+      <li>…σ es chica: la campana es angosta y alta; un residuo pequeño ya es «raro».</li>
+      <li>…σ es grande: la campana es ancha y baja; casi cualquier residuo es tolerable.</li>
+    </ul>
+  </div>
+</div>
+
+<p><strong>Máxima verosimilitud:</strong> escogemos los parámetros que hacen lo más probable posible <em>todo el conjunto de datos</em>. Para todos los datos juntos hay que combinar las n densidades, y de ahí sale el cuadrado. La derivación se hace con la negative log-likelihood (log-verosimilitud negativa), el término técnico para «menos el logaritmo de la verosimilitud».</p>
+
+<h3 id="derivacion-nll" data-toc="Derivar la log-verosimilitud negativa">Derivación paso a paso</h3>
+<p>Escribimos rᵢ = yᵢ − wᵀxᵢ − b para el residuo, y <b>y</b> para el vector con todas las respuestas.</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">p(<b>y</b> | X, w, b) = Π p(yᵢ | xᵢ, w, b)</div><div class="d-por"><b>Independencia (i.i.d.):</b> si las observaciones son independientes, la densidad conjunta es el producto de las individuales (ver <a href="00_matematicas.html#iid">i.i.d.</a>).</div></li>
+  <li><div class="d-ex">= Π (1/√(2πσ²)) · exp( −rᵢ² / (2σ²) )</div><div class="d-por"><b>Sustituir la Normal:</b> metemos la densidad de la fórmula anterior.</div></li>
+  <li><div class="d-ex">maximizar p&nbsp;⇔&nbsp;maximizar log p&nbsp;⇔&nbsp;minimizar −log p</div><div class="d-por"><b>El logaritmo es creciente:</b> no mueve dónde está el máximo. Y maximizar algo es minimizar su negativo.</div></li>
+  <li><div class="d-ex">−log p = −Σ log[ (1/√(2πσ²)) · exp(−rᵢ²/(2σ²)) ]</div><div class="d-por"><b>Log de un producto es suma de logs:</b> log(Π aᵢ) = Σ log aᵢ. El producto sobre i se volvió una suma (ver <a href="00_matematicas.html#log-exp">log y exp</a>).</div></li>
+  <li><div class="d-ex">= −Σ [ log(1/√(2πσ²)) + log exp(−rᵢ²/(2σ²)) ]</div><div class="d-por"><b>Log de un producto otra vez:</b> log(a·b) = log a + log b, ahora dentro de cada término.</div></li>
+  <li><div class="d-ex">= −Σ [ log(1/√(2πσ²)) − rᵢ²/(2σ²) ]</div><div class="d-por"><b>log y exp son inversas:</b> log(exp(u)) = u.</div></li>
+  <li><div class="d-ex">log(1/√(2πσ²)) = −½ log(2πσ²)</div><div class="d-por"><b>Log de una potencia:</b> 1/√a = a<sup>−1/2</sup>, y log(a<sup>p</sup>) = p·log a.</div></li>
+  <li><div class="d-ex">= Σ [ ½ log(2πσ²) + rᵢ²/(2σ²) ]</div><div class="d-por"><b>Repartir el signo menos</b> sobre los dos sumandos.</div></li>
+  <li><div class="d-ex">−log p(<b>y</b> | X, w, b) = <b>(n/2) log(2πσ²)</b> + (1/(2σ²)) Σ rᵢ²</div><div class="d-por"><b>Sumar una constante n veces</b> es multiplicarla por n (el primer término no depende de i), y la constante 1/(2σ²) sale de la suma.</div></li>
+  <li><div class="d-ex">arg max p = arg min Σ rᵢ²</div><div class="d-por"><b>Qué desaparece y por qué:</b> el primer término, (n/2) log(2πσ²), no depende de w ni de b. Sumar una constante no mueve el argmin. Y 1/(2σ²) es una constante positiva: multiplicarla tampoco lo mueve.</div></li>
+  <li><div class="d-ex">dos residuos 0.5 y −1, σ = 1:&nbsp; −log(0.3521 · 0.2420) = 2.4629;&nbsp; (2/2) log(2π) + (0.25 + 1)/2 = 1.8379 + 0.625 = 2.4629</div><div class="d-por"><b>Verificación con números:</b> calcular el producto de densidades y aplicar la fórmula final da lo mismo. ✔</div></li>
+</ol>
+
+<div class="note key">
+  <span class="tag">La conclusión</span>
+  <p>Minimizar la pérdida cuadrática equivale a máxima verosimilitud bajo ruido gaussiano de varianza constante. La pérdida de la slide Interpretación probabilística es la suma Σ(yᵢ − wᵀxᵢ − b)², sin 1/n ni ½; la de la slide Función de pérdida lleva 1/(2n). <b>Es la misma solución</b>: multiplicar por una constante positiva no cambia el argmin.</p>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen: ¿y si σ dependiera de x?</span>
+  <p>Entonces el primer término es Σ ½ log(2πσ²(xᵢ)), que <b>sí depende</b> de los parámetros que predicen σ, y no desaparece. Además, el peso 1/(2σ²(xᵢ)) cambia según i: cada residuo se pondera distinto. Es la regresión heteroscedástica (artefacto <a href="03_entrenamiento1.html">03</a>), donde hay que garantizar σ² &gt; 0.</p>
+</div>
+
+<h3 id="lab-campanas" class="lab" data-toc="Lab: campanas sobre la recta">Laboratorio: campanas sobre la recta</h3>
+<p>Sobre cada punto hay una campana vertical centrada en la recta; la línea horizontal marca su altura en el dato, p(yᵢ|xᵢ). Mueve φ₀, φ₁ y σ. Abajo ves −log-verosimilitud y la suma de cuadrados, y una gráfica con 150 rectas al azar: <b>todas caen sobre una línea recta</b>, porque −log p = constante + S/(2σ²).</p>
+<div class="widget" id="labCamp">
+  <div class="widget-head"><div class="wt">Verosimilitud de la recta</div><div class="ws">Izquierda: datos, recta y campanas. Derecha: suma de cuadrados contra −log-verosimilitud.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="campCanvas"></canvas>
+      <div><canvas id="campDisp"></canvas><div id="campRead"></div></div>
+    </div>
+    <div style="margin-top:12px"><div id="campCtrl"></div><div class="status info" id="campStatus">—</div></div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="campMV">Buscar máxima verosimilitud</button>
+    <button class="btn" id="campSlide">Recta de la slide</button>
+    <button class="btn" id="campReset">Reiniciar</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con (0.84, 0.50) y σ = 0.3: S = 0.567 y −log p = 0.012. Pulsa «Buscar máxima verosimilitud»: llega a (0.664, 0.791), con S = 0.0499 y −log p = −2.858. Bajaron juntas.</li>
+    <li>Con φ fijo, sube σ: la campana se ensancha y −log p cambia. Con σ = 0.1, el mejor valor es −12.73; con σ = 0.3, −2.86; con σ = 0.5, 2.58.</li>
+    <li>Pero <b>la mejor recta no cambia con σ</b>: la búsqueda siempre termina en (0.664, 0.791). Porque σ solo reescala la suma de cuadrados.</li>
+    <li>Con σ chico, una recta mala se castiga más: la pendiente de la línea de puntos de la derecha es 1/(2σ²).</li>
+  </ol>
+</div>
+
+<h3 id="adelanto-perdidas" data-toc="Adelanto: otras pérdidas">Adelanto: esto se repite</h3>
+<p>Muchas pérdidas se entienden así: eliges una distribución para la salida, aplicas máxima verosimilitud y minimizas la log-verosimilitud negativa.</p>
+<table class="tbl chica">
+  <tr><th>Distribución de la salida</th><th></th><th>Pérdida que resulta</th></tr>
+  <tr><td>Normal (gaussiana)</td><td>⇒</td><td>Error cuadrático medio (MSE)</td></tr>
+  <tr><td>Bernoulli</td><td>⇒</td><td>Binary cross-entropy</td></tr>
+  <tr><td>Categórica</td><td>⇒</td><td>Cross-entropy multiclase</td></tr>
+</table>
+<p>Las tres derivaciones se hacen en el <a href="03_entrenamiento1.html">artefacto 03</a> (clase 3).</p>
+
+<!-- ============ 8. GENERALIZACIÓN ============ -->
+<h2 id="generalizacion"><span class="num">Sección 8</span>Generalización</h2>
+
+<p>Entrenar baja L en los datos de entrenamiento. Pero no entrenamos para eso: queremos que el modelo funcione con observaciones <em>nuevas</em>. Hay dos errores promedio distintos.</p>
+
+<div class="formula">
+  <div class="f-head">Riesgo empírico (el que sí podemos calcular)</div>
+  <div class="f-ejemplo">Cuatro errores de entrenamiento 0.2, 0.0, 0.6 y 0.2: R̂<sub>train</sub> = 1.0 / 4 = <b>0.25</b>.</div>
+  <div class="eq">
+    <span class="sym" data-s="Rhat">R̂<sub>train</sub></span>(f) = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="n"></span></span></span> <span class="big"><span class="lim"><span class="r-dato">n</span></span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="ell">ℓ</span>( f(x<span class="sub">i</span>), y<span class="sub">i</span> )
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El riesgo empírico es el promedio de la pérdida sobre las observaciones de entrenamiento.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">R̂<sub>train</sub></dt><dd>Lo mismo que L(φ), visto como una evaluación del modelo f. El gorro dice «estimado a partir de datos».</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul><li>…el modelo memoriza los n datos: R̂<sub>train</sub> = 0, y no sabemos nada de cómo se portará con datos nuevos.</li></ul>
+  </div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Riesgo de población (el que nos importa)</div>
+  <div class="f-ejemplo">Imagina que el mundo real se reparte así: 70 % de los casos son fáciles (error 0.1), 20 % medios (error 0.5) y 10 % difíciles (error 2). El riesgo es 0.7·0.1 + 0.2·0.5 + 0.1·2 = <b>0.37</b>: cada error pesado por qué tan frecuente es. La integral es esa misma suma, con infinitos casos posibles.</div>
+  <div class="eq">
+    <span class="sym" data-s="R">R(f)</span> = <span class="sym" data-s="E">E</span><span class="sub">(X,Y)~P</span>[ ℓ( f(X), Y ) ] = ∫∫ ℓ( f(x), y ) <span class="sym" data-s="pxy">p(x, y)</span> dx dy
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El riesgo de población es el promedio del error sobre todos los datos posibles, pesado por qué tan frecuentes son.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">R(f)</dt><dd>El error promedio que tendría el modelo f sobre el mundo entero.</dd>
+      <dt>E<sub>(X,Y)~P</sub>[·]</dt><dd>La esperanza (valor esperado) cuando (X, Y) se distribuye como P.</dd>
+      <dt>∫∫ … dx dy</dt><dd>Una suma continua sobre todas las x y todas las y.</dd>
+      <dt>p(x, y)</dt><dd>Qué tan frecuente es cada par (x, y) en la población: el «peso». <b>No lo conocemos</b>.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…no conocemos p(x, y): no podemos calcular R(f). Hay que estimarlo con datos que no usamos para entrenar (sección <a href="#train-val-test">9</a>).</li>
+    </ul>
+  </div>
+</div>
+
+<p>El modelo final depende de los datos con que se entrenó: <b>f̂ = <span class="sym" data-s="algo">𝒜</span>(𝒟<sub>train</sub>)</b>, donde 𝒜 es el algoritmo de entrenamiento. Evaluar f̂ en los mismos datos que lo construyeron da una estimación <strong>demasiado optimista</strong>. La pregunta central es: ¿qué tan bien funciona f̂ sobre observaciones nuevas?</p>
+
+<h3 id="sub-sobre" data-toc="Subajuste y sobreajuste">Subajuste y sobreajuste</h3>
+<table class="tbl chica">
+  <tr><th></th><th>R<sub>train</sub></th><th>R<sub>test</sub></th><th>Ejemplo</th></tr>
+  <tr><td><b>Subajuste (underfitting)</b></td><td>Alto</td><td>Alto</td><td>0.62 y 0.65</td></tr>
+  <tr><td><b>Razonable</b></td><td>Bajo</td><td>Cercano al de train</td><td>0.10 y 0.12</td></tr>
+  <tr><td><b>Sobreajuste (overfitting)</b></td><td>Muy bajo</td><td>Mucho mayor que R<sub>train</sub></td><td>0.01 y 0.40</td></tr>
+</table>
+<p>La diferencia R<sub>test</sub> − R<sub>train</sub> es la <strong>brecha de generalización (generalization gap)</strong>: 0.03 en el segundo renglón, 0.39 en el tercero.</p>
+<p>Más datos suelen ayudar al desempeño fuera de muestra (n↑ da más información sobre la distribución), pero no garantizan un mejor modelo: también importan la calidad y representatividad de los datos, que train y test vengan de la misma distribución, la arquitectura, la optimización y la regularización.</p>
+
+<h3 id="lab-polinomio" class="lab" data-toc="Lab: grado del polinomio">Laboratorio: grado del polinomio</h3>
+<p>Los datos salen de sin(πx) más ruido gaussiano (σ = 0.3), con semilla fija: 12 puntos de entrenamiento y 200 de prueba. Ajustamos un polinomio por mínimos cuadrados. Mueve el grado de 0 a 11.</p>
+<div class="widget" id="labPol">
+  <div class="widget-head"><div class="wt">Polinomio de grado g</div><div class="ws">Curva roja = ajuste. Puntos llenos = entrenamiento; puntos huecos = prueba (una muestra). Línea punteada = sin(πx).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="polAjuste"></canvas>
+      <canvas id="polError"></canvas>
+    </div>
+    <div style="margin-top:12px"><div id="polCtrl"></div><div id="polRead"></div></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Grado 0 (una constante): R<sub>train</sub> = 0.464 y R<sub>test</sub> = 0.618, ambos altos: <b>subajuste</b>.</li>
+    <li>Grados 5 y 6: R<sub>train</sub> ≈ 0.075 y R<sub>test</sub> ≈ 0.129. El piso es el ruido (σ² = 0.09): no se puede bajar de ahí. Es la zona razonable, el fondo de la «U».</li>
+    <li>Grado 7: R<sub>train</sub> baja a 0.020, pero R<sub>test</sub> sube a 0.896. Grado 11: R<sub>train</sub> ≈ 0 (pasa por los 12 puntos) y R<sub>test</sub> ≈ 197: <b>sobreajuste</b>. La brecha explota.</li>
+    <li>R<sub>train</sub> solo baja al subir el grado; R<sub>test</sub> hace una U. Por eso no puedes elegir el grado con el error de entrenamiento. (La gráfica de errores usa escala logarítmica.)</li>
+  </ol>
+</div>
+
+<div class="note fix">
+  <span class="tag">Deep learning complica la historia</span>
+  <p>La intuición clásica dice que modelos demasiado complejos sobreajustan. Pero las redes modernas suelen tener muchos más parámetros que observaciones y logran R<sub>train</sub> ≈ 0 sin necesariamente generalizar mal. Entonces, en deep learning: <b>más parámetros ⇏ automáticamente más overfitting</b>. Es un adelanto del double descent, que veremos en el <a href="04_entrenamiento2.html">artefacto 04</a>.</p>
+</div>
+
+<!-- ============ 9. TRAIN / VAL / TEST ============ -->
+<h2 id="train-val-test"><span class="num">Sección 9</span>Train, validación y test</h2>
+
+<p>Tres tareas distintas, tres conjuntos distintos:</p>
+<div class="flow">
+  <div class="node"><div class="t">Train</div><div class="d">𝒟<sub>train</sub> → <b>parámetros</b> (w, b, …). Es donde el gradiente baja la pérdida.</div></div>
+  <div class="node"><div class="t">Validación</div><div class="d">𝒟<sub>val</sub> → <b>hiperparámetros y modelo</b>: η, λ, tamaño de batch, arquitectura.</div></div>
+  <div class="node"><div class="t">Test</div><div class="d">𝒟<sub>test</sub> → <b>evaluación final</b>, con datos que no participaron en ninguna decisión.</div></div>
+</div>
+<p>No debemos usar el test repetidamente para tomar decisiones. Si lo hacemos, empezamos a sobreajustarnos al test; deja de ser una estimación honesta y se convierte en otro conjunto de validación.</p>
+
+<p>¿Por qué? Imagina 30 modelos que en realidad aciertan 70 % cada uno. Los medimos en 200 ejemplos de test. Por azar, cada uno saca 70 % ± 3.2 puntos (la desviación estándar de una proporción es √(0.7·0.3/200) ≈ 0.032). Si escoges el mejor de los 30, te quedas con el que tuvo más suerte: unos 2 desviaciones por encima, ≈ 76 %. Pero en un test nuevo vuelve a ≈ 70 %.</p>
+
+<h3 id="lab-test" class="lab" data-toc="Lab: elegir con el test">Laboratorio: elegir con el test</h3>
+<div class="widget" id="labTest">
+  <div class="widget-head"><div class="wt">30 modelos, todos con 70 % de accuracy real</div><div class="ws">Puntos: accuracy medida en un test de 200 ejemplos. Anillo: el mismo modelo ganador, medido en un test nuevo.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="testCanvas"></canvas>
+      <div><div id="testRead"></div><div class="status info" id="testStatus">—</div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn primary" id="testNueva">Nueva simulación</button>
+    <button class="btn" id="testCien">100 simulaciones</button>
+    <button class="btn" id="testReset">Volver a la semilla inicial</button>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>La simulación inicial elige el modelo 3, que saca 76.5 % en el test. En un test nuevo saca 71 %. Todos eran de 70 %.</li>
+    <li>Pulsa «Nueva simulación» varias veces: el ganador casi siempre marca entre 75 % y 79 %, y el test nuevo oscila alrededor de 70 %.</li>
+    <li>Con «100 simulaciones»: el promedio del ganador es ≈ 76.5 % y el del test nuevo ≈ 69.8 %. Elegir con el test infla la estimación en ≈ 7 puntos, sin que haya ninguna mejora real.</li>
+  </ol>
+</div>
+<div class="note exam">
+  <span class="tag">En el examen</span>
+  <p>Si ajustas la tasa de aprendizaje, la arquitectura o el momento de parar viendo el test, ya no tienes un test: tienes una validación y te quedaste sin evaluación final. Hay que usar el test <b>una sola vez</b>, al final.</p>
+</div>
+
+<!-- ============ 10. L2 ============ -->
+<h2 id="l2"><span class="num">Sección 10</span>Regularización L2 y weight decay</h2>
+
+<p>Una forma de cambiar el problema de entrenamiento es añadir una <strong>penalización</strong> al tamaño de los pesos. La regularización L<sub>2</sub> suma a la pérdida el término (λ/2)‖w‖².</p>
+
+<div class="formula">
+  <div class="f-head">Pérdida regularizada L₂</div>
+  <div class="f-ejemplo">w = (2, −1), λ = 0.5: ‖w‖² = 2² + (−1)² = 5; penalización = (0.5/2)·5 = 1.25. Si la pérdida de datos es 0.30, la total es 0.30 + 1.25 = <b>1.55</b>.</div>
+  <div class="eq">
+    L<sub>reg</sub>(w, b) = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="n"></span></span></span> <span class="big"><span class="lim"><span class="r-dato">n</span></span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="frac"><span class="num">1</span><span class="den">2</span></span>( <span class="r-param">w</span><span class="sup">ᵀ</span><span class="r-dato">x<span class="sub">i</span></span> + <span class="r-param">b</span> − <span class="r-dato">y<span class="sub">i</span></span> )<span class="sup">2</span> + <span class="frac"><span class="num"><span class="sym" data-s="lambda">λ</span></span><span class="den">2</span></span> <span class="sym" data-s="norma">‖w‖²</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La pérdida regularizada es la pérdida de siempre más lambda medios por la norma al cuadrado de los pesos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-hiper">λ ≥ 0</dt><dd>La fuerza de la regularización (la eliges tú). Ojo: aquí es λ de regularización, no la probabilidad λ de Bernoulli.</dd>
+      <dt>‖w‖² = Σⱼ wⱼ²</dt><dd>La suma de los cuadrados de los pesos: mide qué tan grandes son en conjunto.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…λ = 0: sin regularización.</li>
+      <li>…λ crece: penalizar pesos grandes pesa más que ajustar los datos; los pesos se encogen hacia 0.</li>
+      <li>…λ muy grande: w ≈ 0 y el modelo ignora la entrada.</li>
+    </ul>
+  </div>
+</div>
+<p><strong>Por qué no se regulariza b.</strong> Si penalizaras b, el resultado dependería de dónde esté el cero de y: restarle 100 a todas las respuestas cambiaría la solución. El sesgo solo sube o baja la función; no la hace más «sensible» a las entradas, que es lo que L₂ quiere frenar.</p>
+
+<h3 id="derivacion-l2" data-toc="Derivar weight decay">Derivación: gradiente y weight decay</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">R(w) = (λ/2) Σₖ wₖ²</div><div class="d-por">La penalización escrita como suma sobre los pesos.</div></li>
+  <li><div class="d-ex">∂R/∂wⱼ = (λ/2) · ∂(Σₖ wₖ²)/∂wⱼ</div><div class="d-por"><b>La constante sale de la derivada.</b></div></li>
+  <li><div class="d-ex">∂(Σₖ wₖ²)/∂wⱼ = ∂(wⱼ²)/∂wⱼ</div><div class="d-por"><b>Derivada parcial:</b> en la suma, los términos con k ≠ j no dependen de wⱼ y su derivada es 0. Solo queda el término k = j.</div></li>
+  <li><div class="d-ex">∂(wⱼ²)/∂wⱼ = 2wⱼ&nbsp;&nbsp;⇒&nbsp;&nbsp; ∂R/∂wⱼ = (λ/2) · 2wⱼ = λwⱼ</div><div class="d-por"><b>Derivada de una potencia.</b> El ½ cancela el 2: por eso la penalización lleva λ/2.</div></li>
+  <li><div class="d-ex">∇<sub>w</sub> (λ/2)‖w‖² = λw</div><div class="d-por"><b>Apilar</b> las derivadas de todos los pesos en un vector.</div></li>
+  <li><div class="d-ex">w ← w − η [ (1/&#124;B&#124;) Σ xᵢ(wᵀxᵢ + b − yᵢ) + λw ]</div><div class="d-por"><b>Actualización con mini-batch SGD:</b> el gradiente es el de los datos más el de la penalización.</div></li>
+  <li><div class="d-ex">w ← w − ηλw − (η/&#124;B&#124;) Σ xᵢ(wᵀxᵢ + b − yᵢ)</div><div class="d-por"><b>Repartir η</b> entre los dos sumandos del corchete.</div></li>
+  <li><div class="d-ex">w ← (1 − ηλ) w − (η/&#124;B&#124;) Σ xᵢ(wᵀxᵢ + b − yᵢ)</div><div class="d-por"><b>Factorizar w</b> entre w − ηλw.</div></li>
+  <li><div class="d-ex">η = 0.2, λ = 0.5, w = 3, gradiente de datos = 0.6:&nbsp; (1 − 0.1)·3 − 0.2·0.6 = 2.7 − 0.12 = 2.58</div><div class="d-por"><b>Interpretación y verificación:</b> antes de aplicar el gradiente de datos, w se multiplica por (1 − ηλ) = 0.9 &lt; 1: los pesos se encogen («decaen») en cada paso. De ahí el nombre <b>weight decay</b>.</div></li>
+</ol>
+
+<h3 id="lab-decay" class="lab" data-toc="Lab: el factor 1 − ηλ">Mini-laboratorio: el decaimiento</h3>
+<p>Si el gradiente de datos fuera 0, cada paso multiplicaría w por (1 − ηλ), así que wₜ = w₀(1 − ηλ)ᵗ. Aquí w₀ = 2.</p>
+<div class="widget" id="labDec">
+  <div class="widget-head"><div class="wt">wₜ con solo la penalización</div><div class="ws">Mueve η y λ; solo importa su producto.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="decCanvas"></canvas>
+      <div><div id="decCtrl"></div><div id="decRead"></div><div class="status info" id="decStatus">—</div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con η = 0.1 y λ = 0.5: el factor es 0.95. w₁₀ = 1.197, w₂₀ = 0.717, w₅₀ = 0.154. Se reduce a la mitad en ≈ 14 pasos.</li>
+    <li>Con ηλ = 1 (por ejemplo η = 1, λ = 1): w se vuelve 0 en un solo paso.</li>
+    <li>Con 1 &lt; ηλ &lt; 2: w cambia de signo en cada paso, pero se encoge. Con ηλ &gt; 2 el factor pasa de 1 en valor absoluto y w <b>diverge</b>.</li>
+  </ol>
+</div>
+<p>Por qué ayuda este encogimiento a generalizar lo veremos en el <a href="05_regularizacion.html">artefacto 05</a>; la slide lo marca como «próximamente». Se vuelve importante con modelos de 10⁶, 10⁹ o 10¹² parámetros.</p>
+
+<!-- ============ 11. DE ML A DL ============ -->
+<h2 id="de-ml-a-dl"><span class="num">Sección 11</span>Qué permanece y qué cambia</h2>
+
+<p><b>Lo que no cambia:</b> x → f<sub>φ</sub>(x) → L(φ) → ∇<sub>φ</sub>L → actualización de parámetros. Todo lo de las secciones 2 a 10 (promedio de pérdidas, argmin, gradiente, mini-batches, épocas, verosimilitud, train/val/test, L₂) se aplica tal cual.</p>
+<p><b>Lo que cambia:</b> el modelo. En regresión lineal es f(x) = wᵀx + b. En deep learning es una composición de capas:</p>
+<div class="eq">
+  f<span class="sub r-param">φ</span>(x) = f<span class="sup">(K)</span>( f<span class="sup">(K−1)</span>( ⋯ f<span class="sup">(1)</span>(x) ) )
+  <span class="lbl">K capas, cada una es un «ladrillo» z = Ωh + β seguido de una activación</span>
+</div>
+<p>Ejemplo de composición con números: f⁽¹⁾(x) = 2x + 1 y f⁽²⁾(u) = max(0, u − 3). Con x = 2: f⁽¹⁾ = 5 y f⁽²⁾ = 2. Con x = 0: f⁽¹⁾ = 1 y f⁽²⁾ = 0. (La slide usa L para el número de capas; aquí lo escribimos K para no confundirlo con la pérdida L.)</p>
+<table class="tbl chica">
+  <tr><th>Permanece</th><th>Cambia</th></tr>
+  <tr><td>Datos 𝒟<sub>train</sub> y la pérdida L(φ)</td><td>f pasa a ser una composición de muchas capas</td></tr>
+  <tr><td>φ̂ = argmin L(φ) con gradiente</td><td>Millones o miles de millones de parámetros</td></tr>
+  <tr><td>Mini-batches, épocas, η</td><td>El gradiente se calcula con autodiferenciación (backprop)</td></tr>
+  <tr><td>Train/val/test, regularización L₂</td><td>La superficie de L deja de ser un cuenco: hay mínimos locales y puntos silla</td></tr>
+</table>
+<p>Para el código de PyTorch, consulta la <a href="guia_intro_pytorch.html">guía de introducción a PyTorch</a> (y el notebook <code>notebooks/Intro_Pytorch.ipynb</code>). Las redes superficiales y profundas empiezan en el <a href="02_redes_neuronales.html">artefacto 02</a>.</p>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 12</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. Las respuestas muestran el procedimiento, no solo el resultado.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · aritmética de épocas</span>
+  <div class="e-enun">Un conjunto tiene n = 2 400 observaciones. Entrenas con mini-batches de &#124;B&#124; = 32 durante k = 1 500 iteraciones. ¿Cuántas iteraciones tiene una época y cuántas épocas completaste?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Una época es una pasada por los n datos; cada iteración consume &#124;B&#124; de ellos.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p>Pasos por época = n/&#124;B&#124; = 2 400/32 = 75. Épocas = 1 500/75 = 20. Comprobación: 1 500·32 = 48 000 observaciones procesadas, y 48 000/2 400 = 20.</p></div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · aritmética de épocas con residuo</span>
+  <div class="e-enun">Con n = 1 000 y &#124;B&#124; = 64, ¿cuántas iteraciones corresponden a 5 épocas? Explica la convención que usas.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>1 000/64 no es entero. ¿Qué pasa con las observaciones que sobran?</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>1 000/64 = 15.625: hay 15 batches de 64 (960 observaciones) y uno final de 40. Si el último batch incompleto cuenta como una iteración, una época son ⌈15.625⌉ = 16 iteraciones, y 5 épocas son 5·16 = <b>80 iteraciones</b>.</p>
+    <p>Si el último batch incompleto se descarta (drop_last), una época son 15 iteraciones, 5 épocas son 75, y en cada época se ignoran 40 observaciones. La fórmula k·&#124;B&#124;/n da 80·64/1 000 = 5.12, un poco alta porque supone batches completos. Lo importante es declarar la convención.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §1 · gradiente y un paso de GD</span>
+  <div class="e-enun">Con los puntos (x, y) = (0, 1), (1, 2), (2, 2), el modelo ŷ = φ₀ + φ₁x y L = (1/n) Σ (φ₀ + φ₁xᵢ − yᵢ)²: (a) deriva ∂L/∂φ₀ y ∂L/∂φ₁ en general; (b) evalúa el gradiente en φ = (0, 0); (c) da un paso de gradient descent con η = 0.1 y compara L antes y después.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Define eᵢ = φ₀ + φ₁xᵢ − yᵢ. La regla de la cadena baja un 2 y ∂eᵢ/∂φ₀ = 1, ∂eᵢ/∂φ₁ = xᵢ.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) ∂L/∂φ₀ = (2/n) Σ eᵢ y ∂L/∂φ₁ = (2/n) Σ eᵢxᵢ.</p>
+    <p>(b) En (0, 0): e = (−1, −2, −2). ∂L/∂φ₀ = (2/3)(−5) = −10/3 ≈ −3.333. ∂L/∂φ₁ = (2/3)(−1·0 − 2·1 − 2·2) = (2/3)(−6) = −4.</p>
+    <p>(c) φ₀ ← 0 − 0.1·(−3.333) = 0.333; φ₁ ← 0 − 0.1·(−4) = 0.4. L antes = (1 + 4 + 4)/3 = 3. Después, con predicciones 0.333, 0.733 y 1.133, los errores son −0.667, −1.267 y −0.867, y L = (0.444 + 1.604 + 0.751)/3 = 0.933. La pérdida bajó. (La solución exacta de mínimos cuadrados es (1.167, 0.5).)</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §1 · por qué no la solución cerrada ni la búsqueda exhaustiva</span>
+  <div class="e-enun">Da dos razones por las que en deep learning no resolvemos el entrenamiento con una fórmula cerrada ni probando todos los parámetros posibles.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Fórmula cerrada:</b> la de la regresión lineal, (XᵀX)⁻¹Xᵀy, existe porque el modelo es lineal en los parámetros y ∇L = 0 es un sistema de ecuaciones lineales. Una red es una composición de funciones no lineales; ∇L = 0 no se puede despejar, y las matrices del tamaño de los parámetros no cabrían en memoria.</p>
+    <p><b>Búsqueda exhaustiva:</b> con d parámetros y k valores cada uno hay kᵈ combinaciones (10¹ ⁰⁰⁰ con d = 1 000 y k = 10), y los parámetros son continuos. El gradiente sustituye la búsqueda a ciegas por una dirección de mejora local.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §1 · pérdida cuadrática desde máxima verosimilitud</span>
+  <div class="e-enun">Con yᵢ = wᵀxᵢ + b + εᵢ y εᵢ ~ N(0, σ²) i.i.d., la log-verosimilitud negativa es (n/2) log(2πσ²) + (1/(2σ²)) Σ(yᵢ − wᵀxᵢ − b)². (a) ¿Qué término desaparece al minimizar sobre (w, b) y por qué? (b) ¿Qué pasaría si σ dependiera de x?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) Desaparece (n/2) log(2πσ²): no contiene w ni b, así que es una constante respecto a lo que se minimiza, y sumar una constante no mueve el argmin. El factor 1/(2σ²) es una constante positiva y tampoco mueve el argmin. Queda argmin Σ(yᵢ − wᵀxᵢ − b)², la pérdida cuadrática.</p>
+    <p>(b) El primer término pasa a ser Σ ½ log(2πσ²(xᵢ)), que depende de los parámetros que determinan σ(x) y ya no desaparece; además cada residuo se pondera por 1/(2σ²(xᵢ)). Es regresión heteroscedástica, y exige σ² &gt; 0 (por ejemplo, predecir σ² con una exponencial).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §1 · subajuste y sobreajuste</span>
+  <div class="e-enun">Tres modelos para la misma tarea; predecir siempre la media daría un error de 0.90. Modelo A: R<sub>train</sub> = 0.80, R<sub>val</sub> = 0.83. Modelo B: R<sub>train</sub> = 0.02, R<sub>val</sub> = 0.55. Modelo C: R<sub>train</sub> = 0.15, R<sub>val</sub> = 0.18. Clasifica cada uno y dime qué harías.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>A: subajuste.</b> Ambos errores son altos, casi como no aprender nada (0.90), con brecha de 0.03. Haría el modelo más flexible o entrenaría más.</p>
+    <p><b>B: sobreajuste.</b> R<sub>train</sub> casi 0 pero R<sub>val</sub> = 0.55; la brecha es 0.53. Más datos, regularización (L₂) o un modelo más simple.</p>
+    <p><b>C: razonable.</b> Ambos errores son bajos y la brecha es de 0.03. Es el que conservaría.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §1 · para qué sirve cada conjunto</span>
+  <div class="e-enun">Un equipo dice: «elegimos la tasa de aprendizaje viendo el accuracy en el test, y reportamos ese mismo accuracy». ¿Qué está mal y cómo lo corrigen?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>La tasa de aprendizaje es un hiperparámetro: se elige con el conjunto de validación. Al elegir con el test, el valor reportado es el máximo de varias mediciones ruidosas, así que está inflado (en el laboratorio, 30 modelos iguales de 70 % reportaban ≈ 76 %). El test deja de ser una estimación honesta del riesgo de población.</p>
+    <p>Corrección: elegir η con validación, congelar todas las decisiones y evaluar en el test <b>una sola vez</b>. Si ya vieron el test, necesitan datos nuevos para estimar el desempeño.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · weight decay</span>
+  <div class="e-enun">Un paso de SGD con regularización L₂: η = 0.1, λ = 0.5, w = 2, y el gradiente de la pérdida de datos respecto a w vale 0.4. Calcula el nuevo w de dos maneras y explica el nombre «weight decay».</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Forma 1 (gradiente total): el gradiente es 0.4 + λw = 0.4 + 0.5·2 = 1.4, y w ← 2 − 0.1·1.4 = 1.86.</p>
+    <p>Forma 2 (weight decay): w ← (1 − ηλ)w − η·0.4 = (1 − 0.05)·2 − 0.04 = 1.90 − 0.04 = 1.86. Ambas coinciden.</p>
+    <p>Se llama weight decay porque, antes de aplicar el gradiente de datos, el peso se multiplica por (1 − ηλ) = 0.95 &lt; 1: «decae» un poco en cada paso.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §1 · escala de la pérdida</span>
+  <div class="e-enun">Con los datos del ejercicio 3, cambias la pérdida de 1/n a 1/(2n). ¿Qué pasa con (a) el gradiente en (0, 0), (b) el φ̂ final y (c) la tasa de aprendizaje máxima estable?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) El gradiente se divide entre 2: de (−3.333, −4) a (−1.667, −2). (b) φ̂ no cambia: multiplicar L por una constante positiva no cambia el argmin. (c) La curvatura también se divide entre 2, así que el η máximo estable (2/λmáx) se duplica. Con los mismos η, el entrenamiento avanza la mitad por paso.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 13</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">aprendizaje supervisado</div><div class="def">Aprender una función a partir de pares (entrada, respuesta) etiquetados.</div></div>
+  <div class="item"><div class="term">aprendizaje no supervisado</div><div class="def">Aprender la estructura de los datos sin etiquetas: agrupar, detectar atípicos, generar ejemplos.</div></div>
+  <div class="item"><div class="term">pérdida (loss)</div><div class="def">Número no negativo que mide qué tan mal predice el modelo; ℓ para una observación y L para el conjunto.</div></div>
+  <div class="item"><div class="term">riesgo empírico</div><div class="def">Pérdida promedio sobre los datos de entrenamiento. Se puede calcular, pero es optimista.</div></div>
+  <div class="item"><div class="term">riesgo de población</div><div class="def">Error promedio sobre todos los datos posibles, pesado por su frecuencia. No se puede calcular exactamente.</div></div>
+  <div class="item"><div class="term">gradient descent</div><div class="def">Algoritmo que actualiza φ ← φ − η∇L con el gradiente calculado con todos los datos.</div></div>
+  <div class="item"><div class="term">SGD (stochastic gradient descent)</div><div class="def">Gradient descent con el gradiente de una sola observación (o, en general, de un subconjunto).</div></div>
+  <div class="item"><div class="term">mini-batch</div><div class="def">Subconjunto de observaciones usado para estimar el gradiente en una iteración.</div></div>
+  <div class="item"><div class="term">época (epoch)</div><div class="def">Una pasada completa por los n datos de entrenamiento: n/&#124;B&#124; iteraciones.</div></div>
+  <div class="item"><div class="term">tasa de aprendizaje (learning rate)</div><div class="def">η (o α): tamaño del paso en cada actualización. Un hiperparámetro.</div></div>
+  <div class="item"><div class="term">máxima verosimilitud</div><div class="def">Escoger los parámetros que hacen lo más probable posible los datos observados.</div></div>
+  <div class="item"><div class="term">negative log-likelihood</div><div class="def">Menos el logaritmo de la verosimilitud; minimizarla equivale a maximizar la verosimilitud.</div></div>
+  <div class="item"><div class="term">sobreajuste (overfitting)</div><div class="def">Error de entrenamiento muy bajo pero error en datos nuevos mucho mayor.</div></div>
+  <div class="item"><div class="term">subajuste (underfitting)</div><div class="def">El modelo no captura la estructura útil: error alto en entrenamiento y en prueba.</div></div>
+  <div class="item"><div class="term">brecha de generalización</div><div class="def">Diferencia R<sub>test</sub> − R<sub>train</sub>.</div></div>
+  <div class="item"><div class="term">conjunto de validación</div><div class="def">Datos con los que se eligen hiperparámetros y modelo.</div></div>
+  <div class="item"><div class="term">conjunto de test</div><div class="def">Datos reservados para la evaluación final, que no participan en ninguna decisión.</div></div>
+  <div class="item"><div class="term">weight decay</div><div class="def">Efecto de la regularización L₂ en la actualización: w se multiplica por (1 − ηλ) en cada paso.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>.</p>
+
+<nav class="serie" data-actual="01"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Intro.Rmd</code> y <code>slides/Repaso.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  function f2(v){ return DL.fmt(v, 2); }
+
+  /* ---------- datos de la slide (panel azul) ---------- */
+  var XS = [], YS = [0.50,0.85,1.00,1.20,1.35,1.55,1.65,1.75,1.90,2.05,2.20];
+  for(var q=0;q<11;q++) XS.push(Math.round(q*2)/10);
+  var N = XS.length;
+  function sse(p0, p1){ var s = 0; for(var i=0;i<N;i++){ var e = p0 + p1*XS[i] - YS[i]; s += e*e; } return s; }
+  function perdida(p0, p1, c){ return sse(p0, p1)/(c*N); }
+  function grad(p0, p1, c){ var a = 0, b = 0; for(var i=0;i<N;i++){ var e = p0 + p1*XS[i] - YS[i]; a += e; b += e*XS[i]; } return [2*a/(c*N), 2*b/(c*N)]; }
+  var sx = 0, sxx = 0, sy = 0, sxy = 0;
+  for(var u=0;u<N;u++){ sx += XS[u]; sxx += XS[u]*XS[u]; sy += YS[u]; sxy += XS[u]*YS[u]; }
+  var BP1 = (N*sxy - sx*sy)/(N*sxx - sx*sx), BP0 = (sy - BP1*sx)/N;   /* mínimos cuadrados */
+  var LMIN2 = perdida(BP0, BP1, 2);
+
+  /* ================= LAB 1: ajusta la recta ================= */
+  (function(){
+    var p = {a:1.0, b:0.0};
+    var g = DL.grafica($("rectaCanvas"), {x:[0,2.8], y:[0,2.8], alto:340, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      var k = (g.sy(0) - g.sy(1))/(g.sx(1) - g.sx(0));
+      for(var i=0;i<N;i++){
+        var yh = p.a + p.b*XS[i], lado = Math.abs(yh - YS[i]);
+        g.rect(XS[i], Math.min(yh, YS[i]), lado*k, lado, {color:"g1", relleno:true, alfa:0.22, ancho:1});
+      }
+      g.polilinea([[0, p.a], [2.8, p.a + p.b*2.8]], {color:"accent", ancho:2.5});
+      for(var j=0;j<N;j++) g.linea(XS[j], p.a + p.b*XS[j], XS[j], YS[j], {color:"g1", ancho:1.5, guiones:true});
+      g.puntos(XS.map(function(x,i){ return [x, YS[i]]; }), {color:"r-dato", radio:4.5});
+    });
+    var c0, c1;
+    function act(){
+      var s = sse(p.a, p.b), L = s/(2*N);
+      DL.readout($("rectaRead"), [["φ₀", f2(p.a)], ["φ₁", f2(p.b)], ["Σ eᵢ²", DL.fmt(s, 3)], ["L = Σ eᵢ² / 2n", DL.fmt(L, 4)], ["mejor L posible", DL.fmt(LMIN2, 5)]]);
+      var st = $("rectaStatus");
+      if(L < 2*LMIN2){ st.className = "status ok"; st.textContent = "Casi no queda nada por mejorar."; }
+      else { st.className = "status info"; st.textContent = "Todavía hay cuadrados grandes: ajusta φ₀ y φ₁."; }
+      g.redibujar();
+    }
+    c0 = DL.control($("rectaCtrl"), {etiqueta:"φ₀ (ordenada)", min:-0.5, max:2.5, paso:0.01, valor:p.a, alCambiar:function(v){ p.a = v; act(); }});
+    c1 = DL.control($("rectaCtrl"), {etiqueta:"φ₁ (pendiente)", min:-1, max:2, paso:0.01, valor:p.b, alCambiar:function(v){ p.b = v; act(); }});
+    function poner(a, b){ p.a = a; p.b = b; c0.fijar(a, true); c1.fijar(b, true); act(); }
+    $("rectaMejor").onclick = function(){ poner(BP0, BP1); };
+    $("rectaSlide").onclick = function(){ poner(0.84, 0.5); };
+    $("rectaInicio").onclick = function(){ poner(1.0, 0.0); };
+    act();
+  })();
+
+  /* ================= LAB 2: gradient descent ================= */
+  (function(){
+    var conv = 2, eta = 0.30, ini = [0, 1.8], ph = ini.slice(), camino = [ph.slice()], diverge = false, hecho = false;
+    function lamMax(){ /* Hessiana = (2/(c·n)) AᵀA = (2/c)·[[1, x̄],[x̄, mean x²]] */
+      var m = sx/N, q = sxx/N, k = 2/conv, tr = 1 + q, det = q - m*m;
+      return k*(tr/2 + Math.sqrt(tr*tr/4 - det));
+    }
+    var gs = DL.grafica($("gdSup"), {x:[-1,2], y:[-0.5,2.2], alto:340, etiquetaX:"φ₀", etiquetaY:"φ₁"}, function(g){
+      var f = function(a, b){ return perdida(a, b, conv); };
+      g.mapaCalor(f, {res:4, log:true, clave:"gd"+conv});
+      var niv = [0.005, 0.02, 0.05, 0.1, 0.25, 0.5, 1, 2].map(function(v){ return v*(conv === 2 ? 1 : 2); });
+      g.contornos(f, niv, {color:"text-2", ancho:1, clave:"gd"+conv});
+      g.polilinea(camino, {color:"accent", ancho:2});
+      g.puntos(camino, {color:"accent", radio:2.5});
+      g.puntos([ini], {color:"r-param", radio:6, aro:true});
+      g.puntos([ph], {color:"r-calc", radio:5, aro:true});
+      g.puntos([[BP0, BP1]], {color:"ok", radio:6, hueco:true});
+    });
+    var gm = DL.grafica($("gdMini"), {x:[0,2], y:[0,2.6], alto:200, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.linea(0, BP0, 2, BP0 + BP1*2, {color:"text-3", guiones:true, ancho:1.5});
+      g.linea(0, ph[0], 2, ph[0] + ph[1]*2, {color:"accent", ancho:2.5});
+      g.puntos(XS.map(function(x,i){ return [x, YS[i]]; }), {color:"r-dato", radio:3.5});
+    });
+    var ctrl = DL.control($("gdCtrl"), {etiqueta:"tasa de aprendizaje η", min:0.01, max:1.0, paso:0.01, valor:eta, alCambiar:function(v){ eta = v; reinicio(false); }});
+    DL.selector($("gdSel"), {opciones:[{v:2, t:"1/(2n) (la slide)"}, {v:1, t:"1/n (la derivación)"}], valor:conv, alCambiar:function(v){ conv = v; reinicio(false); }});
+    function act(){
+      var G = grad(ph[0], ph[1], conv), nG = Math.sqrt(G[0]*G[0] + G[1]*G[1]), lm = lamMax(), umbral = 2/lm;
+      DL.readout($("gdRead"), [["φ₀, φ₁", f2(ph[0]) + ", " + f2(ph[1])], ["L(φ)", DL.fmt(perdida(ph[0], ph[1], conv), 4)], ["‖∇L‖", DL.fmt(nG, 4)], ["η* = 2/λmáx", DL.fmt(umbral, 3)]]);
+      $("gdPill").textContent = "paso " + (camino.length - 1);
+      var st = $("gdStatus");
+      if(diverge){ st.className = "status bad"; st.textContent = "Diverge: η = " + f2(eta) + " supera el umbral " + DL.fmt(umbral, 3) + "; cada paso se aleja más."; }
+      else if(eta > umbral){ st.className = "status bad"; st.textContent = "η supera el umbral " + DL.fmt(umbral, 3) + ": dará pasos y empeorará."; }
+      else if(eta > 1/lm){ st.className = "status info"; st.textContent = "Zigzag: η pasa de 1/λmáx = " + DL.fmt(1/lm, 3) + ", cada paso cruza el valle, pero converge."; }
+      else { st.className = "status ok"; st.textContent = hecho ? "Convergió (gradiente casi 0)." : "Descenso suave."; }
+      gs.redibujar(); gm.redibujar();
+    }
+    function reinicio(){ bucle.parar(); ph = ini.slice(); camino = [ph.slice()]; diverge = false; hecho = false; act(); }
+    function paso(){
+      if(diverge || hecho) return false;
+      var G = grad(ph[0], ph[1], conv);
+      ph = [ph[0] - eta*G[0], ph[1] - eta*G[1]]; camino.push(ph.slice());
+      if(Math.abs(ph[0]) > 50 || Math.abs(ph[1]) > 50) diverge = true;
+      var G2 = grad(ph[0], ph[1], conv);
+      if(Math.sqrt(G2[0]*G2[0] + G2[1]*G2[1]) < 1e-4) hecho = true;
+      act();
+      return !(diverge || hecho || camino.length > 600);
+    }
+    var bucle = DL.bucle(paso, 70);
+    $("gdPaso").onclick = function(){ bucle.parar(); paso(); };
+    $("gdCorrer").onclick = function(){ bucle.corriendo() ? bucle.parar() : bucle.iniciar(); };
+    $("gdReset").onclick = function(){ reinicio(); };
+    gs.alPuntero(function(e){
+      if(e.tipo === "down" || (e.tipo === "move" && e.abajo)){ ini = [e.x, e.y]; reinicio(); }
+    });
+    act();
+  })();
+
+  /* ================= LAB 3: calculadora de épocas ================= */
+  (function(){
+    var s = {n:26, b:8, k:7};
+    function act(){
+      var pasos = Math.ceil(s.n/s.b), resto = s.n % s.b, ultimo = resto === 0 ? s.b : resto;
+      var epComp = Math.floor(s.k/pasos), enEp = s.k - epComp*pasos;       /* iteraciones dentro de la época actual */
+      var vistas = epComp*s.n + Math.min(enEp*s.b, s.n);
+      if(enEp === pasos) vistas = (epComp+1)*s.n;
+      var actual = enEp === 0 ? -1 : enEp - 1;                            /* grupo de la última iteración */
+      if(enEp === 0 && s.k > 0) actual = pasos - 1;
+      var html = "";
+      for(var b=0;b<pasos;b++){
+        var ini = b*s.b, fin = Math.min(s.n, ini + s.b), cel = "";
+        for(var i=ini;i<fin;i++) cel += "<i>" + (i+1) + "</i>";
+        html += '<span class="bgrp b' + (b%6) + (fin - ini < s.b ? " corto" : "") + (b === actual ? " act" : "") + '">' + cel + "</span>";
+      }
+      $("epGrid").innerHTML = html;
+      DL.readout($("epRead"), [["pasos por época n/|B|", DL.fmt(s.n/s.b, 3)], ["iteraciones por época ⌈n/|B|⌉", pasos], ["tamaño del último batch", ultimo],
+        ["épocas aprox. k·|B|/n", DL.fmt(s.k*s.b/s.n, 3)], ["épocas exactas (datos vistos / n)", DL.fmt(vistas/s.n, 3)], ["observaciones procesadas", vistas]]);
+      var st = $("epStatus");
+      st.className = "status " + (resto === 0 ? "ok" : "info");
+      st.textContent = resto === 0 ? "n es múltiplo de |B|: la fórmula k·|B|/n es exacta." : "Hay residuo: el último batch tiene " + ultimo + " observaciones; k·|B|/n sobreestima.";
+    }
+    var cont = $("epCtrl"), ent = function(v){ return String(Math.round(v)); };
+    DL.control(cont, {etiqueta:"n (observaciones)", min:8, max:120, paso:1, valor:s.n, formato:ent, alCambiar:function(v){ s.n = Math.round(v); if(s.b > s.n) s.b = s.n; act(); }});
+    DL.control(cont, {etiqueta:"|B| (tamaño del batch)", min:1, max:60, paso:1, valor:s.b, formato:ent, alCambiar:function(v){ s.b = Math.min(Math.round(v), s.n); act(); }});
+    DL.control(cont, {etiqueta:"k (iteraciones)", min:1, max:120, paso:1, valor:s.k, formato:ent, alCambiar:function(v){ s.k = Math.round(v); act(); }});
+    act();
+  })();
+
+  /* ================= LAB 4: k a la d ================= */
+  (function(){
+    var s = {d:80, k:10};
+    function act(){
+      var e = s.d*Math.log10(s.k), E = Math.floor(e), m = Math.pow(10, e - E);
+      $("kdGran").innerHTML = s.k + "<sup>" + s.d + "</sup> ≈ " + m.toFixed(2) + " × 10<sup>" + E + "</sup>";
+      DL.readout($("kdRead"), [["log₁₀(kᵈ) = d·log₁₀ k", DL.fmt(e, 2)], ["átomos del universo observable", "~10⁸⁰"], ["d mínimo para superarlos", Math.floor(80/Math.log10(s.k)) + 1]]);
+      var st = $("kdStatus");
+      if(e > 80){ st.className = "status bad"; st.textContent = "Más combinaciones que átomos en el universo observable (por un factor de 10^" + DL.fmt(e - 80, 1) + ")."; }
+      else { st.className = "status ok"; st.textContent = "Todavía por debajo de 10⁸⁰ (faltan 10^" + DL.fmt(80 - e, 1) + ")."; }
+    }
+    var ent = function(v){ return String(Math.round(v)); };
+    DL.control($("kdCtrl"), {etiqueta:"d (número de parámetros)", min:1, max:1000, paso:1, valor:s.d, formato:ent, alCambiar:function(v){ s.d = Math.round(v); act(); }});
+    DL.control($("kdCtrl"), {etiqueta:"k (valores posibles por parámetro)", min:2, max:100, paso:1, valor:s.k, formato:ent, alCambiar:function(v){ s.k = Math.round(v); act(); }});
+    act();
+  })();
+
+  /* ================= LAB 5: campanas sobre la recta ================= */
+  (function(){
+    var p = {a:0.84, b:0.5, s:0.3};
+    var ESC = 0.04;
+    function nll(a, b, s){ return N/2*Math.log(2*Math.PI*s*s) + sse(a, b)/(2*s*s); }
+    function pdf(y, m, s){ return Math.exp(-(y-m)*(y-m)/(2*s*s))/Math.sqrt(2*Math.PI*s*s); }
+    var r = DL.rng(5), AL = [];
+    for(var i=0;i<150;i++) AL.push([0.1 + 1.3*r.u(), 0.1 + 1.2*r.u()]);
+    var g = DL.grafica($("campCanvas"), {x:[0,2.6], y:[0,2.8], alto:320, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.polilinea([[0, p.a], [2.6, p.a + p.b*2.6]], {color:"accent", ancho:2.5});
+      for(var i=0;i<N;i++){
+        var m = p.a + p.b*XS[i], pts = [];
+        for(var j=0;j<=60;j++){ var y = m - 3.5*p.s + 7*p.s*j/60; pts.push([XS[i] + ESC*pdf(y, m, p.s), y]); }
+        g.polilinea(pts, {color:"r-calc", ancho:1.5});
+        g.linea(XS[i], YS[i], XS[i] + ESC*pdf(YS[i], m, p.s), YS[i], {color:"r-calc", ancho:1, guiones:true});
+      }
+      g.puntos(XS.map(function(x,i){ return [x, YS[i]]; }), {color:"r-dato", radio:4.5});
+    });
+    var gd = DL.grafica($("campDisp"), {x:[0,10], y:[0,10], alto:200, etiquetaX:"S", etiquetaY:"−log p"}, function(g){
+      var gd_ = g;
+      var xs = AL.map(function(q){ return sse(q[0], q[1]); }), ys = AL.map(function(q){ return nll(q[0], q[1], p.s); });
+      var xm = 12, y0 = nll(BP0, BP1, p.s), y1 = y0 + xm/(2*p.s*p.s);
+      g.o.x = [0, xm]; g.o.y = [y0 - 0.05*(y1-y0), y1];
+      var pts = xs.map(function(v, i){ return [v, ys[i]]; }).filter(function(q){ return q[0] <= xm; });
+      g.puntos(pts, {color:"g2", radio:2, alfa:0.7});
+      g.puntos([[sse(p.a, p.b), nll(p.a, p.b, p.s)]], {color:"accent", radio:6, aro:true});
+    });
+    function act(){
+      DL.readout($("campRead"), [["S = Σ eᵢ²", DL.fmt(sse(p.a, p.b), 3)], ["−log p(y|X,w,b)", DL.fmt(nll(p.a, p.b, p.s), 3)], ["mejor −log p con este σ", DL.fmt(nll(BP0, BP1, p.s), 3)]]);
+      var st = $("campStatus");
+      st.className = "status info"; st.textContent = "σ = " + f2(p.s) + ": la pendiente de la nube de puntos es 1/(2σ²) = " + DL.fmt(1/(2*p.s*p.s), 2) + ".";
+      g.redibujar(); gd.o.x = [0, 12]; gd.redibujar();
+    }
+    var c0 = DL.control($("campCtrl"), {etiqueta:"φ₀", min:-0.5, max:2.5, paso:0.01, valor:p.a, alCambiar:function(v){ p.a = v; act(); }});
+    var c1 = DL.control($("campCtrl"), {etiqueta:"φ₁", min:-1, max:2, paso:0.01, valor:p.b, alCambiar:function(v){ p.b = v; act(); }});
+    var c2 = DL.control($("campCtrl"), {etiqueta:"σ (desviación del ruido)", min:0.1, max:0.8, paso:0.01, valor:p.s, alCambiar:function(v){ p.s = v; act(); }});
+    function poner(a, b){ p.a = a; p.b = b; c0.fijar(a, true); c1.fijar(b, true); act(); }
+    /* búsqueda numérica de la mejor recta para el σ actual: rejillas cada vez más finas */
+    $("campMV").onclick = function(){
+      var ca = p.a, cb = p.b, ra = 1.5, rb = 1.5;
+      for(var ronda=0; ronda<7; ronda++){
+        var ba = ca, bb = cb, bv = Infinity;
+        for(var i=-10;i<=10;i++) for(var j=-10;j<=10;j++){
+          var a = ca + ra*i/10, b = cb + rb*j/10, v = nll(a, b, p.s);
+          if(v < bv){ bv = v; ba = a; bb = b; }
+        }
+        ca = ba; cb = bb; ra /= 4; rb /= 4;
+      }
+      poner(ca, cb);
+    };
+    $("campSlide").onclick = function(){ poner(0.84, 0.5); };
+    $("campReset").onclick = function(){ poner(0.84, 0.5); p.s = 0.3; c2.fijar(0.3, true); act(); };
+    act();
+  })();
+
+  /* ================= LAB 6: grado del polinomio ================= */
+  (function(){
+    function resolver(A, b){
+      var n = b.length; A = A.map(function(r, i){ return r.concat([b[i]]); });
+      for(var c=0;c<n;c++){
+        var p = c; for(var r=c+1;r<n;r++) if(Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+        var t = A[c]; A[c] = A[p]; A[p] = t;
+        for(var r2=c+1;r2<n;r2++){ var f = A[r2][c]/A[c][c]; for(var k=c;k<=n;k++) A[r2][k] -= f*A[c][k]; }
+      }
+      var x = new Array(n).fill(0);
+      for(var i=n-1;i>=0;i--){ var s = A[i][n]; for(var j=i+1;j<n;j++) s -= A[i][j]*x[j]; x[i] = s/A[i][i]; }
+      return x;
+    }
+    function cheb(x, m){ var t = [1, x]; for(var k=2;k<=m;k++) t.push(2*x*t[k-1] - t[k-2]); return t.slice(0, m+1); }
+    function ajustar(X, Y, g){
+      var m = g+1, A = [], b = [];
+      for(var a=0;a<m;a++){ A.push(new Array(m).fill(0)); b.push(0); }
+      X.forEach(function(x, i){ var t = cheb(x, g); for(var a=0;a<m;a++){ b[a] += t[a]*Y[i]; for(var c=0;c<m;c++) A[a][c] += t[a]*t[c]; } });
+      return resolver(A, b);
+    }
+    function evaluar(c, x){ var t = cheb(x, c.length-1), s = 0; for(var i=0;i<t.length;i++) s += t[i]*c[i]; return s; }
+    var r = DL.rng(21), X = [], Y = [], Xt = [], Yt = [], SD = 0.3;
+    for(var i=0;i<12;i++){ var x = -1 + 2*(i + r.u())/12; X.push(x); Y.push(Math.sin(Math.PI*x) + r.normal(0, SD)); }
+    for(var j=0;j<200;j++){ var xt = -1 + 2*r.u(); Xt.push(xt); Yt.push(Math.sin(Math.PI*xt) + r.normal(0, SD)); }
+    function mse(c, XX, YY){ var s = 0; XX.forEach(function(x, i){ var e = evaluar(c, x) - YY[i]; s += e*e; }); return s/XX.length; }
+    var coef = [], etr = [], ete = [];
+    for(var gr=0; gr<=11; gr++){ var c = ajustar(X, Y, gr); coef.push(c); etr.push(Math.max(mse(c, X, Y), 1e-12)); ete.push(mse(c, Xt, Yt)); }
+    var grado = 3;
+    var ga = DL.grafica($("polAjuste"), {x:[-1,1], y:[-2,2], alto:300, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.funcion(function(x){ return Math.sin(Math.PI*x); }, {color:"text-3", guiones:true, ancho:1.5});
+      g.puntos(Xt.slice(0, 40).map(function(x, i){ return [x, Yt[i]]; }), {color:"text-3", radio:2.5, hueco:true});
+      g.funcion(function(x){ return evaluar(coef[grado], x); }, {color:"accent", ancho:2.5});
+      g.puntos(X.map(function(x, i){ return [x, Y[i]]; }), {color:"r-dato", radio:4.5});
+    });
+    var lo = -3, hi = 3;
+    var ge = DL.grafica($("polError"), {x:[0,11], y:[lo,hi], alto:300, etiquetaX:"grado",
+      opcionesEjes:{ticksX:[0,1,2,3,4,5,6,7,8,9,10,11], ticksY:[-3,-2,-1,0,1,2,3], fmtY:function(v){ return DL.fmt(Math.pow(10, v), Math.max(0, -v)); }}}, function(g){
+      var L = function(v){ return Math.max(lo, Math.min(hi, Math.log10(v))); };
+      g.polilinea(etr.map(function(v, i){ return [i, L(v)]; }), {color:"g2", ancho:2});
+      g.puntos(etr.map(function(v, i){ return [i, L(v)]; }), {color:"g2", radio:3.5});
+      g.polilinea(ete.map(function(v, i){ return [i, L(v)]; }), {color:"g1", ancho:2});
+      g.puntos(ete.map(function(v, i){ return [i, L(v)]; }), {color:"g1", radio:3.5});
+      g.vertical(grado, {color:"text-3", guiones:true, ancho:1.5});
+      g.texto(0.3, 2.65, "azul = entrenamiento", {color:"g2", tam:12});
+      g.texto(0.3, 2.25, "naranja = prueba", {color:"g1", tam:12});
+    });
+    function act(){
+      DL.readout($("polRead"), [["grado", grado], ["R_train", DL.fmt(etr[grado], 4)], ["R_test", DL.fmt(ete[grado], 4)], ["brecha R_test − R_train", DL.fmt(ete[grado] - etr[grado], 4)], ["ruido irreducible σ²", "0.09"]]);
+      ga.redibujar(); ge.redibujar();
+    }
+    DL.control($("polCtrl"), {etiqueta:"grado del polinomio", min:0, max:11, paso:1, valor:grado, formato:function(v){ return String(Math.round(v)); }, alCambiar:function(v){ grado = Math.round(v); act(); }});
+    act();
+  })();
+
+  /* ================= LAB 7: elegir con el test ================= */
+  (function(){
+    var SEMILLA = 11, semilla = SEMILLA, NM = 30, NT = 200, P = 0.7;
+    function binom(r){ var k = 0; for(var i=0;i<NT;i++) if(r.u() < P) k++; return k; }
+    function sim(sem){
+      var r = DL.rng(sem), t = [], best = -1, bi = -1;
+      for(var m=0;m<NM;m++){ var k = binom(r); t.push(k/NT); if(k > best){ best = k; bi = m; } }
+      return {t:t, best:best/NT, bi:bi, nuevo:binom(r)/NT};
+    }
+    var cur = sim(semilla);
+    var g = DL.grafica($("testCanvas"), {x:[0,31], y:[0.62,0.8], alto:300, etiquetaX:"modelo", etiquetaY:"accuracy", opcionesEjes:{decY:2}}, function(g){
+      g.horizontal(0.7, {color:"text-3", guiones:true, ancho:1.5});
+      g.puntos(cur.t.map(function(v, i){ return [i+1, v]; }), {color:"g2", radio:4});
+      g.puntos([[cur.bi+1, cur.t[cur.bi]]], {color:"accent", radio:6});
+      g.puntos([[cur.bi+1, cur.nuevo]], {color:"r-param", radio:6, hueco:true});
+    });
+    function act(msg){
+      DL.readout($("testRead"), [["simulación (semilla)", semilla], ["modelo ganador en este test", cur.bi + 1], ["accuracy medida (ganador)", DL.fmt(cur.best*100, 1) + " %"], ["en un test nuevo", DL.fmt(cur.nuevo*100, 1) + " %"], ["accuracy real de todos", "70.0 %"]]);
+      var st = $("testStatus"); st.className = "status info";
+      st.textContent = msg || "Escoger con el test infló la cifra en " + DL.fmt((cur.best - cur.nuevo)*100, 1) + " puntos respecto a un test nuevo.";
+      g.redibujar();
+    }
+    $("testNueva").onclick = function(){ semilla++; cur = sim(semilla); act(); };
+    $("testReset").onclick = function(){ semilla = SEMILLA; cur = sim(semilla); act(); };
+    $("testCien").onclick = function(){
+      var a = 0, b = 0;
+      for(var s=1;s<=100;s++){ var o = sim(s); a += o.best; b += o.nuevo; }
+      act("100 simulaciones (semillas 1 a 100): el ganador marca en promedio " + DL.fmt(a, 1) + " %, y en un test nuevo " + DL.fmt(b, 1) + " %.");
+    };
+    act();
+  })();
+
+  /* ================= LAB 8: weight decay ================= */
+  (function(){
+    var s = {eta:0.1, lam:0.5}, W0 = 2, T = 40;
+    var g = DL.grafica($("decCanvas"), {x:[0,T], y:[-3,3], alto:280, etiquetaX:"t", etiquetaY:"wₜ"}, function(g){
+      var f = 1 - s.eta*s.lam, pts = [];
+      for(var t=0;t<=T;t++) pts.push([t, W0*Math.pow(f, t)]);
+      g.horizontal(0, {color:"text-3", ancho:1});
+      g.polilinea(pts, {color:"accent", ancho:2});
+      g.puntos(pts, {color:"accent", radio:3});
+    });
+    function act(){
+      var f = 1 - s.eta*s.lam, prod = s.eta*s.lam;
+      var mitad = (Math.abs(f) > 0 && Math.abs(f) < 1) ? Math.log(0.5)/Math.log(Math.abs(f)) : NaN;
+      DL.readout($("decRead"), [["η·λ", DL.fmt(prod, 3)], ["factor 1 − ηλ", DL.fmt(f, 3)], ["w₁₀", DL.fmt(W0*Math.pow(f, 10), 3)], ["w₂₀", DL.fmt(W0*Math.pow(f, 20), 3)],
+        ["w₅₀", DL.fmt(W0*Math.pow(f, 50), 3)], ["pasos para reducir a la mitad", isNaN(mitad) ? "—" : DL.fmt(mitad, 1)]]);
+      var st = $("decStatus");
+      if(Math.abs(f) > 1){ st.className = "status bad"; st.textContent = "|1 − ηλ| > 1: w crece y cambia de signo; diverge."; }
+      else if(prod === 0){ st.className = "status info"; st.textContent = "λ = 0 (o η = 0): no hay decaimiento."; }
+      else if(f < 0){ st.className = "status info"; st.textContent = "Factor negativo: w cambia de signo en cada paso, pero se encoge."; }
+      else if(f === 0){ st.className = "status ok"; st.textContent = "El factor es 0: w se vuelve 0 en un solo paso."; }
+      else { st.className = "status ok"; st.textContent = "Decaimiento geométrico suave hacia 0."; }
+      g.redibujar();
+    }
+    DL.control($("decCtrl"), {etiqueta:"η (tasa de aprendizaje)", min:0.01, max:1, paso:0.01, valor:s.eta, alCambiar:function(v){ s.eta = v; act(); }});
+    DL.control($("decCtrl"), {etiqueta:"λ (fuerza de L₂)", min:0, max:2.5, paso:0.05, valor:s.lam, alCambiar:function(v){ s.lam = v; act(); }});
+    act();
+  })();
+})();
+</script>
+</body>
+</html>

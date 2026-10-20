@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrenamiento 2: backprop, inicialización y desempeño</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  .fig{margin:22px 0; text-align:center}
+  .fig img{max-width:min(100%, 680px); height:auto; border:1px solid var(--border); border-radius:8px; background:#fff}
+  .fig figcaption{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--text-3); margin-top:8px; text-align:left}
+  .desfase{display:flex; gap:6px; flex-wrap:wrap; align-items:center; justify-content:center; margin:14px 0; font-family:ui-monospace,monospace; font-size:13px}
+  .desfase .c{border:1px solid var(--border); background:var(--surface-2); border-radius:8px; padding:7px 10px; text-align:center}
+  .desfase .c small{display:block; font-size:10.5px; color:var(--text-3); font-family:ui-sans-serif,sans-serif}
+  .desfase .ar{color:var(--text-3)}
+  .twocan{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .tabnum td, .tabnum th{white-space:nowrap}
+  .calcline{white-space:normal; overflow-wrap:anywhere}
+  .graph{gap:2px}
+  .graph .gnode{min-width:62px; padding:7px 6px}
+  .graph .garrow{font-size:13px}
+  @media (max-width:760px){ .twocan{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Entrenamiento 2</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 04</div>
+  <h1>Cómo viaja el error hacia atrás, y por qué importa por dónde empiezas</h1>
+  <p class="lead">Vas a hacer backpropagation a mano con números, a explicar de dónde sale la inicialización He y a leer una curva de error de test que baja, sube y vuelve a bajar. Es el bloque del examen donde más se premia el procedimiento escrito paso a paso.</p>
+  <div class="meta">Fuente: <code>slides/Entrenamiento2.Rmd</code> · Temario del Examen 1, sección 4 · Lectura de unos 50 minutos sin contar los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+<p>Para entrenar una red necesitas tres cosas: <b>(1)</b> una manera eficiente de calcular gradientes, <b>(2)</b> una buena manera de inicializar los parámetros y <b>(3)</b> un optimizador estable. La clase anterior resolvió la tercera. Esta clase resuelve las dos primeras y termina preguntando cómo saber si el modelo, ya entrenado, sirve para datos nuevos.</p>
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Pérdidas y optimizadores (<a href="03_entrenamiento1.html">artefacto 03</a>): sabes <em>qué</em> hacer con un gradiente, pero no cómo se calcula.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">Cómo se calcula el gradiente (backprop), desde dónde se arranca (inicialización) y cómo se mide el resultado (sesgo, varianza, double descent).</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Si el modelo se ajusta demasiado, cómo frenarlo: <a href="05_regularizacion.html">regularización</a>.</div></div>
+</div>
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>El gradiente de un peso es <b>el error que llega a su salida × lo que entró a ese peso</b>. Backprop no hace magia: guarda lo que calculó hacia adelante y lo reutiliza al recorrer la red hacia atrás, una sola vez. Y como el error se multiplica una vez por capa, <em>por dónde empiezas</em> (la escala de los pesos iniciales) decide si ese error llega entero, se apaga o explota.</p>
+</div>
+
+<!-- ============ 2. EL PROBLEMA ============ -->
+<h2 id="por-que-backprop"><span class="num">Sección 2</span>El problema: gradientes en una red profunda</h2>
+
+<p>La red de la slide es una <b>composición</b>: la salida de cada capa es la entrada de la siguiente. Con <span class="sym" data-s="beta"></span> los sesgos, <span class="sym" data-s="Omega"></span> las matrices de pesos y <span class="sym" data-s="a"></span> la activación:</p>
+
+<div class="formula">
+  <div class="f-head">La red como composición de cuatro pasos</div>
+  <div class="f-ejemplo">Con una entrada x, la capa 1 produce h₁ = a(β₀ + Ω₀x); la capa 2 produce h₂ = a(β₁ + Ω₁h₁); la 3, h₃ = a(β₂ + Ω₂h₂); y la salida es f = β₃ + Ω₃h₃. Cada paso consume el resultado del anterior.</div>
+  <div class="eq">
+    <div><span class="r-calc">h</span><span class="sub">1</span> = a( <span class="r-param">β</span><span class="sub">0</span> + <span class="r-param">Ω</span><span class="sub">0</span><span class="r-dato">x</span> )</div>
+    <div><span class="r-calc">h</span><span class="sub">2</span> = a( <span class="r-param">β</span><span class="sub">1</span> + <span class="r-param">Ω</span><span class="sub">1</span><span class="r-calc">h</span><span class="sub">1</span> )</div>
+    <div><span class="r-calc">h</span><span class="sub">3</span> = a( <span class="r-param">β</span><span class="sub">2</span> + <span class="r-param">Ω</span><span class="sub">2</span><span class="r-calc">h</span><span class="sub">2</span> )</div>
+    <div><span class="sym" data-s="f">f</span> = <span class="r-param">β</span><span class="sub">3</span> + <span class="r-param">Ω</span><span class="sub">3</span><span class="r-calc">h</span><span class="sub">3</span></div>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«A la entrada le aplico una combinación lineal y luego la activación; al resultado le aplico otra, y así tres veces; la última capa solo combina, sin activación.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">β<sub>k</sub>, Ω<sub>k</sub></dt><dd>Sesgos y pesos de la capa k. Son lo que el entrenamiento ajusta.</dd>
+      <dt class="r-calc">h<sub>k</sub></dt><dd>El vector de activaciones que sale de una capa y entra a la siguiente.</dd>
+      <dt class="r-dato">x</dt><dd>La entrada del ejemplo; está fija.</dd>
+    </dl>
+  </div>
+</div>
+
+<figure class="fig">
+  <img src="../images/redbackprop.png" alt="Red de cuatro capas de pesos Ω₀ a Ω₃ con activaciones ReLU, que termina en la pérdida">
+  <figcaption>La red de la slide. «Training input» es la entrada x; «Hidden layer» son las capas ocultas h₁, h₂, h₃; «Output f[x, φ]» es la salida; «Training output y» es la etiqueta; «Loss ℓ» es la pérdida. Cada flecha gris es un peso de alguna Ω<sub>k</sub>.</figcaption>
+</figure>
+
+<p>Para entrenar con mini-batch SGD (<a href="03_entrenamiento1.html">artefacto 03</a>) necesitas, en cada paso, las derivadas parciales <span class="sym" data-s="partial"></span> de la pérdida de un ejemplo respecto a <em>todos</em> los parámetros: ∂ℓ/∂β<sub>k</sub> y ∂ℓ/∂Ω<sub>k</sub>. Un parámetro de la capa 0 afecta a la capa 1, que afecta a la 2, que afecta a la salida, que afecta a la pérdida. Para saber cuánto pesa, hay que recorrer todo ese camino con la <a href="00_matematicas.html#regla-cadena">regla de la cadena</a>.</p>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Por qué no simplemente derivo a mano la expresión completa de ℓ respecto a cada parámetro?</div>
+<p>Porque con cada capa la expresión crece y, peor, <b>se repite</b>: la derivada respecto a un peso de la capa 0 contiene, tal cual, casi todos los factores de la derivada respecto a un peso de la capa 1. Calcular cada parcial desde cero repite el mismo trabajo cientos de veces. Backprop calcula cada factor una vez y lo reutiliza. En un modelo con millones de parámetros, esa diferencia es lo que separa «se puede entrenar» de «no».</p>
+
+<!-- ============ 3. BACKPROP ESCALAR ============ -->
+<h2 id="backprop-escalar"><span class="num">Sección 3</span>Backprop en una cadena escalar</h2>
+
+<p>La slide usa una red diminuta, de un solo input y un solo output, que parece un ejercicio de cálculo pero tiene la misma estructura que cualquier red:</p>
+
+<div class="eq">
+  <span class="sym" data-s="f">f</span>(x, φ) = <span class="r-param">β</span><span class="sub">3</span> + <span class="r-param">ω</span><span class="sub">3</span> cos( <span class="r-param">β</span><span class="sub">2</span> + <span class="r-param">ω</span><span class="sub">2</span> exp( <span class="r-param">β</span><span class="sub">1</span> + <span class="r-param">ω</span><span class="sub">1</span> sin( <span class="r-param">β</span><span class="sub">0</span> + <span class="r-param">ω</span><span class="sub">0</span><span class="r-dato">x</span> ) ) )
+  <div class="leyenda-roles"></div>
+</div>
+<p>Con la pérdida cuadrática <span class="sym" data-s="ell"></span> = (f − y)². Ojo con dos detalles: <b>(1)</b> aquí las ω son escalares (números), por eso van en minúscula; <b>(2)</b> esta pérdida <em>no lleva ½</em>, así que al derivar sale un 2: ∂ℓ/∂f = 2(f − y). (En el repaso de ML se usaba ½ y ese 2 desaparecía.)</p>
+
+<h3 id="forward-escalar">Hacia adelante: ocho pasos intermedios</h3>
+<p>Se trata de partir la función en pasos, cada uno con su nombre, y <b>guardar</b> cada valor:</p>
+<table class="tbl tabnum">
+  <thead><tr><th>Combinación lineal (entra a la activación)</th><th>Activación (sale)</th></tr></thead>
+  <tbody>
+    <tr><td>f₀ = β₀ + ω₀x</td><td>h₁ = sin(f₀)</td></tr>
+    <tr><td>f₁ = β₁ + ω₁h₁</td><td>h₂ = exp(f₁)</td></tr>
+    <tr><td>f₂ = β₂ + ω₂h₂</td><td>h₃ = cos(f₂)</td></tr>
+    <tr><td>f₃ = β₃ + ω₃h₃</td><td>ℓ = (f₃ − y)²</td></tr>
+  </tbody>
+</table>
+<p>Léelo de arriba abajo, primero la columna izquierda y luego la derecha de cada renglón: son los ocho pasos del recorrido.</p>
+
+<div class="note fix">
+  <span class="tag">Trampa común: los índices están desfasados una posición</span>
+  <p>Fíjate en que f₀ lleva β₀ y ω₀, pero lo que sale de la activación se llama h<sub>1</sub>. Es decir, <b>f<sub>k</sub> es lo que entra a la activación y h<sub>k+1</sub> es lo que sale</b>. Por eso el peso ω<sub>k</sub> se multiplica por h<sub>k</sub> (con h₀ = x).</p>
+  <div class="desfase">
+    <div class="c">x<small>h₀</small></div><span class="ar">→ ω₀, β₀ →</span>
+    <div class="c">f₀<small>entra a sin</small></div><span class="ar">→ sin →</span>
+    <div class="c">h₁<small>sale</small></div><span class="ar">→ ω₁, β₁ →</span>
+    <div class="c">f₁<small>entra a exp</small></div><span class="ar">→ …</span>
+  </div>
+</div>
+
+<h3 id="lab-grafo" class="lab" data-toc="Lab: grafo computacional">Laboratorio: el grafo computacional</h3>
+<p>Valores del laboratorio: <b>x = 1, y = 1</b>, todas las β = 0.1 y todas las ω = 0.5. Da «Siguiente» ocho veces para el recorrido hacia adelante (en naranja) y siete más para el recorrido hacia atrás (en verde). Al final aparece la tabla con todos los gradientes y su comprobación numérica.</p>
+<div class="widget" id="labGrafo">
+  <div class="widget-head"><div class="wt">Forward y backward en la cadena escalar</div><div class="ws">Cada nodo muestra su valor; los verdes añaden «∂ℓ:», el gradiente de la pérdida respecto a ese nodo.</div></div>
+  <div class="widget-body">
+    <div class="graphwrap"><div class="graph" id="grafoNodos"></div></div>
+    <div class="calcline" id="grafoCalc"></div>
+    <div id="grafoTabla"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> En el forward cada nodo solo necesita al anterior: es una receta lineal. <b>2.</b> En el backward cada gradiente se obtiene del <em>anterior (el de la derecha)</em> multiplicado por una derivada local: nada se recalcula. <b>3.</b> En el último paso, compara las columnas «backprop» y «diferencias finitas»: coinciden hasta unas diez cifras (la diferencia es del orden de 10⁻¹¹). Esa es la verificación que se hace en el notebook <code>Entrenamiento2</code> para saber que el gradiente está bien. <b>4.</b> Fíjate que ∂ℓ/∂ω<sub>0</sub> y ∂ℓ/∂β<sub>0</sub> valen lo mismo: como h₀ = x = 1, el «lo que entró» es 1.</p>
+</div>
+
+<h3 id="derivacion-cadena">La derivación completa, paso por paso</h3>
+<p>Ahora, con símbolos. Las derivadas locales que necesitas son d/dz sin = cos, d/dz exp = exp y d/dz cos = −sin (están en la <a href="00_matematicas.html#derivadas">tabla de derivadas</a>).</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">∂ℓ/∂f₃ = 2(f₃ − y)</div><div class="d-por"><b>Derivada de algo al cuadrado:</b> 2 por ese algo, por la derivada de ese algo respecto a f₃, que es 1. Este es el 2 que mencionamos.</div></li>
+  <li><div class="d-ex">∂ℓ/∂h₃ = (∂ℓ/∂f₃) · ω₃</div><div class="d-por"><b>Regla de la cadena:</b> f₃ = β₃ + ω₃h₃, así que ∂f₃/∂h₃ = ω₃.</div></li>
+  <li><div class="d-ex">∂ℓ/∂f₂ = (∂ℓ/∂h₃) · (−sin f₂)</div><div class="d-por"><b>Regla de la cadena:</b> h₃ = cos(f₂), y la derivada de cos es −sin.</div></li>
+  <li><div class="d-ex">∂ℓ/∂h₂ = (∂ℓ/∂f₂) · ω₂</div><div class="d-por"><b>Regla de la cadena:</b> f₂ = β₂ + ω₂h₂.</div></li>
+  <li><div class="d-ex">∂ℓ/∂f₁ = (∂ℓ/∂h₂) · exp(f₁)</div><div class="d-por"><b>Regla de la cadena:</b> h₂ = exp(f₁), y la derivada de exp es exp (¡no cambia!).</div></li>
+  <li><div class="d-ex">∂ℓ/∂h₁ = (∂ℓ/∂f₁) · ω₁</div><div class="d-por"><b>Regla de la cadena:</b> f₁ = β₁ + ω₁h₁.</div></li>
+  <li><div class="d-ex">∂ℓ/∂f₀ = (∂ℓ/∂h₁) · cos(f₀)</div><div class="d-por"><b>Regla de la cadena:</b> h₁ = sin(f₀), y la derivada de sin es cos.</div></li>
+  <li><div class="d-ex">∂ℓ/∂ω<sub>k</sub> = (∂ℓ/∂f<sub>k</sub>) · h<sub>k</sub> &nbsp;&nbsp; ∂ℓ/∂β<sub>k</sub> = (∂ℓ/∂f<sub>k</sub>) · 1</div><div class="d-por"><b>Regla de la cadena otra vez:</b> f<sub>k</sub> = β<sub>k</sub> + ω<sub>k</sub>h<sub>k</sub>, entonces ∂f<sub>k</sub>/∂ω<sub>k</sub> = h<sub>k</sub> y ∂f<sub>k</sub>/∂β<sub>k</sub> = 1. Con h₀ = x.</div></li>
+  <li><div class="d-ex">con números: ∂ℓ/∂f₃ = 2(0.436 − 1) = −1.127; ∂ℓ/∂ω₃ = −1.127 · h₃ = −1.127 · 0.673 = −0.758</div><div class="d-por"><b>Verificación:</b> es el valor que ves en el laboratorio. Es negativo: subir ω₃ bajaría la pérdida, porque la salida (0.436) está por debajo del objetivo (1).</div></li>
+</ol>
+
+<div class="formula">
+  <div class="f-head">Gradiente de un peso</div>
+  <div class="f-ejemplo">En la capa 3: ∂ℓ/∂f₃ = −1.127 (el error que llega) y h₃ = 0.673 (lo que entró al peso). Entonces ∂ℓ/∂ω₃ = −1.127 × 0.673 = −0.758, y ∂ℓ/∂β₃ = −1.127 × 1 = −1.127.</div>
+  <div class="eq">
+    <span class="sym" data-s="partial">∂</span><span class="sym" data-s="ell"></span> / <span class="sym" data-s="partial">∂</span><span class="r-param">ω</span><span class="sub">k</span> = ( <span class="sym" data-s="partial">∂</span>ℓ / ∂<span class="sym" data-s="fk"></span> ) · <span class="sym" data-s="h">h</span><span class="sub">k</span>
+    &nbsp;&nbsp;&nbsp;
+    ∂ℓ / ∂<span class="r-param">β</span><span class="sub">k</span> = ∂ℓ / ∂f<span class="sub">k</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cuánto cambia la pérdida si muevo un peso es igual a cuánto cambia la pérdida si muevo lo que sale de la neurona, por lo que entró a ese peso. Para el sesgo, no hay nada que multiplicar: entra siempre un 1.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">∂ℓ/∂f<sub>k</sub></dt><dd>«El error que llega a la salida de la neurona k». Lo calcula el backward hacia atrás.</dd>
+      <dt class="r-calc">h<sub>k</sub></dt><dd>«Lo que entró al peso». Lo guardó el forward. Para la primera capa es x.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…h<sub>k</sub> = 0: el gradiente de ese peso es 0 aunque el error sea enorme. Un peso no puede ser culpable de algo en lo que no participó.</li>
+      <li>…el error que llega es 0: ningún peso de esa capa recibe gradiente. Ahí se apaga el aprendizaje.</li>
+    </ul>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Lectura intuitiva</span>
+  <p>El gradiente de un peso = <b>el error que llega a su salida × lo que entró a ese peso</b>. Es como una nómina: la culpa de un error se reparte según cuánto participó cada entrada.</p>
+</div>
+
+<figure class="fig">
+  <img src="../images/backwardpass.png" alt="Grafo del backward pass: de ℓ hacia la izquierda pasando por ∂ℓ/∂f₃, ∂ℓ/∂h₃, etc., con ramas hacia ∂ℓ/∂β y ∂ℓ/∂ω">
+  <figcaption>El backward de la slide. Se empieza a la derecha en ℓ y se va hacia la izquierda: cada flecha horizontal es una derivada local; cada rama hacia abajo termina en el gradiente de un parámetro (∂ℓ/∂β<sub>k</sub> o ∂ℓ/∂ω<sub>k</sub>).</figcaption>
+</figure>
+
+<!-- ============ 4. BACKPROP RELU ============ -->
+<h2 id="backprop-relu"><span class="num">Sección 4</span>La versión del examen: dos capas con ReLU</h2>
+<p>En el examen no te darán sin ni exp, sino una red chica con ReLU, que se hace con calculadora:</p>
+<div class="eq">
+  <div>f<sub>0</sub> = β<sub>0</sub> + ω<sub>0</sub>x &nbsp;&nbsp;·&nbsp;&nbsp; h<sub>1</sub> = ReLU(f<sub>0</sub>) &nbsp;&nbsp;·&nbsp;&nbsp; f<sub>1</sub> = β<sub>1</sub> + ω<sub>1</sub>h<sub>1</sub> &nbsp;&nbsp;·&nbsp;&nbsp; ℓ = (f<sub>1</sub> − y)²</div>
+</div>
+<p>El procedimiento es el mismo: forward con todos los valores, luego backward. La única novedad es la derivada de la activación, <span class="sym" data-s="relu">ReLU</span>′(f₀) = <span class="sym" data-s="indic">𝟙[f₀ &gt; 0]</span>: vale 1 si la neurona estaba encendida y <b>0 si no</b>.</p>
+
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">∂ℓ/∂f₁ = 2(f₁ − y)</div><div class="d-por"><b>Pérdida cuadrática sin ½:</b> sale el 2.</div></li>
+  <li><div class="d-ex">∂ℓ/∂ω₁ = (∂ℓ/∂f₁) · h₁ &nbsp;&nbsp; ∂ℓ/∂β₁ = ∂ℓ/∂f₁</div><div class="d-por"><b>Gradiente de un peso:</b> error que llega × lo que entró.</div></li>
+  <li><div class="d-ex">∂ℓ/∂h₁ = (∂ℓ/∂f₁) · ω₁</div><div class="d-por"><b>Regla de la cadena</b> hacia atrás por la capa lineal.</div></li>
+  <li><div class="d-ex">∂ℓ/∂f₀ = (∂ℓ/∂h₁) · 𝟙[f₀ &gt; 0]</div><div class="d-por"><b>Derivada de ReLU:</b> 1 si f₀ &gt; 0, 0 si f₀ ≤ 0. Es una compuerta.</div></li>
+  <li><div class="d-ex">∂ℓ/∂ω₀ = (∂ℓ/∂f₀) · x &nbsp;&nbsp; ∂ℓ/∂β₀ = ∂ℓ/∂f₀</div><div class="d-por"><b>Gradiente de un peso</b> otra vez, con h₀ = x.</div></li>
+</ol>
+
+<h3 id="lab-relu" class="lab" data-toc="Lab: dos capas con ReLU">Laboratorio: las cuatro parciales en vivo</h3>
+<p>Estado inicial: x = 2, y = 3, β₀ = −1, ω₀ = 1.5, β₁ = 0.5, ω₁ = 2. <b>Prueba esto:</b> baja ω₀ hasta que f₀ se haga negativa y mira qué pasa con el lado izquierdo.</p>
+<div class="widget" id="labRelu">
+  <div class="widget-head"><div class="wt">Red 1 → 1 → 1 con ReLU</div><div class="ws">Mueve los controles; todo se recalcula con las fórmulas de arriba.</div></div>
+  <div class="widget-body">
+    <div class="graphwrap"><div class="graph" id="reluNodos"></div></div>
+    <div class="lab-grid">
+      <div>
+        <div class="calcline" id="reluCalc"></div>
+        <div class="status ok" id="reluEstado">Listo.</div>
+      </div>
+      <div><div id="reluCtrl"></div><div id="reluRead"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot"><button class="btn" id="reluReset">Valores iniciales</button><button class="btn" id="reluMuerta">Apagar la neurona</button></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> Con los valores iniciales, f₀ = 2 &gt; 0: la neurona está viva y las cuatro parciales son 12, 6, 6 y 3 (las de ω₀, β₀, ω₁, β₁). <b>2.</b> Pulsa «Apagar la neurona»: f₀ pasa a ser negativa, h₁ = 0 y ∂ℓ/∂ω₁ = 0 (no entró nada al peso) y también ∂ℓ/∂ω₀ y ∂ℓ/∂β₀ = 0 (la compuerta cortó el error). <b>3.</b> Aun con la neurona apagada, ∂ℓ/∂β₁ ≠ 0: el sesgo de la capa de salida siempre recibe error. <b>4.</b> Mueve y: el gradiente cambia de signo cuando f₁ cruza y.</p>
+</div>
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>Escribe siempre la tabla de forward (f₀, h₁, f₁, ℓ) antes de empezar el backward, y anota <b>si f₀ fue positiva o negativa</b>. Es la pregunta que más se pierde: si f₀ ≤ 0, tres de las cuatro parciales valen 0, y debes poder decir por qué.</p>
+</div>
+
+<!-- ============ 5. VECTORIAL ============ -->
+<h2 id="backprop-vectorial"><span class="num">Sección 5</span>La recurrencia vectorial</h2>
+<p>Con capas de muchas neuronas, f<sub>k</sub> y h<sub>k</sub> son vectores y Ω<sub>k</sub> es una matriz (<a href="00_matematicas.html#vectores">repaso de vectores y matrices</a>; la forma matricial de la red está en el <a href="02_redes_neuronales.html#profundas">artefacto 02</a>). Se define el error que viaja hacia atrás:</p>
+
+<div class="formula">
+  <div class="f-head">Definición de δ</div>
+  <div class="f-ejemplo">En la red de 1 neurona de la sección 4, δ₁ = ∂ℓ/∂f₁ = 3 y δ₀ = ∂ℓ/∂f₀ = 6 (con los valores iniciales del laboratorio). Cada capa tiene el suyo; en capas con varias neuronas, δ es un vector con una entrada por neurona.</div>
+  <div class="eq"><span class="sym" data-s="delta"></span> = ∂<span class="sym" data-s="ell"></span> / ∂<span class="sym" data-s="fk"></span></div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«δ de k es cuánto cambiaría la pérdida si cambiara la pre-activación de la capa k.»</p></div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Recurrencia hacia atrás</div>
+  <div class="f-ejemplo">Si Ω<sub>k</sub> = [[1, −2],[3, 1]], δ<sub>k</sub> = (2, −1) y f<sub>k−1</sub> = (0.5, −1): Ω<sub>k</sub>ᵀδ<sub>k</sub> = (1·2 + 3·(−1), −2·2 + 1·(−1)) = (−1, −5). La máscara 𝟙[f &gt; 0] = (1, 0). Entonces δ<sub>k−1</sub> = (−1, −5) ⊙ (1, 0) = (−1, 0).</div>
+  <div class="eq">
+    <span class="sym" data-s="delta">δ</span><span class="sub">k−1</span> = ( <span class="r-param">Ω</span><span class="sub">k</span><span class="sym" data-s="transp">ᵀ</span> <span class="r-calc">δ</span><span class="sub">k</span> ) <span class="sym" data-s="hadamard">⊙</span> <span class="sym" data-s="aprima">a′</span>( <span class="r-calc">f</span><span class="sub">k−1</span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El error de la capa de arriba se reparte hacia abajo según los mismos pesos (por eso Ωᵀ), y solo pasa por las neuronas que estaban encendidas (por eso ⊙ 𝟙[f &gt; 0]).»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">Ω<sub>k</sub>ᵀ</dt><dd>La transpuesta de la matriz de pesos. Voltearla hace que cada neurona de abajo reciba la suma de los errores de las neuronas de arriba a las que alimentó, ponderados por el peso de cada conexión.</dd>
+      <dt>⊙</dt><dd>Producto elemento a elemento: multiplica posición por posición.</dd>
+      <dt class="r-calc">a′(f<sub>k−1</sub>)</dt><dd>La derivada de la activación evaluada en lo que se guardó del forward. Para ReLU es 𝟙[f &gt; 0]: 1 para neuronas encendidas, 0 para apagadas.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…una neurona de abajo estaba apagada (f ≤ 0): su entrada de δ vale 0 sin importar los pesos.</li>
+      <li>…los pesos Ω son grandes: el error crece al propagarse hacia atrás (ver inicialización).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Gradientes de los parámetros de una capa</div>
+  <div class="f-ejemplo">Con δ₁ = (2), h₁ = (3, 0, 1): ∂ℓ/∂Ω₁ = δ₁ h₁ᵀ = (2·3, 2·0, 2·1) = (6, 0, 2). Una fila, tres columnas: la misma forma que Ω₁.</div>
+  <div class="eq">
+    ∂ℓ / ∂<span class="r-param">β</span><span class="sub">k</span> = <span class="r-calc">δ</span><span class="sub">k</span>
+    &nbsp;&nbsp;&nbsp;
+    ∂ℓ / ∂<span class="r-param">Ω</span><span class="sub">k</span> = <span class="r-calc">δ</span><span class="sub">k</span> <span class="r-calc">h</span><span class="sub">k</span><span class="sup">ᵀ</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El gradiente del sesgo es el error que llega. El gradiente de la matriz es el error por la entrada: un producto exterior, un renglón por cada neurona de salida y una columna por cada neurona de entrada.»</p></div>
+</div>
+<p>Es la misma regla de la sección 3 («error que llega × lo que entró»), pero escrita para todas las conexiones de la capa a la vez: δ<sub>k</sub>h<sub>k</sub>ᵀ tiene un elemento por cada peso de Ω<sub>k</sub>.</p>
+
+<h3 id="lab-vectorial" class="lab" data-toc="Lab: backprop con matrices">Laboratorio: una red 2 → 3 → 1 con ReLU</h3>
+<p>Red con números enteros: Ω₀ de 3×2, β₀ = (0, −1, 0), Ω₁ de 1×3, β₁ = 0, entrada x = (1, 1) y objetivo y = 1. Avanza un paso a la vez y fíjate en la forma (tamaño) de cada matriz.</p>
+<div class="widget" id="labVec">
+  <div class="widget-head"><div class="wt">Recurrencia vectorial paso a paso</div><div class="ws">δ₁ → Ω₁ᵀδ₁ → máscara ReLU → δ₀ → producto exterior δhᵀ.</div></div>
+  <div class="widget-body">
+    <div class="mat-row" id="vecA"></div>
+    <div class="mat-row" id="vecB"></div>
+    <div class="calcline" id="vecCalc"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> La neurona 2 de la capa oculta tiene f = −1 (apagada): en el paso de la máscara, su entrada de δ₀ pasa a 0 aunque Ω₁ᵀδ₁ valía 4. <b>2.</b> Entonces la segunda fila de ∂ℓ/∂Ω₀ es toda ceros: esa neurona no aprende en este ejemplo. <b>3.</b> Todas las formas encajan: (3×1)(1×2) = (3×2), igual que Ω₀. Si tus formas no encajan en un examen, hay un error.</p>
+</div>
+
+<h3 id="memoria">Por qué hace falta memoria, y qué es la diferenciación automática</h3>
+<p>Para calcular δ<sub>k−1</sub> necesitas f<sub>k−1</sub> y para ∂ℓ/∂Ω<sub>k</sub> necesitas h<sub>k</sub>: ambos son del <em>forward</em>. Por eso el forward <b>guarda</b> las activaciones intermedias y el backward las <b>reutiliza</b>. Es eficiente (casi todo son multiplicaciones de matrices y operaciones elemento a elemento) pero cuesta memoria: más capas o más datos por batch significan más activaciones guardadas.</p>
+<p>Los frameworks como PyTorch hacen esto solos: durante el forward <b>registran cada operación y sus valores</b>; durante el backward recorren ese registro al revés aplicando la regla de la cadena. A eso se le llama <b>diferenciación algorítmica en modo reverso</b>, y backprop es el caso particular de una red de capas. Funciona aunque la red no sea una cadena simple: con ramas, conexiones residuales, operaciones reutilizadas o recurrencia (en una RNN se «desenrolla» en el tiempo y se aplica backprop sobre esa gráfica).</p>
+
+<!-- ============ 6. GRADIENTES QUE SE APAGAN ============ -->
+<h2 id="gradientes-que-se-apagan"><span class="num">Sección 6</span>Saturación y neuronas muertas</h2>
+<p>Mira otra vez la recurrencia: en <b>cada capa</b> el error se multiplica por Ωᵀ y por a′. Con K capas, el gradiente que llega a la primera lleva K veces el factor a′. La derivada de la activación manda:</p>
+<table class="tbl">
+  <thead><tr><th>Activación</th><th>a′ vale…</th><th>Consecuencia</th></tr></thead>
+  <tbody>
+    <tr><td>ReLU</td><td>0 si f ≤ 0; 1 si f &gt; 0</td><td>Si la neurona está encendida, deja pasar el error intacto. Si está apagada, lo corta (neurona «muerta» para ese ejemplo).</td></tr>
+    <tr><td>Sigmoide</td><td>σ(f)(1 − σ(f)); máximo 0.25 en f = 0; casi 0 en los extremos</td><td>Aun en el mejor caso, cada capa multiplica el error por ≤ 0.25. Con saturación es peor.</td></tr>
+  </tbody>
+</table>
+
+<h3 id="lab-saturacion" class="lab" data-toc="Lab: producto de derivadas">Laboratorio: el gradiente tras K capas</h3>
+<p>Dibuja 0.25<sup>K</sup> (sigmoide en su mejor caso) y 1<sup>K</sup> (ReLU activa). Es un modelo simplificado: solo el producto de las derivadas, ignorando los pesos.</p>
+<div class="widget" id="labSat">
+  <div class="widget-head"><div class="wt">Producto de K derivadas (escala logarítmica)</div><div class="ws">El eje vertical muestra potencias de 10.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="satCanvas"></canvas>
+      <div><div id="satCtrl"></div><div id="satRead"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> Con K = 10 la sigmoide ya multiplica por ≈ 10⁻⁶: casi nada llega a las primeras capas (gradiente que desaparece, <em>vanishing gradient</em>). <b>2.</b> La ReLU activa queda en 1 siempre: por eso hizo posibles las redes profundas. <b>3.</b> Pero ojo: 1<sup>K</sup> es el mejor caso para ReLU; si una neurona del camino está apagada, el producto es 0. <b>4.</b> Si en vez de 0.25 el factor por capa fuera mayor que 1 (pesos grandes), el producto <em>explotaría</em>: gradiente que explota (<em>exploding gradient</em>).</p>
+</div>
+
+<!-- ============ 7. INICIALIZACIÓN ============ -->
+<h2 id="inicializacion"><span class="num">Sección 7</span>Inicialización</h2>
+<p>El punto de partida afecta la estabilidad numérica, el tamaño de las activaciones y de los gradientes, y la velocidad de entrenamiento. Durante el forward, f<sub>k</sub> = β<sub>k</sub> + Ω<sub>k</sub>h<sub>k</sub> y h<sub>k+1</sub> = a(f<sub>k</sub>). Se acostumbra β<sub>k</sub> = 0 y pesos aleatorios <span class="sym" data-s="Omega">Ω</span><span class="sub">ij</span> ∼ N(0, <span class="sym" data-s="sigmaOm"></span>). Dos preguntas: ¿por qué <em>aleatorios</em>?, y ¿qué varianza?</p>
+
+<h3 id="simetria">Primero: con ceros (o con cualquier valor repetido) no se aprende</h3>
+<p>Si todos los pesos de una capa valen lo mismo, todas sus neuronas calculan lo mismo, reciben el <b>mismo gradiente</b> y se actualizan igual: se quedan idénticas para siempre. Es la <b>ruptura de simetría</b>: solo los pesos aleatorios hacen que las neuronas empiecen distintas y se especialicen. Con ReLU y pesos 0 es todavía peor: f = 0 en todas partes, a′(0) = 0 y los gradientes de las capas ocultas son 0: nada se mueve.</p>
+
+<h3 id="lab-simetria" class="lab" data-toc="Lab: ruptura de simetría">Laboratorio: ¿se separan las dos neuronas?</h3>
+<p>Red 1 → 2 → 1 que aprende la parábola (−1→1, −0.5→0.25, 0.5→0.25, 1→1) con descenso de gradiente (tasa 0.3). Todos los parámetros arrancan en <b>c</b>, o aleatorios si lo eliges. Entrena y mira si las dos neuronas ocultas (a y b) se distinguen.</p>
+<div class="widget" id="labSim">
+  <div class="widget-head"><div class="wt">Dos neuronas ocultas con pesos iguales</div><div class="ws">Pesos de entrada wₐ y w<sub>b</sub>; pesos de salida vₐ y v<sub>b</sub>.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div><div id="simRead"></div><div class="status ok" id="simEstado">Listo.</div></div>
+      <div><div id="simCtrl"></div><div id="simSelPesos"></div><div id="simSelAct"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot"><button class="btn primary" id="simEntrenar">Entrenar 50 pasos</button><button class="btn" id="simReset">Reiniciar</button><button class="btn" id="simSemilla">Otra semilla (aleatorios)</button></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> Con «todos iguales», tanh y cualquier c (prueba 0.5, 0 y −0.5): da varios clics a «Entrenar 50 pasos». La pérdida baja de golpe y se estanca en <b>0.141</b>, y w<sub>a</sub> y w<sub>b</sub> siguen <em>exactamente</em> iguales (diferencia 0): las dos neuronas son una sola copiada, y una sola neurona tanh no puede ajustar la parábola. <b>2.</b> Con c = 0, además, nada se mueve salvo el sesgo de salida: el modelo solo aprende una constante (el promedio de y). <b>3.</b> Cambia a «aleatorios»: las neuronas se separan (diferencia ≠ 0) y en varias semillas la pérdida baja muy por debajo de 0.141. <b>4.</b> Pulsa «Otra semilla» varias veces: en 6 de las 8 semillas que probé la pérdida baja de 0.12 tras 200 pasos, pero en 2 de 8 también se queda en 0.141. Romper la simetría es <em>necesario</em>, no <em>suficiente</em>. <b>5.</b> Con ReLU y c = 0 los gradientes ocultos son exactamente 0.</p>
+</div>
+
+<h3 id="varianza">Segundo: la varianza de los pesos</h3>
+<p>Si σ<sub>Ω</sub> es muy pequeño, las pre-activaciones se encogen capa tras capa, y los gradientes también. Si es muy grande, crecen capa tras capa y explotan. El objetivo es mantener escalas razonables hacia adelante y hacia atrás. Esto es justo la historia de las secciones anteriores: cada capa multiplica por algo, y el producto de K cosas ≈ 1 solo es estable si cada cosa ≈ 1.</p>
+
+<div class="formula">
+  <div class="f-head">Inicialización He (para ReLU)</div>
+  <div class="f-ejemplo">Una capa con D<sub>h</sub> = 512 entradas: σ²<sub>Ω</sub> = 2/512 = 0.0039, y la desviación estándar es σ<sub>Ω</sub> = √0.0039 = 0.0625. Cada peso se saca de una N(0, 0.0039).</div>
+  <div class="eq"><span class="sym" data-s="sigmaOm"></span> = 2 / <span class="r-hiper">D<sub>h</sub></span></div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La varianza de los pesos iniciales es dos entre el número de entradas de la capa.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-hiper">σ²<sub>Ω</sub></dt><dd>La varianza de la Normal de la que se sacan los pesos iniciales. La eliges tú, antes de entrenar.</dd>
+      <dt class="r-hiper">D<sub>h</sub></dt><dd>El número de entradas de la capa (fan-in): cuántas neuronas alimentan a cada neurona de salida.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…D<sub>h</sub> crece: σ²<sub>Ω</sub> baja. Con más entradas sumándose, cada peso debe ser más chico para que la suma no crezca.</li>
+      <li>…usas σ²<sub>Ω</sub> = 1/D<sub>h</sub> con ReLU (la mitad): la señal se encoge un factor √2 por capa.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion-he">De dónde sale el 2</h3>
+<p>Para una neurona de la siguiente capa, f′<sub>i</sub> = Σ<sub>j</sub> Ω<sub>ij</sub>h<sub>j</sub> (suma sobre las D<sub>h</sub> entradas). Supón β = 0, pesos independientes de media 0 y varianza σ²<sub>Ω</sub>, y que la pre-activación f de la capa anterior tiene media 0 y varianza σ²<sub>f</sub> y es simétrica alrededor de 0 (<a href="00_matematicas.html#probabilidad">repaso de probabilidad</a>: media y varianza de una suma).</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">f′<sub>i</sub> = Σ<sub>j=1</sub><sup>D<sub>h</sub></sup> Ω<sub>ij</sub> h<sub>j</sub></div><div class="d-por"><b>Definición:</b> cada pre-activación es una suma de D<sub>h</sub> productos peso × activación.</div></li>
+  <li><div class="d-ex">E[f′<sub>i</sub>] = 0</div><div class="d-por"><b>Esperanza de una suma:</b> cada Ω<sub>ij</sub> tiene media 0 y es independiente de h<sub>j</sub>, así que cada término tiene media 0.</div></li>
+  <li><div class="d-ex">Var(f′<sub>i</sub>) = Σ<sub>j</sub> Var(Ω<sub>ij</sub>h<sub>j</sub>)</div><div class="d-por"><b>Varianza de una suma de términos independientes:</b> es la suma de las varianzas.</div></li>
+  <li><div class="d-ex">Var(Ω<sub>ij</sub>h<sub>j</sub>) = σ²<sub>Ω</sub> · E[h<sub>j</sub>²]</div><div class="d-por"><b>Varianza de un producto de independientes con una de media 0:</b> Ω tiene media 0, así que Var(Ωh) = E[Ω²]E[h²] = σ²<sub>Ω</sub>E[h²].</div></li>
+  <li><div class="d-ex">σ²<sub>f′</sub> = D<sub>h</sub> σ²<sub>Ω</sub> E[h²]</div><div class="d-por"><b>Juntar:</b> son D<sub>h</sub> términos iguales.</div></li>
+  <li><div class="d-ex">E[h²] = ½ σ²<sub>f</sub></div><div class="d-por"><b>Efecto de ReLU:</b> h = ReLU(f). Como f es simétrica alrededor de 0, la mitad de las veces f &lt; 0 y h = 0; la otra mitad h = f. Entonces E[h²] es la mitad de E[f²] = σ²<sub>f</sub>. (Imagina la campana con la mitad izquierda aplastada contra el cero.)</div></li>
+  <li><div class="d-ex">σ²<sub>f′</sub> = ½ D<sub>h</sub> σ²<sub>Ω</sub> σ²<sub>f</sub></div><div class="d-por"><b>Sustituir:</b> ya tienes la varianza de la capa siguiente en función de la anterior.</div></li>
+  <li><div class="d-ex">σ²<sub>f′</sub> = σ²<sub>f</sub> ⇒ ½ D<sub>h</sub> σ²<sub>Ω</sub> = 1 ⇒ σ²<sub>Ω</sub> = 2 / D<sub>h</sub></div><div class="d-por"><b>Pedir que la varianza se conserve:</b> el factor entre capas debe ser 1. Despejando sale la inicialización He.</div></li>
+  <li><div class="d-ex">interpretación: el 2 compensa exactamente la mitad de neuronas que ReLU apaga</div><div class="d-por"><b>Lectura:</b> si usaras 1/D<sub>h</sub>, cada capa dejaría pasar solo la mitad de la varianza.</div></li>
+</ol>
+
+<h3 id="lab-varianza" class="lab" data-toc="Lab: propagación de la varianza">Laboratorio: 20 capas, ¿qué le pasa a la señal?</h3>
+<p>Red de 20 capas de ancho D = 100, un batch de 200 entradas N(0, 1) y pesos N(0, c/D). A la izquierda: la desviación típica de las pre-activaciones en cada capa 1 a 20 (hacia adelante). A la derecha: la magnitud del gradiente δ en cada capa (hacia atrás, con pérdida = promedio de la salida). Las dos en escala logarítmica; la línea punteada es 1.</p>
+<div class="widget" id="labVar">
+  <div class="widget-head"><div class="wt">Propagación de la varianza, capa por capa</div><div class="ws">Semilla fija: lo que describe el texto es lo que ves.</div></div>
+  <div class="widget-body">
+    <div class="twocan"><canvas id="varF"></canvas><canvas id="varB"></canvas></div>
+    <div class="lab-grid" style="margin-top:12px">
+      <div><div id="varCtrl"></div><div id="varSel"></div>
+        <div class="selrow"><button id="bHe" type="button">He (c = 2)</button><button id="bChica" type="button">demasiado chica (c = 1)</button><button id="bGrande" type="button">demasiado grande (c = 3)</button><button id="bXavier" type="button">Xavier (tanh)</button></div></div>
+      <div><div id="varRead"></div><div class="status ok" id="varEstado">Calculando…</div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> ReLU con He (c = 2): la desviación se queda en el mismo orden (alrededor de 1 a 3) en las 20 capas, y el gradiente también. La capa 1 sale algo mayor (√2) porque recibe la entrada cruda, sin ReLU previa. <b>2.</b> c = 1 («demasiado chica»): la señal cae como 0.7 por capa y llega a ~10⁻³ en la capa 20; el gradiente igual. <b>3.</b> c = 3: crece ~1.2 por capa y llega a ~10²: explota. <b>4.</b> Cambia a tanh: con c = 2 la señal no explota porque tanh acota las activaciones (se estabiliza con la desviación ≈ 0.8, con algunas neuronas saturadas); con Xavier (c = 1 en capas cuadradas) se encoge despacio. Ninguna es catastrófica a 20 capas, pero la derivación del ½ <em>no</em> aplica a tanh.</p>
+</div>
+
+<h3 id="xavier">Backward, Xavier y reglas prácticas</h3>
+<p>Un razonamiento parecido aplica hacia atrás: para que los gradientes no exploten ni desaparezcan, la condición depende del número de salidas de la capa (<b>fan-out</b>). Si la capa no es cuadrada (D<sub>in</sub> ≠ D<sub>out</sub>), no se pueden cumplir ambas condiciones a la vez. Por eso las inicializaciones prácticas son <b>compromisos</b>. La slide no da la derivación del lado backward; basta con la intuición simétrica de arriba.</p>
+<div class="formula">
+  <div class="f-head">Inicialización Xavier (Glorot)</div>
+  <div class="f-ejemplo">Una capa de 100 entradas y 50 salidas: σ²<sub>Ω</sub> = 2/(100 + 50) = 0.0133. Con He sería 2/100 = 0.02.</div>
+  <div class="eq"><span class="sym" data-s="sigmaOm">σ<sub>Ω</sub>²</span> = 2 / ( D<sub>in</sub> + D<sub>out</sub> )</div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Dos entre la suma de entradas y salidas.» Es un punto medio entre la condición hacia adelante (1/D<sub>in</sub>) y la hacia atrás (1/D<sub>out</sub>).</p></div>
+</div>
+<table class="tbl tabnum">
+  <thead><tr><th>Si tu activación es…</th><th>Empieza con…</th><th>σ²<sub>Ω</sub></th></tr></thead>
+  <tbody>
+    <tr><td>ReLU / Leaky ReLU</td><td>He</td><td>2 / D<sub>in</sub></td></tr>
+    <tr><td>tanh / sigmoide</td><td>Xavier / Glorot</td><td>2 / (D<sub>in</sub> + D<sub>out</sub>)</td></tr>
+    <tr><td>Red muy profunda</td><td>Revisar si activaciones y gradientes explotan o desaparecen</td><td>—</td></tr>
+  </tbody>
+</table>
+<p>Si la escala sigue descontrolándose, hay otra herramienta que ataca el mismo problema desde otro lado: normalizar las activaciones de cada capa durante el entrenamiento (<a href="05_regularizacion.html#batchnorm">BatchNorm, en el artefacto 05</a>). La Tarea 4 compara sigmoide y ReLU con y sin BatchNorm precisamente para observar esto; los laboratorios de esta sección te dan la intuición de lo que debes esperar ver.</p>
+
+<!-- ============ 8. DESEMPEÑO ============ -->
+<h2 id="desempeno"><span class="num">Sección 8</span>Ruido, sesgo y varianza</h2>
+<p>El error en test puede venir de seis fuentes: (1) ruido inherente del problema; (2) pocos ejemplos de entrenamiento; (3) un modelo con capacidad insuficiente; (4) un modelo demasiado flexible para los datos disponibles; (5) problemas de optimización; (6) diferencias entre la distribución de entrenamiento y la de prueba. En deep learning, la slide pide separar dos preguntas: <b>¿podemos optimizar el modelo?</b> (el error de entrenamiento baja) y <b>¿el modelo generaliza?</b> (el de test también).</p>
+<table class="tbl">
+  <thead><tr><th>Término</th><th>Qué es</th><th>¿Desaparece cambiando el modelo?</th></tr></thead>
+  <tbody>
+    <tr><td><b>Ruido</b></td><td>La parte impredecible del proceso que genera los datos: error de medición, variables no observadas, etiquetas erróneas, variabilidad inherente.</td><td>No.</td></tr>
+    <tr><td><b>Sesgo</b></td><td>Error sistemático: la familia de modelos <em>no puede</em> representar bien la relación verdadera. Modelo demasiado simple ⇒ sesgo alto.</td><td>Sí: más capacidad (más neuronas, más capas, mejor arquitectura).</td></tr>
+    <tr><td><b>Varianza</b></td><td>Sensibilidad del modelo a <em>qué</em> datos de entrenamiento le tocaron. Entrenar el mismo algoritmo con otros datos da modelos distintos.</td><td>Sí: más datos, o menos flexibilidad.</td></tr>
+  </tbody>
+</table>
+<p>La varianza viene del tamaño finito del conjunto de entrenamiento, del ruido, de la flexibilidad del modelo y de la aleatoriedad del algoritmo.</p>
+
+<h3 id="lab-datasets" class="lab" data-toc="Lab: muchos datasets">Laboratorio: 30 datasets, 30 modelos</h3>
+<p>La función verdadera es sin(πx) en [−1, 1] y cada observación lleva ruido σ = 0.3 (varianza del ruido = 0.09). Se generan 30 datasets de n puntos y a cada uno se le ajusta un polinomio del grado elegido. Los 30 ajustes salen tenues; su promedio, fuerte.</p>
+<div class="widget" id="labDS">
+  <div class="widget-head"><div class="wt">Sesgo y varianza con polinomios</div><div class="ws">Línea punteada: la función verdadera. Puntos: el primer dataset.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="dsCanvas"></canvas>
+      <div><div id="dsCtrl"></div><div id="dsRead"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> Grado 1, n = 15: el promedio (línea fuerte) queda lejos de la curva, aunque los 30 ajustes casi coinciden entre sí: <em>sesgo² alto (≈ 0.20), varianza baja</em>. <b>2.</b> Sube el grado a 3: el promedio ya cae sobre la curva (sesgo² ≈ 0.01) pero los ajustes se abren un poco: la varianza sube. <b>3.</b> Con grado 6 y n = 15 la varianza se dispara (≈ 9, cien veces más que con grado 1): el polinomio persigue el ruido de cada dataset. <b>4.</b> Ahora sube n a 60 con el mismo grado: la varianza baja mucho, pero con grado 1 el sesgo² <em>no cambia</em> (≈ 0.20). Más datos no arreglan un modelo demasiado simple.</p>
+</div>
+<p><b>Cómo reducir cada uno.</b> Más datos reduce la varianza (menos dependencia de ejemplos particulares), siempre que los datos nuevos no sean ruidosos, sesgados o de otra distribución. Más capacidad reduce el sesgo, pero puede subir la varianza: ese es el <em>trade-off</em> clásico. Si te pasas, en la intuición clásica llega el overfitting: R<sub>train</sub> baja pero R<sub>test</sub> sube.</p>
+<figure class="fig">
+  <img src="../images/biasvsvariance.png" alt="Curvas clásicas de sesgo, varianza y error total contra la complejidad del modelo">
+  <figcaption>La curva clásica de la slide: al aumentar la complejidad del modelo baja el sesgo, sube la varianza y el error total tiene un mínimo en medio. En el dibujo, «Mean squared error» es el error cuadrático medio, «Model capacity» es la capacidad del modelo, «bias» es el sesgo, «variance» es la varianza y «bias+variance» es su suma.</figcaption>
+</figure>
+
+<!-- ============ 9. DOUBLE DESCENT ============ -->
+<h2 id="double-descent"><span class="num">Sección 9</span>Double descent</h2>
+<p>La intuición clásica dice: más capacidad ⇒ menos sesgo pero más riesgo de overfitting. En modelos modernos suele verse otro patrón. Al aumentar la capacidad: (1) baja el error de test; (2) sube cerca del <b>umbral de interpolación</b>; (3) vuelve a bajar en el régimen sobreparametrizado. Eso es <b>double descent</b>.</p>
+<p>El umbral de interpolación es el punto donde el modelo apenas puede lograr R<sub>train</sub> ≈ 0. Hay tres zonas:</p>
+<ul>
+  <li><b>Subparametrizada:</b> el modelo no tiene suficiente capacidad (sesgo alto).</li>
+  <li><b>Cerca del umbral:</b> puede ajustar los datos, pero apenas, y puede ser inestable.</li>
+  <li><b>Sobreparametrizada:</b> hay <em>muchas</em> soluciones que ajustan los datos.</li>
+</ul>
+<div class="note fix">
+  <span class="tag">Ojo</span>
+  <p>Double descent no es una ley universal: depende de los datos, el ruido, la arquitectura y la optimización. En la figura de la slide, con etiquetas sin ruido (panel a) el error de test solo baja y no se ve el pico; con 15 % de ruido en las etiquetas (panel b) sí aparece.</p>
+</div>
+<figure class="fig">
+  <img src="../images/doubledescent.png" alt="Error de entrenamiento y de test contra el tamaño de la capa oculta, sin ruido (a) y con 15 por ciento de ruido en las etiquetas (b)">
+  <figcaption>La figura de la slide con MNIST1D. «Hidden layer size» es el tamaño de la capa oculta, «Error» es el error en porcentaje, «Train» es entrenamiento y «Test» es prueba; la línea punteada vertical es el umbral de interpolación. En (b), con 15 % de etiquetas con ruido, el error de test sube hasta el umbral y después baja otra vez, aunque el error de entrenamiento ya es 0.</figcaption>
+</figure>
+
+<h3 id="lab-dd" class="lab" data-toc="Lab: double descent de verdad">Laboratorio: double descent calculado de verdad</h3>
+<p>Regresión de sin(πx) con <b>n = 20</b> puntos de entrenamiento equiespaciados en [−1, 1] y ruido σ = 0.3. El modelo usa <b>p características aleatorias</b> ReLU(±(x − u)), con u uniforme en [−1, 1]: más características = más capacidad. Cuando p &lt; n se resuelve mínimos cuadrados; cuando p ≥ n hay muchas soluciones que interpolan y se toma la de <b>norma mínima</b>: w = Φᵀ(ΦΦᵀ + εI)⁻¹y, con ε = 10⁻⁸. Cada punto de las curvas resume 40 semillas (se calcula una vez al abrir la página y puede tardar un momento). El error de entrenamiento baja tanto que sale por el fondo de la gráfica: llega a ≈ 10⁻¹¹.</p>
+<div class="widget" id="labDD">
+  <div class="widget-head"><div class="wt">Error contra el número de características p</div><div class="ws">Izquierda: curvas de error (escala log). Derecha: el ajuste para el p que marques (semilla 1).</div></div>
+  <div class="widget-body">
+    <div class="twocan"><canvas id="ddCurva"></canvas><canvas id="ddAjuste"></canvas></div>
+    <div class="lab-grid" style="margin-top:12px">
+      <div><div id="ddCtrl"></div><div id="ddSel"></div></div>
+      <div><div id="ddRead"></div><div class="status info" id="ddEstado">Calculando…</div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <p><b>1.</b> Con pocas características el error de test baja al aumentar p, hasta ≈ 0.07 con p = 10 (media). <b>2.</b> Cerca de p = n = 20 el error de test <em>se dispara</em>: con la media llega a ≈ 1.6 con p = 25, más de veinte veces el valor anterior, mientras el error de entrenamiento sigue bajando. Cambia a la mediana, que ignora las semillas extremas: el pico es más modesto (≈ 0.15, en p = 21) pero está en el mismo lugar. <b>3.</b> Para p grande el error de entrenamiento es ≈ 0 (interpola) y el de test vuelve a bajar hasta ≈ 0.09 con p = 80, tanto con la media como con la mediana: el segundo descenso. <b>4.</b> Marca p = 20 en el panel derecho y mira la semilla 1: la curva ajustada se desvía mucho de la función verdadera (hasta 1.8 en algún punto, sobre todo en los bordes) y su error de test es 0.12. Con p = 80 pasa por todos los puntos de entrenamiento (error ≈ 6 × 10⁻¹²) y se parece mucho más a la función verdadera (desviación máxima 0.6, error de test 0.055). Interpolan las dos, no es la misma solución, y la de norma mínima es la más suave.</p>
+</div>
+
+<div class="note fix">
+  <span class="tag">Sobre este laboratorio</span>
+  <p>Este laboratorio es un experimento hecho aquí, no un resultado de la slide, y el pico exacto depende de las semillas (entre p = 21 y 25 según se use mediana o media, siempre pegado a n = 20). La slide solo enseña la figura de MNIST1D. Un matiz: aquí el pico de test cae en p ≈ n, pero el error de entrenamiento llega a ≈ 0 un poco después (hacia p ≈ 40). Con características 1D tan parecidas entre sí, el umbral de interpolación se «difumina» en una zona, no en un punto. Con otra familia de características el pico se movería.</p>
+  <p>Para que la curva se viera hubo que escoger bien el diseño. En las primeras pruebas, con puntos de entrenamiento al azar en lugar de equiespaciados, el error de test crecía con p y no aparecía el segundo descenso. El fenómeno depende de los detalles del problema.</p>
+</div>
+
+<h3 id="sesgo-inductivo">Sesgo inductivo: ¿cuál de las soluciones que interpolan?</h3>
+<p>Cuando hay muchas soluciones que ajustan el entrenamiento, la pregunta ya no es «¿existe una solución?» sino <b>«¿qué tipo de solución encuentra el entrenamiento?»</b>. Eso es el <b>sesgo inductivo</b>: el algoritmo y la arquitectura prefieren ciertas soluciones sobre otras. En el laboratorio, la preferencia es explícita: entre todas las que interpolan, la de <em>norma mínima</em>, que resulta suave. En redes profundas, el sesgo viene de la arquitectura, la inicialización, el algoritmo de optimización y los datos. Conecta con la <b>regularización implícita</b> del <a href="05_regularizacion.html">artefacto 05</a>: SGD, sin que se lo pidas, favorece ciertas soluciones.</p>
+<p>La pregunta que la slide deja abierta es por qué algunas de esas soluciones generalizan bien. No tiene respuesta completa; no la inventes en el examen.</p>
+
+<h3 id="maldicion">La maldición de la dimensionalidad</h3>
+<p>En espacios de alta dimensión, los datos se vuelven escasos: aunque tengas muchos ejemplos, el espacio de entradas posibles es enorme. Un cálculo con números: divide cada eje en 10 intervalos y cuenta las celdas.</p>
+<table class="tbl tabnum">
+  <thead><tr><th>Dimensiones d</th><th>Celdas = 10<sup>d</sup></th><th>Con 1 000 datos, en el mejor caso…</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>10</td><td>de sobra: 100 datos por celda</td></tr>
+    <tr><td>2</td><td>100</td><td>de sobra: 10 por celda</td></tr>
+    <tr><td>3</td><td>1 000</td><td>1 dato por celda: justo</td></tr>
+    <tr><td>10</td><td>10 000 000 000</td><td>10⁻⁷: una celda de cada diez millones</td></tr>
+  </tbody>
+</table>
+<p>Así que muchas regiones no contienen ningún ejemplo y generalizar exige supuestos sobre qué ocurre entre los puntos observados. La maldición <em>no</em> es una explicación completa del double descent; solo ayuda a entender por qué generalizar en alta dimensión es difícil y por qué hace falta un sesgo inductivo.</p>
+
+<!-- ============ 10. HIPERPARAMETROS ============ -->
+<h2 id="hiperparametros"><span class="num">Sección 10</span>Elegir hiperparámetros</h2>
+<p>Entre los hiperparámetros importantes están el número de capas, de neuronas por capa, el optimizador, la tasa de aprendizaje, el tamaño del batch y el número de épocas. Se escogen de forma empírica con el conjunto de <b>validación</b>:</p>
+<ol>
+  <li>Entrena varios modelos con distintos hiperparámetros.</li>
+  <li>Evalúalos en el conjunto de validación.</li>
+  <li>Escoge la configuración con mejor desempeño en validación.</li>
+  <li>Evalúa <b>una sola vez</b> el modelo final en el conjunto de prueba (test).</li>
+</ol>
+<p>Es costoso, porque cada configuración requiere un entrenamiento completo. Y el test no se toca para tomar decisiones: si lo usaras para elegir, la evaluación final ya no mediría datos «nuevos», porque tu elección estaría ajustada a él.</p>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 11</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. Muestra el procedimiento completo: el examen premia los pasos, no solo el resultado. Los números de los ejercicios de cálculo están comprobados con un script.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §4 · backprop a mano</span>
+  <div class="e-enun">Red f₀ = β₀ + ω₀x, h₁ = ReLU(f₀), f₁ = β₁ + ω₁h₁, ℓ = (f₁ − y)², con x = 3, y = 1, β₀ = −1, ω₀ = 1, β₁ = 2, ω₁ = −1. Calcula el forward y las cuatro parciales ∂ℓ/∂ω₀, ∂ℓ/∂β₀, ∂ℓ/∂ω₁, ∂ℓ/∂β₁.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Primero la tabla de forward, anotando el signo de f₀. Luego ∂ℓ/∂f₁ = 2(f₁ − y).</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Forward:</b> f₀ = −1 + 1·3 = 2 (positiva); h₁ = 2; f₁ = 2 + (−1)(2) = 0; ℓ = (0 − 1)² = 1.</p>
+    <p><b>Backward:</b> ∂ℓ/∂f₁ = 2(0 − 1) = −2. Entonces ∂ℓ/∂ω₁ = (−2)(h₁) = (−2)(2) = <b>−4</b> y ∂ℓ/∂β₁ = <b>−2</b>. Luego ∂ℓ/∂h₁ = (−2)(ω₁) = (−2)(−1) = 2; como f₀ = 2 &gt; 0, la compuerta vale 1 y ∂ℓ/∂f₀ = 2. Por último ∂ℓ/∂ω₀ = 2 · x = 2 · 3 = <b>6</b> y ∂ℓ/∂β₀ = <b>2</b>.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §4 · ReLU apagada</span>
+  <div class="e-enun">Repite el ejercicio anterior pero con ω₀ = −1 (el resto igual). ¿Qué gradientes valen 0 y por qué?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Forward:</b> f₀ = −1 + (−1)(3) = −4 (negativa); h₁ = ReLU(−4) = 0; f₁ = 2 + (−1)(0) = 2; ℓ = (2 − 1)² = 1.</p>
+    <p><b>Backward:</b> ∂ℓ/∂f₁ = 2(2 − 1) = 2. ∂ℓ/∂ω₁ = 2 · h₁ = 2 · 0 = <b>0</b>; ∂ℓ/∂β₁ = <b>2</b>. ∂ℓ/∂h₁ = 2 · (−1) = −2, pero f₀ &lt; 0, así que la compuerta 𝟙[f₀ &gt; 0] = 0 y ∂ℓ/∂f₀ = 0; entonces ∂ℓ/∂ω₀ = <b>0</b> y ∂ℓ/∂β₀ = <b>0</b>.</p>
+    <p><b>Por qué:</b> ∂ℓ/∂ω₁ = 0 porque no entró nada al peso (h₁ = 0). ∂ℓ/∂ω₀ y ∂ℓ/∂β₀ = 0 porque la ReLU apagada corta el error antes de llegar a la capa 0. Solo ∂ℓ/∂β₁ ≠ 0, porque a un sesgo siempre le entra un 1.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §4 · recurrencia vectorial</span>
+  <div class="e-enun">Con Ω<sub>k</sub> = [[1, −2],[3, 1]], δ<sub>k</sub> = (2, −1)ᵀ, f<sub>k−1</sub> = (0.5, −1)ᵀ y h<sub>k</sub> = (1, 2)ᵀ, usa ReLU y calcula δ<sub>k−1</sub> y ∂ℓ/∂Ω<sub>k</sub>.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>δ<sub>k−1</sub> = (Ω<sub>k</sub>ᵀδ<sub>k</sub>) ⊙ 𝟙[f<sub>k−1</sub> &gt; 0] y ∂ℓ/∂Ω<sub>k</sub> = δ<sub>k</sub>h<sub>k</sub>ᵀ. Ojo: transpón Ω antes de multiplicar.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Ω<sub>k</sub>ᵀ = [[1, 3],[−2, 1]]. Ω<sub>k</sub>ᵀδ<sub>k</sub> = (1·2 + 3·(−1), −2·2 + 1·(−1)) = (−1, −5). La máscara es (𝟙[0.5 &gt; 0], 𝟙[−1 &gt; 0]) = (1, 0). Entonces <b>δ<sub>k−1</sub> = (−1, −5) ⊙ (1, 0) = (−1, 0)</b>.</p>
+    <p>∂ℓ/∂Ω<sub>k</sub> = δ<sub>k</sub>h<sub>k</sub>ᵀ = (2, −1)ᵀ(1, 2) = <b>[[2, 4],[−1, −2]]</b>, una matriz 2×2 como Ω<sub>k</sub>.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §4 · ruptura de simetría</span>
+  <div class="e-enun">Inicializas todos los pesos de una red profunda en 0.5 (no en cero), con D = 100 neuronas por capa y β = 0. ¿Se rompe la simetría? ¿Qué le pasa a las activaciones?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>No se rompe.</b> Que el valor no sea cero no importa: dentro de una capa todos los pesos son iguales, así que todas las neuronas de esa capa calculan lo mismo, reciben el mismo gradiente y se actualizan igual. Siguen siendo copias.</p>
+    <p>Además, la escala es desastrosa: si las 100 entradas valen h, cada neurona calcula 0.5 · 100 · h = 50h. Con ReLU, cada capa multiplica la señal por 50, y tras 10 capas es 50¹⁰ ≈ 10¹⁷ veces mayor: explota. Falta aleatoriedad (para romper la simetría) y falta escala (σ²<sub>Ω</sub> = 2/D).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §4 · inicialización He</span>
+  <div class="e-enun">Una capa tiene 512 entradas y usa ReLU. ¿Cuál es σ²<sub>Ω</sub> según He y cuál es la desviación estándar de los pesos?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>σ²<sub>Ω</sub> = 2/D<sub>h</sub> = 2/512 = <b>0.0039</b> y σ<sub>Ω</sub> = √0.0039 = <b>0.0625</b> (porque 0.0625² = 0.0039).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §4 · tanh con He</span>
+  <div class="e-enun">Una red de 30 capas con tanh se inicializa con He en vez de Xavier. ¿Qué esperas de las activaciones? ¿Qué cambiarías?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>El factor ½ de la derivación de He viene de que ReLU apaga la mitad de las neuronas; tanh <em>no</em> apaga nada, así que He da el doble de varianza de lo necesario y las pre-activaciones empiezan más grandes. Pero tanh acota la salida en [−1, 1], de modo que no explota: en una simulación de 30 capas con D = 100, las pre-activaciones se estabilizan con desviación ≈ 0.8, con un 6 % de las neuronas saturadas (|h| &gt; 0.9). Con Xavier la señal, al contrario, se encoge poco a poco (≈ 0.12 en la capa 30).</p>
+    <p>Lo que cambiarías según la regla de la slide: usar <b>Xavier</b> para tanh, y de todos modos <b>revisar</b> activaciones y gradientes en redes muy profundas, porque ninguna regla garantiza nada a 30 capas.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §4 · gradientes que desaparecen</span>
+  <div class="e-enun">En el mejor caso, cada capa de sigmoide multiplica el gradiente por 0.25. ¿Cuántas capas hacen falta para que el factor baje de 10⁻⁶?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Se necesita 0.25<sup>K</sup> &lt; 10⁻⁶. Tomando logaritmos: K &gt; log(10⁻⁶)/log(0.25) = (−13.82)/(−1.386) = 9.97. Entonces <b>K ≥ 10</b>. Comprobación: 0.25⁹ = 3.8 × 10⁻⁶ (todavía mayor) y 0.25¹⁰ = 9.5 × 10⁻⁷ (ya menor).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §4 · double descent</span>
+  <div class="e-enun">Datos hipotéticos para ilustrar. Error (%) según el número de neuronas ocultas — 10: train 30, test 35; 50: train 8, test 20; 100: train 0, test 32; 500: train 0, test 24; 5 000: train 0, test 18. Dibuja un esquema de la curva de test, ubica las tres zonas e indica el umbral de interpolación.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Subparametrizada:</b> 10 y 50 neuronas; el error de entrenamiento no es 0 y el de test baja (35 → 20). <b>Umbral de interpolación:</b> ≈ 100 neuronas, donde el error de entrenamiento llega a 0 por primera vez y el de test <em>sube</em> a su máximo (32). <b>Sobreparametrizada:</b> 500 y 5 000, con entrenamiento en 0 y test que vuelve a bajar (24 → 18) aunque ya no hay nada que ajustar. Eso es lo que la intuición clásica no predecía.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §4 · sesgo y varianza</span>
+  <div class="e-enun">«Más datos de entrenamiento reduce el sesgo.» ¿Verdadero o falso? Justifica.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Falso en general.</b> El sesgo viene de que la familia de modelos no puede representar la relación verdadera; con más datos sigues teniendo la misma familia. Lo que más datos reduce es la <b>varianza</b> (menos dependencia de ejemplos particulares). En el laboratorio de la sección 8, con grado 1 el sesgo² es ≈ 0.20 tanto con n = 15 como con n = 60, mientras la varianza cae de ≈ 0.05 a ≈ 0.01. Para reducir el sesgo hace falta más capacidad.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §4 · hiperparámetros</span>
+  <div class="e-enun">¿Por qué el conjunto de prueba se usa una sola vez?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Porque se quiere estimar el error en datos <em>nuevos</em>. Si usas el test para elegir hiperparámetros (o para decidir entre modelos), tu elección queda ajustada a él y su error ya no representa datos que el modelo no ha visto: se contamina la evaluación final. Para decidir está el conjunto de validación; el test se evalúa una sola vez, con el modelo ya elegido.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 12</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">forward pass (pasada hacia adelante)</div><div class="def">Recorrer la red de la entrada a la pérdida, calculando y guardando cada valor intermedio.</div></div>
+  <div class="item"><div class="term">backward pass (pasada hacia atrás)</div><div class="def">Recorrer la red de la pérdida a la entrada, aplicando la regla de la cadena para obtener el gradiente de cada parámetro.</div></div>
+  <div class="item"><div class="term">backpropagation</div><div class="def">El algoritmo que calcula todos los gradientes con un forward y un backward, reutilizando derivadas intermedias.</div></div>
+  <div class="item"><div class="term">regla de la cadena</div><div class="def">La derivada de una composición es el producto de las derivadas de cada eslabón. Ver <a href="00_matematicas.html#regla-cadena">artefacto 00</a>.</div></div>
+  <div class="item"><div class="term">diferenciación automática (modo reverso)</div><div class="def">Lo que hacen los frameworks: registrar las operaciones del forward y recorrerlas al revés para obtener gradientes.</div></div>
+  <div class="item"><div class="term">pre-activación (f<sub>k</sub>)</div><div class="def">Lo que entra a la función de activación: β<sub>k</sub> + Ω<sub>k</sub>h<sub>k</sub>.</div></div>
+  <div class="item"><div class="term">δ<sub>k</sub></div><div class="def">∂ℓ/∂f<sub>k</sub>: el error que viaja hacia atrás y llega a la capa k.</div></div>
+  <div class="item"><div class="term">gradiente que desaparece (vanishing gradient)</div><div class="def">Los gradientes se encogen capa tras capa y las primeras capas casi no aprenden.</div></div>
+  <div class="item"><div class="term">gradiente que explota (exploding gradient)</div><div class="def">Los gradientes crecen capa tras capa hasta volverse numéricamente inmanejables.</div></div>
+  <div class="item"><div class="term">neurona muerta</div><div class="def">Neurona ReLU con f ≤ 0: su salida y su derivada valen 0, así que no recibe gradiente (para ese ejemplo, o para todos si nunca se enciende).</div></div>
+  <div class="item"><div class="term">saturación</div><div class="def">Zona donde la derivada de una activación (sigmoide, tanh) es casi 0, lo que apaga el gradiente.</div></div>
+  <div class="item"><div class="term">ruptura de simetría</div><div class="def">Que las neuronas de una capa empiecen siendo distintas, lo que exige pesos iniciales aleatorios.</div></div>
+  <div class="item"><div class="term">fan-in / fan-out</div><div class="def">Número de entradas / de salidas de una capa. He usa el fan-in; Xavier usa ambos.</div></div>
+  <div class="item"><div class="term">inicialización He</div><div class="def">σ²<sub>Ω</sub> = 2/D<sub>in</sub>. Para ReLU.</div></div>
+  <div class="item"><div class="term">inicialización Xavier (Glorot)</div><div class="def">σ²<sub>Ω</sub> = 2/(D<sub>in</sub> + D<sub>out</sub>). Para tanh y sigmoide.</div></div>
+  <div class="item"><div class="term">ruido</div><div class="def">Parte impredecible de los datos; ningún modelo la elimina.</div></div>
+  <div class="item"><div class="term">sesgo</div><div class="def">Error sistemático de una familia de modelos demasiado simple para la relación verdadera.</div></div>
+  <div class="item"><div class="term">varianza</div><div class="def">Sensibilidad del modelo ajustado a qué datos de entrenamiento le tocaron.</div></div>
+  <div class="item"><div class="term">umbral de interpolación</div><div class="def">El punto de capacidad donde el modelo apenas puede alcanzar error de entrenamiento ≈ 0.</div></div>
+  <div class="item"><div class="term">double descent</div><div class="def">El error de test baja, sube cerca del umbral de interpolación y vuelve a bajar en el régimen sobreparametrizado.</div></div>
+  <div class="item"><div class="term">sesgo inductivo</div><div class="def">La preferencia del algoritmo y la arquitectura por ciertas soluciones entre muchas que ajustan los datos.</div></div>
+  <div class="item"><div class="term">maldición de la dimensionalidad</div><div class="def">En alta dimensión los datos son escasos: las celdas crecen como 10<sup>d</sup> y la mayoría quedan vacías.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>.</p>
+
+<nav class="serie" data-actual="04"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Entrenamiento2.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  /* ======== núcleos numéricos (probados en node antes de publicarse) ======== */
+  var C = {};
+
+  /* eliminación gaussiana con pivoteo parcial */
+  C.resolver = function(A, b){
+    var n = b.length, i, j, k, M = A.map(function(r, q){ return r.concat([b[q]]); });
+    for(i = 0; i < n; i++){
+      var p = i;
+      for(k = i + 1; k < n; k++) if(Math.abs(M[k][i]) > Math.abs(M[p][i])) p = k;
+      var t = M[i]; M[i] = M[p]; M[p] = t;
+      for(k = i + 1; k < n; k++){ var f = M[k][i] / M[i][i]; for(j = i; j <= n; j++) M[k][j] -= f * M[i][j]; }
+    }
+    var x = new Array(n);
+    for(i = n - 1; i >= 0; i--){ var s = M[i][n]; for(j = i + 1; j < n; j++) s -= M[i][j] * x[j]; x[i] = s / M[i][i]; }
+    return x;
+  };
+
+  /* ---- cadena escalar: f = β3 + ω3 cos(β2 + ω2 exp(β1 + ω1 sin(β0 + ω0 x))) ---- */
+  C.escalarAdelante = function(p, x, y){
+    var f0 = p.b[0] + p.w[0]*x, h1 = Math.sin(f0), f1 = p.b[1] + p.w[1]*h1, h2 = Math.exp(f1),
+        f2 = p.b[2] + p.w[2]*h2, h3 = Math.cos(f2), f3 = p.b[3] + p.w[3]*h3;
+    return {x:x, f0:f0, h1:h1, f1:f1, h2:h2, f2:f2, h3:h3, f3:f3, l:(f3 - y)*(f3 - y)};
+  };
+  C.escalarAtras = function(p, x, y){
+    var F = C.escalarAdelante(p, x, y);
+    var d3 = 2*(F.f3 - y), dh3 = d3*p.w[3], d2 = dh3*(-Math.sin(F.f2)), dh2 = d2*p.w[2],
+        d1 = dh2*Math.exp(F.f1), dh1 = d1*p.w[1], d0 = dh1*Math.cos(F.f0);
+    return {F:F, d3:d3, dh3:dh3, d2:d2, dh2:dh2, d1:d1, dh1:dh1, d0:d0,
+            gw:[d0*x, d1*F.h1, d2*F.h2, d3*F.h3], gb:[d0, d1, d2, d3]};
+  };
+
+  /* ---- dos capas con ReLU: f0 = β0 + ω0 x, h1 = ReLU(f0), f1 = β1 + ω1 h1, ℓ = (f1 − y)² ---- */
+  C.relu2 = function(x, y, b0, w0, b1, w1){
+    var f0 = b0 + w0*x, h1 = f0 > 0 ? f0 : 0, f1 = b1 + w1*h1, d1 = 2*(f1 - y),
+        dh1 = d1*w1, d0 = f0 > 0 ? dh1 : 0;
+    return {f0:f0, h1:h1, f1:f1, l:(f1 - y)*(f1 - y), d1:d1, dh1:dh1, d0:d0,
+            gw1:d1*h1, gb1:d1, gw0:d0*x, gb0:d0, viva:f0 > 0};
+  };
+
+  /* ---- simetría: red 1 → 2 → 1 con todos los parámetros iguales a c ---- */
+  C.redSimetria = function(c, act, aleatorio, semilla){
+    var r = DL.rng(semilla || 2), v = function(){ return aleatorio ? r.normal(0, 1.5) : c; };
+    return {act:act, pasos:0, wa:v(), wb:v(), ba:v(), bb:v(), va:v(), vb:v(), bo:v()};
+  };
+  C.simetriaPaso = function(R, lr){
+    var xs = [-1, -0.5, 0.5, 1], ys = [1, 0.25, 0.25, 1], g = {wa:0, wb:0, ba:0, bb:0, va:0, vb:0, bo:0}, L = 0;
+    var a = R.act === "tanh" ? Math.tanh : function(z){ return z > 0 ? z : 0; };
+    var da = R.act === "tanh" ? function(z){ var t = Math.tanh(z); return 1 - t*t; } : function(z){ return z > 0 ? 1 : 0; };
+    xs.forEach(function(x, i){
+      var za = R.wa*x + R.ba, zb = R.wb*x + R.bb, ha = a(za), hb = a(zb), f = R.va*ha + R.vb*hb + R.bo,
+          d = 2*(f - ys[i]);
+      L += (f - ys[i])*(f - ys[i]) / xs.length;
+      g.va += d*ha/xs.length; g.vb += d*hb/xs.length; g.bo += d/xs.length;
+      g.wa += d*R.va*da(za)*x/xs.length; g.wb += d*R.vb*da(zb)*x/xs.length;
+      g.ba += d*R.va*da(za)/xs.length;   g.bb += d*R.vb*da(zb)/xs.length;
+    });
+    for(var k in g) R[k] -= lr*g[k];
+    R.pasos++; R.perdida = L; R.g = g;
+    return R;
+  };
+  C.simetriaPerdida = function(R){
+    var xs = [-1, -0.5, 0.5, 1], ys = [1, 0.25, 0.25, 1], L = 0;
+    var a = R.act === "tanh" ? Math.tanh : function(z){ return z > 0 ? z : 0; };
+    xs.forEach(function(x, i){ var f = R.va*a(R.wa*x + R.ba) + R.vb*a(R.wb*x + R.bb) + R.bo; L += (f - ys[i])*(f - ys[i]) / xs.length; });
+    return L;
+  };
+
+  /* ---- propagación de la varianza: L capas de ancho D, batch de N entradas N(0, 1) ---- */
+  C.crearRedProfunda = function(D, L, N, semilla){
+    var r = DL.rng(semilla), Z = [], k, m, X = new Float64Array(N*D);
+    for(m = 0; m < N*D; m++) X[m] = r.normal(0, 1);
+    for(k = 0; k < L; k++){ var W = new Float64Array(D*D); for(m = 0; m < D*D; m++) W[m] = r.normal(0, 1); Z.push(W); }
+    return {D:D, L:L, N:N, Z:Z, X:X};
+  };
+  C.propagar = function(R, c, act){
+    var D = R.D, L = R.L, N = R.N, s = Math.sqrt(c/D), H = R.X, Fs = [], std = [], k, n, i, j, m;
+    var rms = function(A){ var q = 0; for(var t = 0; t < A.length; t++) q += A[t]*A[t]; return Math.sqrt(q/A.length); };
+    for(k = 0; k < L; k++){
+      var W = R.Z[k], F = new Float64Array(N*D), Hn = new Float64Array(N*D);
+      for(n = 0; n < N; n++) for(i = 0; i < D; i++){
+        var sum = 0, oi = i*D, on = n*D;
+        for(j = 0; j < D; j++) sum += W[oi + j]*H[on + j];
+        F[on + i] = sum*s;
+      }
+      for(m = 0; m < N*D; m++) Hn[m] = act === "relu" ? (F[m] > 0 ? F[m] : 0) : Math.tanh(F[m]);
+      Fs.push(F); std.push(rms(F)); H = Hn;
+    }
+    /* pérdida = suma de las salidas de la última capa / (N·D); multiplicamos por N·D para que δ sea O(1) */
+    var dH = new Float64Array(N*D).fill(1), grad = new Array(L);
+    for(k = L - 1; k >= 0; k--){
+      var Fk = Fs[k], dF = new Float64Array(N*D);
+      for(m = 0; m < N*D; m++){ var z = Fk[m]; dF[m] = dH[m]*(act === "relu" ? (z > 0 ? 1 : 0) : 1 - Math.tanh(z)*Math.tanh(z)); }
+      grad[k] = rms(dF);
+      if(k > 0){
+        var Wk = R.Z[k], dn = new Float64Array(N*D);
+        for(n = 0; n < N; n++) for(i = 0; i < D; i++){
+          var d = dF[n*D + i]*s, oi2 = i*D;
+          for(j = 0; j < D; j++) dn[n*D + j] += d*Wk[oi2 + j];
+        }
+        dH = dn;
+      }
+    }
+    return {std:std, grad:grad};
+  };
+
+  /* ---- sesgo y varianza: 30 datasets, polinomio de grado d, verdad sin(πx), ruido 0.3 ---- */
+  C.ajustePoli = function(xs, ys, d){
+    var P = xs.map(function(x){ return Array.from({length:d + 1}, function(_, j){ return Math.pow(x, j); }); });
+    var A = Array.from({length:d + 1}, function(_, i){ return Array.from({length:d + 1}, function(_, j){
+      return P.reduce(function(s, r){ return s + r[i]*r[j]; }, 0) + (i === j ? 1e-8 : 0); }); });
+    var b = Array.from({length:d + 1}, function(_, i){ return P.reduce(function(s, r, k){ return s + r[i]*ys[k]; }, 0); });
+    return C.resolver(A, b);
+  };
+  C.evalPoli = function(w, x){ var s = 0, pw = 1; for(var j = 0; j < w.length; j++){ s += w[j]*pw; pw *= x; } return s; };
+  C.sesgoVarianza = function(n, d){
+    var G = DL.linspace(-1, 1, 101), fits = [], data0 = null, s, i;
+    for(s = 0; s < 30; s++){
+      var r = DL.rng(1000 + s), xs = [], ys = [];
+      for(i = 0; i < n; i++){ var x = -1 + 2*r.u(); xs.push(x); ys.push(Math.sin(Math.PI*x) + r.normal(0, 0.3)); }
+      if(s === 0) data0 = {xs:xs, ys:ys};
+      var w = C.ajustePoli(xs, ys, d);
+      fits.push(G.map(function(x){ return C.evalPoli(w, x); }));
+    }
+    var mean = G.map(function(_, k){ var q = 0; for(var t = 0; t < 30; t++) q += fits[t][k]; return q/30; });
+    var b2 = 0, v = 0;
+    G.forEach(function(x, k){
+      b2 += Math.pow(mean[k] - Math.sin(Math.PI*x), 2);
+      for(var t = 0; t < 30; t++) v += Math.pow(fits[t][k] - mean[k], 2)/30;
+    });
+    return {G:G, fits:fits, mean:mean, data0:data0, sesgo2:b2/G.length, varianza:v/G.length};
+  };
+
+  /* ---- double descent: p características ReLU(±(x − u)), u ~ U(−1, 1); n puntos equiespaciados ---- */
+  C.ddAjuste = function(p, semilla, n, sigma){
+    var r = DL.rng(semilla), f = function(x){ return Math.sin(Math.PI*x); }, i, k;
+    var xs = DL.linspace(-1, 1, n), ys = xs.map(function(x){ return f(x) + r.normal(0, sigma); });
+    var Wf = []; for(k = 0; k < p; k++) Wf.push([r.u() < 0.5 ? -1 : 1, -1 + 2*r.u()]);
+    var phi = function(x){ return Wf.map(function(q){ var z = q[0]*(x - q[1]); return z > 0 ? z : 0; }); };
+    var Phi = xs.map(phi), eps = 1e-8, w;
+    if(p < n){
+      var A = Array.from({length:p}, function(_, a){ return Array.from({length:p}, function(_, b){
+        return Phi.reduce(function(s, rw){ return s + rw[a]*rw[b]; }, 0) + (a === b ? eps : 0); }); });
+      w = C.resolver(A, Array.from({length:p}, function(_, a){ return Phi.reduce(function(s, rw, t){ return s + rw[a]*ys[t]; }, 0); }));
+    } else {
+      var K = Phi.map(function(a, ia){ return Phi.map(function(b, ib){
+        return a.reduce(function(s, v, t){ return s + v*b[t]; }, 0) + (ia === ib ? eps : 0); }); });
+      var al = C.resolver(K, ys);
+      w = Array.from({length:p}, function(_, j){ return Phi.reduce(function(s, rw, t){ return s + rw[j]*al[t]; }, 0); });
+    }
+    var pred = function(x){ return phi(x).reduce(function(s, v, j){ return s + v*w[j]; }, 0); };
+    var tr = 0; xs.forEach(function(x, t){ var e = pred(x) - ys[t]; tr += e*e/n; });
+    var T = 200, G = DL.linspace(-1, 1, T), te = 0;
+    G.forEach(function(x){ var e = pred(x) - f(x); te += e*e/T; });
+    return {xs:xs, ys:ys, tr:tr, te:te, G:G, pred:G.map(pred), verdad:G.map(f)};
+  };
+  C.ddCurvas = function(n, sigma, nSemillas, pMax){
+    var p, s, out = {p:[], trMedia:[], teMedia:[], trMed:[], teMed:[]};
+    for(p = 1; p <= pMax; p++){
+      var tr = [], te = [];
+      for(s = 1; s <= nSemillas; s++){ var o = C.ddAjuste(p, s*101 + 3, n, sigma); tr.push(o.tr); te.push(o.te); }
+      var med = function(a){ var b = a.slice().sort(function(x, y){ return x - y; }), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m-1] + b[m])/2; };
+      var media = function(a){ return a.reduce(function(x, y){ return x + y; }, 0)/a.length; };
+      out.p.push(p); out.trMedia.push(media(tr)); out.teMedia.push(media(te)); out.trMed.push(med(tr)); out.teMed.push(med(te));
+    }
+    return out;
+  };
+
+
+  var $ = function(id){ return document.getElementById(id); };
+  var fm = function(x, d){ return DL.fmt(x, d === undefined ? 3 : d).replace(/-/g, "−"); };
+
+  /* ================= Lab 1: grafo computacional ================= */
+  (function(){
+    var P = {b:[.1,.1,.1,.1], w:[.5,.5,.5,.5]}, X = 1, Y = 1;
+    var B = C.escalarAtras(P, X, Y), F = B.F;
+    var nombres = ["x","f₀","h₁","f₁","h₂","f₂","h₃","f₃","ℓ"];
+    var vals = [X, F.f0, F.h1, F.f1, F.h2, F.f2, F.h3, F.f3, F.l];
+    var grad = {7:B.d3, 6:B.dh3, 5:B.d2, 4:B.dh2, 3:B.d1, 2:B.dh1, 1:B.d0};
+    var ordenAtras = [7,6,5,4,3,2,1];
+    var texto = [
+      "Estado inicial: solo conocemos la entrada x = 1 y los parámetros (β = 0.1, ω = 0.5).",
+      "f₀ = β₀ + ω₀x = 0.1 + 0.5·1 = <b>" + fm(F.f0) + "</b>",
+      "h₁ = sin(f₀) = sin(" + fm(F.f0) + ") = <b>" + fm(F.h1) + "</b>",
+      "f₁ = β₁ + ω₁h₁ = 0.1 + 0.5·" + fm(F.h1) + " = <b>" + fm(F.f1) + "</b>",
+      "h₂ = exp(f₁) = exp(" + fm(F.f1) + ") = <b>" + fm(F.h2) + "</b>",
+      "f₂ = β₂ + ω₂h₂ = 0.1 + 0.5·" + fm(F.h2) + " = <b>" + fm(F.f2) + "</b>",
+      "h₃ = cos(f₂) = cos(" + fm(F.f2) + ") = <b>" + fm(F.h3) + "</b>",
+      "f₃ = β₃ + ω₃h₃ = 0.1 + 0.5·" + fm(F.h3) + " = <b>" + fm(F.f3) + "</b>",
+      "ℓ = (f₃ − y)² = (" + fm(F.f3) + " − 1)² = <b>" + fm(F.l) + "</b>. Termina el forward; empieza el backward.",
+      "∂ℓ/∂f₃ = 2(f₃ − y) = 2(" + fm(F.f3) + " − 1) = <b>" + fm(B.d3) + "</b>",
+      "∂ℓ/∂h₃ = (∂ℓ/∂f₃)·ω₃ = " + fm(B.d3) + " · 0.5 = <b>" + fm(B.dh3) + "</b>",
+      "∂ℓ/∂f₂ = (∂ℓ/∂h₃)·(−sin f₂) = " + fm(B.dh3) + " · (−sin " + fm(F.f2) + ") = <b>" + fm(B.d2) + "</b>",
+      "∂ℓ/∂h₂ = (∂ℓ/∂f₂)·ω₂ = " + fm(B.d2) + " · 0.5 = <b>" + fm(B.dh2) + "</b>",
+      "∂ℓ/∂f₁ = (∂ℓ/∂h₂)·exp(f₁) = " + fm(B.dh2) + " · " + fm(F.h2) + " = <b>" + fm(B.d1) + "</b>",
+      "∂ℓ/∂h₁ = (∂ℓ/∂f₁)·ω₁ = " + fm(B.d1) + " · 0.5 = <b>" + fm(B.dh1) + "</b>",
+      "∂ℓ/∂f₀ = (∂ℓ/∂h₁)·cos(f₀) = " + fm(B.dh1) + " · cos(" + fm(F.f0) + ") = <b>" + fm(B.d0) + "</b>. Ya tenemos todos los errores δ; ahora los gradientes de los parámetros."
+    ];
+    function tabla(){
+      var h = '<table class="tbl tabnum"><thead><tr><th>Parámetro</th><th>backprop</th><th>diferencias finitas</th><th>|diferencia|</th></tr></thead><tbody>';
+      for(var k = 0; k < 4; k++){
+        [["ω", "w", B.gw[k]], ["β", "b", B.gb[k]]].forEach(function(t){
+          var a = {b:P.b.slice(), w:P.w.slice()}, c2 = {b:P.b.slice(), w:P.w.slice()}, e = 1e-5;
+          a[t[1]][k] += e; c2[t[1]][k] -= e;
+          var fd = (C.escalarAdelante(a, X, Y).l - C.escalarAdelante(c2, X, Y).l) / (2*e);
+          h += '<tr><td>' + t[0] + '<sub>' + k + '</sub></td><td>' + fm(t[2], 5) + '</td><td>' + fm(fd, 5) + '</td><td>' + (Math.abs(t[2] - fd)).toExponential(1) + '</td></tr>';
+        });
+      }
+      return h + '</tbody></table><p>Fórmulas: ∂ℓ/∂ω<sub>k</sub> = (∂ℓ/∂f<sub>k</sub>)·h<sub>k</sub> con h₀ = x; ∂ℓ/∂β<sub>k</sub> = ∂ℓ/∂f<sub>k</sub>. Diferencias finitas: (ℓ(θ + ε) − ℓ(θ − ε))/(2ε) con ε = 10⁻⁵.</p>';
+    }
+    DL.pasos($("labGrafo"), {total: 16, reproducir: true, ms: 1100, render: function(i){
+      var h = "";
+      for(var n = 0; n < 9; n++){
+        var cls = "gnode", extra = "";
+        if(n === 0 || n <= Math.min(i, 8)) cls += (i >= 1 && i <= 8 && n === i) ? " on" : " done";
+        else cls += "";
+        if(i >= 9){
+          var j = ordenAtras.indexOf(n), hechos = i - 8;
+          if(j >= 0 && j < hechos){ cls = "gnode " + (j === hechos - 1 ? "bon" : "bdone"); extra = '<div class="gv">∂ℓ: ' + fm(grad[n]) + '</div>'; }
+          else if(n <= 8) cls = "gnode done";
+        }
+        var v = n <= Math.min(Math.max(i, 0), 8) ? fm(vals[n]) : "·";
+        h += '<div class="' + cls + '"><div class="gn">' + nombres[n] + '</div><div class="gv">' + v + '</div>' + extra + '</div>';
+        if(n < 8) h += '<span class="garrow">' + (i >= 9 ? "←" : "→") + '</span>';
+      }
+      $("grafoNodos").innerHTML = h;
+      var act = $("grafoNodos").querySelector(".on, .bon"), cont = $("grafoNodos").parentNode;
+      if(act){ var ra = act.getBoundingClientRect(), rc = cont.getBoundingClientRect(); cont.scrollLeft += (ra.left - rc.left) - rc.width/2 + ra.width/2; } else cont.scrollLeft = 0;
+      $("grafoCalc").innerHTML = texto[Math.min(i, 15)];
+      $("grafoTabla").innerHTML = i === 15 ? tabla() : (i >= 9 ? "" : "");
+    }});
+  })();
+
+  /* ================= Lab 2: dos capas con ReLU ================= */
+  (function(){
+    var ini = {x:2, y:3, b0:-1, w0:1.5, b1:.5, w1:2}, S = {}, ctr = {};
+    function copia(){ for(var k in ini) S[k] = ini[k]; }
+    copia();
+    function pintar(){
+      var R = C.relu2(S.x, S.y, S.b0, S.w0, S.b1, S.w1);
+      var nodo = function(n, v, cls, ex){ return '<div class="gnode ' + cls + '"><div class="gn">' + n + '</div><div class="gv">' + v + '</div>' + (ex ? '<div class="gv">' + ex + '</div>' : '') + '</div>'; };
+      var arr = '<span class="garrow">→</span>', arrB = '<span class="garrow">←</span>';
+      var back = R.viva ? "bdone" : "";
+      $("reluNodos").innerHTML =
+        nodo("x", fm(S.x, 2), "done") + arr + nodo("f₀", fm(R.f0), "done", "δ = " + fm(R.d0)) + arr +
+        nodo("h₁", fm(R.h1), R.viva ? "done" : "", "∂ℓ/∂h₁ = " + fm(R.dh1)) + arr + nodo("f₁", fm(R.f1), "done", "δ = " + fm(R.d1)) + arr + nodo("ℓ", fm(R.l), "done");
+      DL.readout($("reluRead"), [["∂ℓ/∂ω₀", fm(R.gw0)], ["∂ℓ/∂β₀", fm(R.gb0)], ["∂ℓ/∂ω₁", fm(R.gw1)], ["∂ℓ/∂β₁", fm(R.gb1)], ["ℓ", fm(R.l)]]);
+      $("reluCalc").innerHTML =
+        "f₀ = " + fm(S.b0, 2) + " + " + fm(S.w0, 2) + "·" + fm(S.x, 2) + " = <b>" + fm(R.f0) + "</b> · h₁ = ReLU(f₀) = <b>" + fm(R.h1) + "</b> · f₁ = " + fm(S.b1, 2) + " + " + fm(S.w1, 2) + "·" + fm(R.h1) + " = <b>" + fm(R.f1) + "</b><br>" +
+        "∂ℓ/∂f₁ = 2(f₁ − y) = <b>" + fm(R.d1) + "</b> · ∂ℓ/∂h₁ = ∂ℓ/∂f₁·ω₁ = <b>" + fm(R.dh1) + "</b> · ∂ℓ/∂f₀ = ∂ℓ/∂h₁·𝟙[f₀ &gt; 0] = <b>" + fm(R.d0) + "</b>";
+      var st = $("reluEstado");
+      if(R.viva){ st.className = "status ok"; st.textContent = "Neurona encendida (f₀ > 0): el error pasa completo hacia las capas de abajo."; }
+      else { st.className = "status bad"; st.textContent = "Neurona muerta para este ejemplo (f₀ ≤ 0): ∂ℓ/∂ω₀, ∂ℓ/∂β₀ y ∂ℓ/∂ω₁ valen 0."; }
+    }
+    [["x", "entrada x", -3, 3], ["y", "objetivo y", -3, 5], ["b0", "β₀", -3, 3], ["w0", "ω₀", -3, 3], ["b1", "β₁", -3, 3], ["w1", "ω₁", -3, 3]].forEach(function(c){
+      ctr[c[0]] = DL.control($("reluCtrl"), {etiqueta:c[1], min:c[2], max:c[3], paso:0.1, valor:S[c[0]], alCambiar:function(v){ S[c[0]] = v; pintar(); }});
+    });
+    $("reluReset").onclick = function(){ copia(); for(var k in ctr) ctr[k].fijar(S[k], true); pintar(); };
+    $("reluMuerta").onclick = function(){ S.w0 = -1.5; ctr.w0.fijar(-1.5, true); pintar(); };
+    pintar();
+  })();
+
+  /* ================= Lab 3: recurrencia vectorial ================= */
+  (function(){
+    var O0 = [[1,2],[-1,1],[2,-1]], B0 = [0,-1,0], O1 = [[1,2,-1]], B1 = [0], x = [1,1], y = 1;
+    var f0 = O0.map(function(r, i){ return r[0]*x[0] + r[1]*x[1] + B0[i]; });
+    var h1 = f0.map(function(v){ return v > 0 ? v : 0; });
+    var f1 = O1[0].reduce(function(s, w, i){ return s + w*h1[i]; }, 0) + B1[0];
+    var d1 = 2*(f1 - y);
+    var Otd = O1[0].map(function(w){ return w*d1; });
+    var mask = f0.map(function(v){ return v > 0 ? 1 : 0; });
+    var d0 = Otd.map(function(v, i){ return v*mask[i]; });
+    var col = function(a){ return a.map(function(v){ return [v]; }); };
+    var M = function(m, t, f, k){ return DL.matriz(m, {titulo:t, forma:f, dec:0, clase:k || function(){ return ""; }}); };
+    var op = function(s){ return '<span class="op">' + s + '</span>'; };
+    DL.pasos($("labVec"), {total: 7, etiqueta: "paso", render: function(i){
+      var A = "", Bm = "", t = "";
+      if(i === 0){
+        A = M(O0, "Ω₀", "(3, 2)") + op("·") + M(col(x), "x", "(2, 1)") + op("+") + M(col(B0), "β₀", "(3, 1)") + op("=") + M(col(f0), "f₀", "(3, 1)", function(r){ return f0[r] <= 0 ? "dim" : "ok"; });
+        Bm = M(col(h1), "h₁ = ReLU(f₀)", "(3, 1)") + op("→") + M(O1, "Ω₁", "(1, 3)") + op("·") + M(col(h1), "h₁", "(3, 1)") + op("=") + M([[f1]], "f₁", "(1, 1)");
+        t = "Forward: f₀ = (3, −1, 1) y h₁ = (3, 0, 1). f₁ = 1·3 + 2·0 + (−1)·1 = <b>2</b>. Pérdida ℓ = (2 − 1)² = <b>1</b>. Guardamos f₀ y h₁ y también x.";
+      } else if(i === 1){
+        A = M([[d1]], "δ₁ = 2(f₁ − y)", "(1, 1)", function(){ return "hl"; });
+        t = "δ₁ = ∂ℓ/∂f₁ = 2(f₁ − y) = 2(2 − 1) = <b>2</b>. Este es el error que arranca el viaje hacia atrás.";
+      } else if(i === 2){
+        A = M(col(O1[0]), "Ω₁ᵀ", "(3, 1)", function(){ return "hl2"; }) + op("·") + M([[d1]], "δ₁", "(1, 1)", function(){ return "hl"; }) + op("=") + M(col(Otd), "Ω₁ᵀδ₁", "(3, 1)", function(){ return "ok"; });
+        t = "Ω₁ᵀδ₁ = (1·2, 2·2, −1·2) = <b>(2, 4, −2)</b>. Cada neurona oculta recibe el error de arriba multiplicado por el peso que la conecta con la salida.";
+      } else if(i === 3){
+        A = M(col(f0), "f₀ (guardado)", "(3, 1)") + op("→") + M(col(mask), "𝟙[f₀ > 0]", "(3, 1)", function(r){ return mask[r] ? "ok" : "dim"; });
+        t = "La máscara de ReLU sale de f₀, que guardó el forward: 𝟙[3 &gt; 0], 𝟙[−1 &gt; 0], 𝟙[1 &gt; 0] = <b>(1, 0, 1)</b>. La neurona 2 estaba apagada.";
+      } else if(i === 4){
+        A = M(col(Otd), "Ω₁ᵀδ₁", "(3, 1)") + op("⊙") + M(col(mask), "𝟙[f₀ > 0]", "(3, 1)") + op("=") + M(col(d0), "δ₀", "(3, 1)", function(r){ return mask[r] ? "ok" : "dim"; });
+        t = "δ₀ = (2, 4, −2) ⊙ (1, 0, 1) = <b>(2, 0, −2)</b>. El 4 de la neurona apagada se perdió: el producto elemento a elemento lo anuló.";
+      } else if(i === 5){
+        A = M(col([d1]), "δ₁", "(1, 1)", function(){ return "hl"; }) + op("·") + M([h1], "h₁ᵀ", "(1, 3)", function(){ return "hl2"; }) + op("=") + M([h1.map(function(v){ return d1*v; })], "∂ℓ/∂Ω₁", "(1, 3)", function(){ return "ok"; });
+        t = "∂ℓ/∂Ω₁ = δ₁h₁ᵀ = (2·3, 2·0, 2·1) = <b>(6, 0, 2)</b>, con la misma forma que Ω₁. Y ∂ℓ/∂β₁ = δ₁ = <b>2</b>.";
+      } else {
+        A = M(col(d0), "δ₀", "(3, 1)", function(){ return "hl"; }) + op("·") + M([x], "xᵀ", "(1, 2)", function(){ return "hl2"; }) + op("=") + M(d0.map(function(d){ return x.map(function(v){ return d*v; }); }), "∂ℓ/∂Ω₀", "(3, 2)", function(r){ return mask[r] ? "ok" : "dim"; });
+        t = "∂ℓ/∂Ω₀ = δ₀xᵀ, de forma (3, 2) como Ω₀: <b>[[2, 2],[0, 0],[−2, −2]]</b>. La fila de la neurona apagada es toda ceros. Y ∂ℓ/∂β₀ = δ₀ = <b>(2, 0, −2)</b>.";
+      }
+      $("vecA").innerHTML = A; $("vecB").innerHTML = Bm; $("vecCalc").innerHTML = t;
+    }});
+  })();
+
+  /* ================= Lab 4: producto de derivadas ================= */
+  (function(){
+    var K = 10;
+    var lg = function(base, k){ return k*Math.log10(base); };
+    var g = DL.grafica($("satCanvas"), {x:[0, 20], y:[-13, 1], alto:300, etiquetaX:"K (capas)", etiquetaY:"log₁₀ del producto", opcionesEjes:{decY:0, fmtY:function(v){ return "1e" + (v < 0 ? "−" + (-v) : v); }}}, function(g){
+      var A = [], R = [], k;
+      for(k = 0; k <= 20; k++){ A.push([k, lg(0.25, k)]); R.push([k, 0]); }
+      g.polilinea(A, {color:"r-param", ancho:2});
+      g.polilinea(R, {color:"ok", ancho:2});
+      g.puntos([[K, lg(0.25, K)]], {color:"r-param", radio:6, aro:true});
+      g.puntos([[K, 0]], {color:"ok", radio:6, aro:true});
+      g.horizontal(-6, {color:"text-3", guiones:true, ancho:1});
+      g.texto(14, 0.55, "ReLU activa: 1ᴷ", {color:"ok", negrita:true});
+      g.texto(0.6, -11.8, "sigmoide (mejor caso): 0.25ᴷ", {color:"r-param", negrita:true});
+      g.texto(0.4, -5.6, "10⁻⁶", {color:"text-3"});
+    });
+    function leer(){ DL.readout($("satRead"), [["K", K], ["sigmoide 0.25ᴷ", (Math.pow(0.25, K)).toExponential(2).replace("-", "−")], ["ReLU activa 1ᴷ", "1"], ["¿0.25ᴷ < 10⁻⁶?", Math.pow(0.25, K) < 1e-6 ? "sí" : "no"]]); g.redibujar(); }
+    DL.control($("satCtrl"), {etiqueta:"número de capas K", min:1, max:20, paso:1, valor:K, formato:function(v){ return String(v); }, alCambiar:function(v){ K = v; leer(); }});
+    leer();
+  })();
+
+  /* ================= Lab 5: ruptura de simetría ================= */
+  (function(){
+    var c = 0.5, act = "tanh", aleatorio = false, semilla = 2, R;
+    function nueva(){ R = C.redSimetria(c, act, aleatorio, semilla); R.perdida = C.simetriaPerdida(R); pintar(); }
+    function pintar(){
+      var dif = Math.abs(R.wa - R.wb) + Math.abs(R.va - R.vb) + Math.abs(R.ba - R.bb);
+      DL.readout($("simRead"), [["pasos", R.pasos], ["pérdida", fm(R.perdida)], ["wₐ, w_b (entrada)", fm(R.wa) + " | " + fm(R.wb)], ["vₐ, v_b (salida)", fm(R.va) + " | " + fm(R.vb)], ["bₐ, b_b (sesgos)", fm(R.ba) + " | " + fm(R.bb)], ["b salida", fm(R.bo)], ["diferencia entre neuronas", dif < 1e-12 ? "0 (idénticas)" : fm(dif)]]);
+      var st = $("simEstado");
+      if(!aleatorio && dif < 1e-12 && R.pasos > 0){ st.className = "status bad"; st.textContent = "Las dos neuronas siguen siendo idénticas: la simetría no se rompió."; }
+      else if(aleatorio && R.pasos > 0){
+        if(R.perdida > 0.13){ st.className = "status bad"; st.textContent = "Las neuronas son distintas, pero esta semilla se atascó cerca de 0.141: romper la simetría es necesario, no suficiente. Prueba otra semilla."; }
+        else { st.className = "status ok"; st.textContent = "Las neuronas empezaron distintas y se especializan: la pérdida bajó de 0.141."; }
+      }
+      else { st.className = "status info"; st.textContent = aleatorio ? "Pesos aleatorios: las neuronas ya empiezan distintas." : "Todos los parámetros valen c. Entrena y compara las dos neuronas."; }
+    }
+    DL.control($("simCtrl"), {etiqueta:"valor inicial c", min:-1, max:1, paso:0.1, valor:c, alCambiar:function(v){ c = Math.round(v*10)/10; nueva(); }});
+    DL.selector($("simSelPesos"), {opciones:[{v:false, t:"todos iguales a c"}, {v:true, t:"aleatorios"}], valor:false, alCambiar:function(v){ aleatorio = v; nueva(); }});
+    DL.selector($("simSelAct"), {opciones:[{v:"tanh", t:"tanh"}, {v:"relu", t:"ReLU"}], valor:"tanh", alCambiar:function(v){ act = v; nueva(); }});
+    $("simEntrenar").onclick = function(){ for(var i = 0; i < 50; i++) C.simetriaPaso(R, 0.3); R.perdida = C.simetriaPerdida(R); pintar(); };
+    $("simReset").onclick = nueva;
+    $("simSemilla").onclick = function(){ semilla = semilla % 8 + 1; if(!aleatorio){ aleatorio = true; document.querySelectorAll("#simSelPesos button").forEach(function(b){ b.classList.toggle("sel", b.textContent === "aleatorios"); }); } nueva(); };
+    nueva();
+  })();
+
+  /* ================= Lab 6: propagación de la varianza ================= */
+  (function(){
+    var red = null, c = 2, act = "relu", pendiente = false;
+    var cf, cb;
+    function barras(g, arr, color){
+      arr.forEach(function(v, k){
+        var y = Math.log10(Math.max(v, 1e-12));
+        g.rect(k + 0.65, -4, 0.7, y + 4, {color:color, relleno:true, alfa:0.85, borde:false});
+      });
+    }
+    var fmtLog = function(v){ return "1e" + (v < 0 ? "−" + (-v) : v); };
+    var res = null;
+    cf = DL.grafica($("varF"), {x:[0, 21], y:[-4, 3], alto:260, etiquetaY:"desviación típica de f (hacia adelante)", opcionesEjes:{decY:0, fmtY:fmtLog, decX:0}}, function(g){
+      g.horizontal(0, {color:"text-3", guiones:true, ancho:1});
+      if(res) barras(g, res.std, "accent");
+    });
+    cb = DL.grafica($("varB"), {x:[0, 21], y:[-4, 3], alto:260, etiquetaY:"magnitud de δ (hacia atrás)", opcionesEjes:{decY:0, fmtY:fmtLog, decX:0}}, function(g){
+      g.horizontal(0, {color:"text-3", guiones:true, ancho:1});
+      if(res) barras(g, res.grad, "ok");
+    });
+    function calcular(){
+      if(!red) red = C.crearRedProfunda(100, 20, 200, 7);
+      res = C.propagar(red, c, act);
+      var st = $("varEstado"), fin = res.std[19], cap1 = res.std[0];
+      DL.readout($("varRead"), [["c (σ² = c/D)", fm(c, 2)], ["desv. capa 1", fm(cap1, 2)], ["desv. capa 20", fm(fin, 2)], ["δ capa 1", fm(res.grad[0], 3)], ["δ capa 20", fm(res.grad[19], 3)]]);
+      if(fin < 0.05){ st.className = "status bad"; st.textContent = "La señal se apaga: ya casi no llega nada a la capa 20."; }
+      else if(fin > 20){ st.className = "status bad"; st.textContent = "La señal explota capa tras capa."; }
+      else { st.className = "status ok"; st.textContent = "La escala se mantiene razonable en las 20 capas."; }
+      cf.redibujar(); cb.redibujar();
+      pendiente = false;
+    }
+    function pedir(){ if(pendiente) return; pendiente = true; $("varEstado").textContent = "Calculando…"; setTimeout(calcular, 10); }
+    var ctrl = DL.control($("varCtrl"), {etiqueta:"c (σ²_Ω = c/D), escala log", min:Math.log10(0.25), max:Math.log10(8), paso:0.001, valor:Math.log10(c), formato:function(v){ return fm(Math.pow(10, v), 2); }, alCambiar:function(v){ c = Math.pow(10, v); pedir(); }});
+    var selAct = DL.selector($("varSel"), {opciones:[{v:"relu", t:"ReLU"}, {v:"tanh", t:"tanh"}], valor:"relu", alCambiar:function(v){ act = v; pedir(); }});
+    function poner(cc, aa){ c = cc; act = aa; ctrl.fijar(Math.log10(cc), true); selAct.el.querySelectorAll("button").forEach(function(b){ b.classList.toggle("sel", b.textContent === (aa === "relu" ? "ReLU" : "tanh")); }); pedir(); }
+    $("bHe").onclick = function(){ poner(2, "relu"); };
+    $("bChica").onclick = function(){ poner(1, "relu"); };
+    $("bGrande").onclick = function(){ poner(3, "relu"); };
+    $("bXavier").onclick = function(){ poner(1, "tanh"); };
+    setTimeout(calcular, 30);
+  })();
+
+  /* ================= Lab 7: muchos datasets ================= */
+  (function(){
+    var n = 15, d = 1, cache = {};
+    var g = DL.grafica($("dsCanvas"), {x:[-1, 1], y:[-2, 2], alto:320, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      var r = cache[n + "_" + d];
+      if(!r) r = cache[n + "_" + d] = C.sesgoVarianza(n, d);
+      r.fits.forEach(function(f){ g.polilinea(r.G.map(function(x, k){ return [x, f[k]]; }), {color:"accent", ancho:1, alfa:0.22}); });
+      g.polilinea(r.G.map(function(x){ return [x, Math.sin(Math.PI*x)]; }), {color:"text-3", ancho:2, guiones:true});
+      g.polilinea(r.G.map(function(x, k){ return [x, r.mean[k]]; }), {color:"r-param", ancho:3});
+      g.puntos(r.data0.xs.map(function(x, k){ return [x, r.data0.ys[k]]; }), {color:"r-dato", radio:3.5});
+      DL.readout($("dsRead"), [["sesgo²", fm(r.sesgo2)], ["varianza", fm(r.varianza)], ["ruido (σ²)", "0.090"], ["suma", fm(r.sesgo2 + r.varianza + 0.09)]]);
+    });
+    DL.control($("dsCtrl"), {etiqueta:"n (puntos por dataset)", min:12, max:100, paso:1, valor:n, formato:function(v){ return String(v); }, alCambiar:function(v){ n = v; g.redibujar(); }});
+    DL.control($("dsCtrl"), {etiqueta:"grado del polinomio", min:0, max:6, paso:1, valor:d, formato:function(v){ return String(v); }, alCambiar:function(v){ d = v; g.redibujar(); }});
+  })();
+
+  /* ================= Lab 8: double descent ================= */
+  (function(){
+    var N = 20, SIGMA = 0.3, cur = null, p = 20, usaMediana = false, selVista;
+    var gc = DL.grafica($("ddCurva"), {x:[0, 80], y:[-3, 0.5], alto:320, etiquetaX:"p (características)", etiquetaY:"error (escala log)", opcionesEjes:{decY:0, fmtY:function(v){ return "1e" + (v < 0 ? "−" + (-v) : v); }, decX:0}}, function(g){
+      if(!cur) return;
+      var te = usaMediana ? cur.teMed : cur.teMedia, tr = usaMediana ? cur.trMed : cur.trMedia;
+      var lg = function(v){ return Math.log10(Math.max(v, 1e-12)); };
+      g.vertical(N, {color:"text-3", guiones:true, ancho:1.5});
+      g.texto(N + 1, -2.75, "p = n = 20", {color:"text-3"});
+      g.polilinea(cur.p.map(function(q, k){ return [q, lg(tr[k])]; }), {color:"r-param", ancho:2});
+      g.polilinea(cur.p.map(function(q, k){ return [q, lg(te[k])]; }), {color:"accent", ancho:2.5});
+      g.puntos([[p, lg(te[p - 1])]], {color:"accent", radio:6, aro:true});
+      g.puntos([[p, lg(tr[p - 1])]], {color:"r-param", radio:6, aro:true});
+      g.texto(48, lg(te[47]) + 0.35, "test", {color:"accent", negrita:true});
+      g.texto(40, -2.55, "entrenamiento", {color:"r-param", negrita:true});
+    });
+    var ga = DL.grafica($("ddAjuste"), {x:[-1, 1], y:[-2, 2], alto:300, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      var o = C.ddAjuste(p, 1*101 + 3, N, SIGMA);
+      g.polilinea(o.G.map(function(x, k){ return [x, o.verdad[k]]; }), {color:"text-3", ancho:2, guiones:true});
+      g.polilinea(o.G.map(function(x, k){ return [x, o.pred[k]]; }), {color:"accent", ancho:2.5});
+      g.puntos(o.xs.map(function(x, k){ return [x, o.ys[k]]; }), {color:"r-dato", radio:3.5});
+      DL.readout($("ddRead"), cur ? [["p", p], ["train (semilla 1)", o.tr.toExponential(1).replace("-", "−")], ["test (semilla 1)", fm(o.te)], ["test, " + (usaMediana ? "mediana" : "media") + " de 40", fm((usaMediana ? cur.teMed : cur.teMedia)[p - 1])]] : [["p", p]]);
+    });
+    DL.control($("ddCtrl"), {etiqueta:"características p", min:1, max:80, paso:1, valor:p, formato:function(v){ return String(v); }, alCambiar:function(v){ p = v; gc.redibujar(); ga.redibujar(); }});
+    selVista = DL.selector($("ddSel"), {opciones:[{v:false, t:"media de 40 semillas"}, {v:true, t:"mediana de 40 semillas (más robusta)"}], valor:false, alCambiar:function(v){ usaMediana = v; gc.redibujar(); ga.redibujar(); }});
+    setTimeout(function(){
+      cur = C.ddCurvas(N, SIGMA, 40, 80);
+      var pico = function(a){ var m = 4; for(var i = 4; i < a.length; i++) if(a[i] > a[m]) m = i; return m + 1; };
+      var st = $("ddEstado"); st.className = "status ok";
+      st.textContent = "Listo. Pico del error de test en p = " + pico(cur.teMed) + " (mediana) y p = " + pico(cur.teMedia) + " (media); n = 20.";
+      gc.redibujar(); ga.redibujar();
+    }, 60);
+  })();
+
+})();
+</script>
+</body>
+</html>

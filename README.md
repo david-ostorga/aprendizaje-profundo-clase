@@ -1,149 +1,39 @@
 # Aprendizaje profundo y sus usos en las políticas públicas
 
 **Escuela de Gobierno y Transformación Pública, Tec de Monterrey**
-
 Profesora: Fernanda Sobrino (fersobrinono@tec.mx)
 
-Entregas en Canvas
+## ¡Bienvenidos!
 
-## Filosofía del curso
+Este es el repositorio espejo de la clase *Aprendizaje profundo y sus usos en las políticas públicas*. La rama `artefactos` reúne material de apoyo para estudiar: explicaciones interactivas de los temas del primer examen y el entorno necesario para correr los notebooks de la clase.
 
-Los agentes de IA ya construyen y entrenan redes neuronales mejor y más rápido que la mayoría de los humanos. El agente hace *exactamente* lo que le
-pides: si no sabes pedir una división train/val/test, pesos por clase o métricas por subgrupo, no las vas a obtener; y si no sabes leer una curva de pérdida, no vas a notar cuando el resultado esté mal. Este curso enseña las dos cosas que la IA aún no hace muy bien: entender cómo funciona el aprendizaje profundo y verificar lo que te entrega el agente.
+## Qué hay en esta rama
 
-Por eso:
+- **[Explicaciones/](Explicaciones)**: 8 artefactos en HTML para estudiar para el primer examen (matemáticas, repaso de ML, redes neuronales, entrenamiento, regularización y una guía de introducción a PyTorch).
+- **`pyproject.toml` y `uv.lock`**: definen el ambiente virtual y las paqueterías necesarias para ejecutar todo lo del repositorio, en especial los notebooks.
 
-1. **El curso es de teoría, no de código.** Derivamos las pérdidas
-   desde máxima verosimilitud, hacemos backprop a mano y entendemos
-   cada arquitectura desde sus supuestos. Los exámenes son a lápiz y
-   papel.
-2. **Uso de IA.** Las tareas de práctica son libres (y no calificadas):
-   puedes usar LLMs, agentes, Google o lo que quieras. En el proyecto
-   final vas a dirigir a un agente, y esa será la habilidad evaluada,
-   con transcripción obligatoria.
-3. **Cubrimos hasta la frontera.** El curso llega hasta LLMs, RLVR y
-   modelos de razonamiento, MoE, RAG y tendremos una sesión sobre
-   dirigir, supervisar y auditar agentes.
+## Cómo ver los artefactos
 
-## Evaluación
+Tienen dos opciones:
 
-| Componente | Peso | Detalle |
-|---|---|---|
-| Exámenes en clase (2) | 50% | Escritos, sin computadora, 40 minutos (25% c/u) |
-| Proyecto de colaboración con IA | 40% | Dirigir a un agente; se califica especificación, verificación e interpretación |
-| Participación | 10% | Contestar preguntas en clase, proponer ejemplos, etc. |
+1. **Desde el navegador:** descarguen el archivo `.html` que quieran y ábranlo con el navegador de su preferencia.
+2. **Desde Visual Studio Code:** abran el archivo con la extensión *Live Server*, que lo despliega automáticamente en su navegador predeterminado.
 
-- **Exámenes**: en clase, individuales, lápiz y papel. No piden
-  escribir código: piden derivar, predecir, diagnosticar y justificar.
-  Temarios y **exámenes de práctica con respuestas**
-  en [Examenes/](Examenes/). Examen 1 (~semana 6): fundamentos
-  ([temario](Examenes/Examen1_Temario.md) ·
-  [examen de práctica](Examenes/Examen1_GuiaEstudio.pdf)). Examen 2
-  (~semana 11): CNNs, RNNs, Transformers y LLMs
-  ([temario](Examenes/Examen2_Temario.md) ·
-  [examen de práctica](Examenes/Examen2_GuiaEstudio.pdf)).
-- **Proyecto**: diriges a un agente de IA para ejecutar un experimento
-  de deep learning. Se califica tu especificación, tu verificación del
-  trabajo del agente y tu interpretación — no el código ni el resultado del modelo. Es el
-  entregable principal del curso (40%): la especificación se entrega
-  en la semana 7 (Entrega 1) y el proyecto completo en la semana 12. Guía en
-  [Evaluacion/ProyectoColaboracionIA.md](Evaluacion/ProyectoColaboracionIA.md)
-  ([PDF](Evaluacion/ProyectoColaboracionIA.pdf)).
-- **Tareas de práctica (no calificadas)**: las 8 tareas en
-  [tareas/](tareas/) son la preparación directa para los exámenes y el
-  proyecto final.
+## Cómo preparar el ambiente
 
-## Temario semanal
+Necesitan tener instalado [`uv`](https://docs.astral.sh/uv/). Después, desde la carpeta del repositorio:
 
-| Semana | Temas | Slides | Notebook | Práctica | Exámenes |
-|---|---|---|---|---|---|
-| 1 | Introducción y política de IA · Repaso de ML | [Intro](slides/Intro.pdf) · [Repaso](slides/Repaso.pdf) | [Tensores](notebooks/Intro_Tensores.ipynb) · [PyTorch](notebooks/Intro_Pytorch.ipynb) | | |
-| 2 | Redes neuronales superficiales y profundas | [NN](slides/NN.pdf) | [MNIST](notebooks/Clase_RN_MNIST.ipynb) | T1 | |
-| 3 | Entrenamiento I: pérdidas y optimización | [Entrenamiento](slides/Entrenamiento.pdf) | [Optimizadores](notebooks/Optimizadores.ipynb) | T2 | |
-| 4 | Entrenamiento II: backprop, inicialización, performance | [Entrenamiento 2](slides/Entrenamiento2.pdf) | [Diagnósticos](notebooks/Entrenamiento2.ipynb) | T3 | |
-| 5 | Regularización | [Regularización](slides/Regularizacion.pdf) | [Regularización](notebooks/Regularizacion.ipynb) | T4 | |
-| 6 | CNNs I | [CNN](slides/CNN.pdf) | [CNN](notebooks/NotebookCNN.ipynb) | T5 | **Examen 1** |
-| 7 | CNNs II y aplicaciones (satélite y pobreza) | [CNN](slides/CNN.pdf) | [CNN](notebooks/NotebookCNN.ipynb) | | **Entrega 1 del proyecto** (tema y especificación) |
-| 8 | RNNs y modelos de secuencias | [RNN](slides/RNN.pdf) | [RNN](notebooks/NotebookRNN.ipynb) | T6 | |
-| 9 | Atención y Transformers | [Transformers](slides/Transformers.pdf) | [Mini-GPT](notebooks/Transformers.ipynb) | T7 | |
-| 10 | LLMs: post-entrenamiento, RAG · Agentes | [Transformers](slides/Transformers.pdf) · [Agentes](slides/Agentes.pdf) | | T8 | |
-| 11 | ¿Por qué funciona DL? · Ética y gobernanza | [Ética](slides/EticayPreguntas.pdf) | | | **Examen 2** |
-| 12 | Entrega final del proyecto de colaboración con IA | | | | **Proyecto** |
+```bash
+uv sync
+```
 
-## Política de IA (resumen)
+Esto crea su propio ambiente virtual e instala las paqueterías necesarias.
 
-La política completa está en [PoliticaIA.md](PoliticaIA.md). En corto:
+## Si quieren hacer sus propias versiones de los notebooks
 
-- En **tareas de práctica y proyecto**: cualquier LLM o agente está
-  permitido. En el proyecto entregas la transcripción completa; sin
-  transcripción, no se califica.
-- En **exámenes**: sin IA — a lápiz y papel.
-- Eres responsable de todo lo que entregas: "lo escribió el agente" no
-  es defensa de un resultado incorrecto.
+Por favor trabajen en una **rama propia**, creada a partir de esta, para evitar conflictos entre versiones de los archivos:
 
-## Materiales
-
-Todo el material vive en este repositorio (público); los avisos y las
-entregas, en Canvas. Recomendado: copiar la carpeta completa una sola
-vez — guía paso a paso (Colab o instalación local) en
-[tech-help/configuracion_entorno.md](tech-help/configuracion_entorno.md).
-
-- `slides/` — presentaciones (.Rmd → PDF)
-- `notebooks/` — notebooks de clase (PyTorch) para seguir en vivo
-- `tareas/` — las 8 tareas de práctica (no calificadas)
-- `soluciones/` — soluciones de la parte práctica de las tareas
-- `Examenes/` — temarios y exámenes de práctica (con respuestas) de los dos exámenes
-- `Evaluacion/` — guía del proyecto de colaboración con IA
-- `images/` — figuras usadas por las slides
-
-## Bibliografía
-
-- Prince — *Understanding Deep Learning* (texto base; gratis en udlbook.github.io)
-- Xiao & Zhu — *Foundations of Large Language Models* (arXiv 2501.09223; complemento LLM gratuito)
-- Goodfellow, Bengio & Courville — *Deep Learning*
-- Zhang et al. — *Dive into Deep Learning (d2l)*
-- Chollet — *Deep Learning with Python*
-
-## Papers clásicos (lectura opcional)
-
-1. AlexNet — Krizhevsky, Sutskever & Hinton (2012)
-2. ResNet — He et al. (2015)
-3. Batch Normalization — Ioffe & Szegedy (2015)
-4. Attention is All You Need (Transformers) — Vaswani et al. (2017)
-5. BERT — Devlin et al. (2018)
-6. Variational Autoencoders (VAE) — Kingma & Welling (2013)
-7. GANs — Goodfellow et al. (2014)
-8. Double Descent — Belkin et al. (2019) / Nakkiran et al. (2019)
-
-**Era LLM:**
-
-9. Scaling Laws / Chinchilla — Hoffmann et al. (2022)
-10. InstructGPT (RLHF) — Ouyang et al. (2022)
-11. LoRA — Hu et al. (2021)
-12. RAG (Retrieval-Augmented Generation) — Lewis et al. (2020)
-13. DeepSeek-R1 (RL con recompensas verificables) — DeepSeek-AI (2025)
-
-## Lecturas de DL en políticas públicas (opcionales)
-
-**Medición de pobreza con imágenes satelitales**
-- Jean et al. (2016) — *Combining satellite imagery and machine learning to predict poverty* (Science)
-- Yeh et al. (2020) — *Using publicly available satellite imagery and deep learning to understand economic well-being in Africa* (Nature Communications)
-- Huang, Hsiang & Gonzalez-Navarro (2021) — *Using Satellite Imagery and Deep Learning to Evaluate the Impact of Anti-Poverty Programs* (NBER)
-- Rolf et al. (2021) — *A generalizable and accessible approach to machine learning with global satellite imagery* (MOSAIKS, Nature Communications)
-
-**Análisis de textos legislativos**
-- Korn & Newman (2020) — *A Deep Learning Model to Predict Congressional Roll Call Votes From Legislative Texts*
-- Chalkidis et al. (2019) — *Large-Scale Multi-Label Text Classification on EU Legislation*
-- Wei et al. (2019) — *Empirical Study of Deep Learning for Text Classification in Legal Document Review*
-
-**Agentes: dirigir, supervisar y auditar**
-- Microsoft (2026) — *Taxonomy of Failure Modes in Agentic AI Systems v2.0* (la lectura central del deck de agentes)
-- Abdurahman et al. (2025) — *A Primer for Evaluating Large Language Models in Social-Science Research* (AMPPS)
-- Amnesty International (2021) — *Xenophobic Machines* (el caso holandés de las guarderías)
-
-**LLMs como herramienta de investigación y medición**
-- Gilardi, Alizadeh & Kubli (2023) — *ChatGPT outperforms crowd workers for text-annotation tasks* (PNAS)
-- Ziems et al. (2024) — *Can Large Language Models Transform Computational Social Science?* (Computational Linguistics)
-- Dell (2025) — *Deep Learning for Economists* (Journal of Economic Literature)
-
----
+```bash
+git checkout -b mi-rama
+uv sync
+```
