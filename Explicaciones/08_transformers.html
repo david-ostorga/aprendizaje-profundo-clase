@@ -1,0 +1,1427 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atención y Transformers</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: solo lo que no existe en estilos.css */
+  .tbl td.c, .tbl th.c{text-align:right; white-space:nowrap; font-family:ui-monospace,monospace; font-size:13px}
+  #attTabla th, #bpePares th{text-transform:none; letter-spacing:0; font-size:12px}
+  #attCalc, #bpeCalc{white-space:normal}
+  .heat-grid{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px}
+  .heat-grid .cv-t, .cv-t{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:650; color:var(--text-2); margin:4px 0}
+  .toks{display:flex; flex-wrap:wrap; gap:4px; margin:3px 0 8px}
+  .toks span{font-family:ui-monospace,monospace; font-size:12.5px; padding:2px 7px; border-radius:6px; background:var(--surface-2); border:1px solid var(--border)}
+  .toks span.nuevo{background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:650}
+  .wlist{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px}
+  .wlist .w{display:grid; grid-template-columns:96px 1fr; gap:8px; align-items:center}
+  .wlist .w b{font-weight:600; color:var(--text-2)}
+  .etapa{border:1px solid var(--border); border-radius:10px; background:var(--surface-2); padding:12px 14px}
+  .etapa .et{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); font-weight:650}
+  .etapa dl{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:8px 0 0; font-size:14.5px}
+  .etapa dt{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12.5px; color:var(--text-3); font-weight:650}
+  .etapa dd{margin:0}
+  .salida{font-family:ui-monospace,monospace; font-size:12.8px; white-space:pre-wrap; background:var(--code-bg); border:1px solid var(--border); border-radius:8px; padding:9px 11px; margin-top:8px; line-height:1.55}
+  .caso{border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin:10px 0; background:var(--surface)}
+  .caso .ct{font-size:15px; margin-bottom:8px}
+  .fb{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13.5px; line-height:1.55; padding:8px 10px; border-radius:8px; margin-top:4px}
+  .fb.ok{background:var(--ok-soft)} .fb.mal{background:var(--warn-soft)} .fb.neu{background:var(--surface-2); color:var(--text-3)}
+  @media (max-width:700px){ .heat-grid{grid-template-columns:1fr} .wlist .w{grid-template-columns:1fr} .etapa dl{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Atención y Transformers</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 08</div>
+  <h1>Atención y Transformers: cada token decide a quién escuchar</h1>
+  <p class="lead">La atención es un promedio ponderado en el que la propia pregunta elige los pesos. Al terminar vas a poder calcular una atención a mano, explicar cada pieza del bloque Transformer y razonar cómo un modelo de lenguaje base se convierte en asistente.</p>
+  <div class="meta">Fuente: <code>slides/Transformers.Rmd</code> y Tarea 8 (<code>notebooks/Transformers.ipynb</code>) · Temario del Examen 2, secciones 3 y 4 · Lectura de unos 55 minutos</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+<p>Las redes recurrentes leen una secuencia token por token y cargan todo lo leído en un solo estado oculto. Esta clase reemplaza esa idea por otra: en cada paso, cada token puede <strong>mirar directamente a todos los demás</strong> y decidir cuánto le importa cada uno. Sobre esa operación se construyen el Transformer, BERT, GPT y los LLMs actuales.</p>
+<div class="flow">
+  <div class="node"><div class="t">Antes (artefacto 07)</div><div class="d">RNN, <a href="07_rnn.html#lstm">LSTM</a> y modelos de lenguaje: P(x<sub>t</sub> | x<sub>&lt;t</sub>), <a href="07_rnn.html#perplejidad">perplejidad</a>, gradientes que se desvanecen a lo largo del tiempo.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">¿Cómo dejar que cada posición consulte toda la secuencia a la vez? Atención, multi-head, posiciones, máscaras, el bloque, y de ahí a los LLMs.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Agentes: LLMs que además actúan con herramientas (deck aparte, fuera del Examen 2).</div></div>
+</div>
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>La atención es un <strong>promedio ponderado de values</strong>, con pesos que salen de comparar una query con cada key y pasar esas comparaciones por un softmax. Todo lo demás de esta clase son variaciones de esa línea: dividir entre √d para que el softmax no se sature, varias atenciones en paralelo (multi-head), sumar la posición porque el promedio no ve el orden, y poner −∞ donde un token no debe mirar (máscaras).</p>
+</div>
+<p>Una nota de notación antes de empezar: los símbolos de esta clase (<span class="sym" data-s="q">q</span>, <span class="sym" data-s="k">k</span>, <span class="sym" data-s="v">v</span>, <span class="sym" data-s="dk">d<sub>k</sub></span>, <span class="sym" data-s="WQKV">W<sup>Q</sup></span>…) ya están en la <a href="00_matematicas.html#not-atencion">tabla del artefacto 00</a>; pasa el cursor por los que están subrayados para ver su explicación. Ojo con dos choques con símbolos de clases anteriores: en esta clase <span class="sym" data-s="alphaAtt">α</span> son los <strong>pesos de atención</strong>, no la tasa de aprendizaje de Entrenamiento, y <span class="sym" data-s="nheads">h</span> puede ser una <strong>cabeza</strong> de atención además del estado oculto. Cada vez que aparezcan lo diremos.</p>
+
+<!-- ============ 2. ENCODER-DECODER ============ -->
+<h2 id="encoder-decoder"><span class="num">Sección 2</span>El cuello de botella del encoder-decoder</h2>
+
+<p>Traducir es el problema que motiva todo. La entrada («The cat sat on the mat», 6 tokens) y la salida («El gato se sentó en el tapete», 7 tokens) tienen <strong>distinto tamaño</strong>, y una RNN normal produce una salida por cada entrada. La solución clásica es un <strong>encoder-decoder</strong> (codificador-decodificador):</p>
+<ul>
+  <li><strong>Encoder:</strong> una RNN lee la entrada paso a paso, actualizando su estado oculto <span class="sym" data-s="h">h</span><sub>t</sub> con cada token x<sub>t</sub>. Al terminar, el último estado h<sub>T</sub> se toma como <strong>vector de contexto</strong> (context vector): una representación comprimida de toda la frase.</li>
+  <li><strong>Decoder:</strong> otra RNN arranca con ese vector de contexto y un token de inicio, y en cada paso predice el siguiente token y<sub>t</sub> a partir de su estado anterior y del token que acaba de generar, hasta producir el token de fin de secuencia.</li>
+</ul>
+<div class="flow">
+  <div class="node"><div class="t">x₁ … x<sub>T</sub></div><div class="d">la frase de entrada, token por token</div></div>
+  <div class="node"><div class="t">Encoder (RNN)</div><div class="d">h₁ → h₂ → … → h<sub>T</sub></div></div>
+  <div class="node aqui"><div class="t">h<sub>T</sub> = contexto</div><div class="d">un solo vector de tamaño fijo: el cuello de botella</div></div>
+  <div class="node"><div class="t">Decoder (RNN)</div><div class="d">genera y₁, y₂, … hasta el token de fin</div></div>
+</div>
+<p>El problema está en la caja de en medio. Toda la frase, tenga 6 o 600 tokens, se aplasta en <strong>un vector del mismo tamaño</strong>. La slide lo dice así: tratamos el vector de contexto como un <em>estadístico suficiente</em> de todo el input. Es como pedirle a un analista que resuma un expediente de 300 páginas en un tuit, y luego pedirle a otro que redacte el dictamen leyendo solo el tuit. Con frases cortas funciona; con frases largas se pierde información.</p>
+<p>A eso se suman los dos problemas que ya conoces de las RNN: son <strong>secuenciales</strong> (no puedes calcular h<sub>5</sub> sin h<sub>4</sub>, así que no se paraleliza) y, en secuencias largas, los gradientes que viajan hacia atrás en el tiempo <strong>se desvanecen</strong>.</p>
+<div class="note good">
+  <span class="tag">La lectura intuitiva</span>
+  <p>¿Y si el decoder, en lugar de leer solo el tuit, pudiera <strong>volver al expediente</strong> en cada paso y abrirlo justo en la página que necesita? Eso es la atención: el decoder consulta todos los estados h<sub>1</sub>, …, h<sub>T</sub> del encoder y decide, para cada palabra que va a escribir, cuáles le sirven.</p>
+</div>
+
+<!-- ============ 3. ATENCIÓN ============ -->
+<h2 id="atencion"><span class="num">Sección 3</span>Queries, keys y values</h2>
+
+<p>La atención toma prestado el vocabulario de la búsqueda de información. La slide usa una biblioteca:</p>
+<div class="cmp">
+  <div class="col"><h5>Query <span class="sym" data-s="q">q</span>: lo que buscas</h5><div class="cb">Tu pregunta: «quiero información sobre gatos». En el decoder, es su estado actual.</div></div>
+  <div class="col"><h5>Keys <span class="sym" data-s="k">k</span>: las etiquetas</h5><div class="cb">El tema o índice de cada libro. Con ellas decides qué libro se parece a tu pregunta.</div></div>
+  <div class="col"><h5>Values <span class="sym" data-s="v">v</span>: el contenido</h5><div class="cb">Lo que el libro trae adentro. Es lo que te llevas a casa.</div></div>
+  <div class="col"><h5>El resultado</h5><div class="cb">No un solo libro, sino una mezcla: mucho de los libros cuyas keys se parecen a tu query, poco de los demás.</div></div>
+</div>
+<p>La diferencia con una biblioteca real es que aquí no eliges <em>un</em> libro: tomas un poco de todos, en proporción a qué tan relevante es cada uno. Esa proporción son los pesos de atención.</p>
+
+<h3 id="pooling" data-toc="Attention pooling">Atención como promedio ponderado</h3>
+<p>Primero con números. Tres libros con values v₁ = (4, 0), v₂ = (0, 4) y v₃ = (2, 2). Si la búsqueda decide que los pesos son 0.5, 0.25 y 0.25, el resultado es 0.5·(4, 0) + 0.25·(0, 4) + 0.25·(2, 2) = (2, 0) + (0, 1) + (0.5, 0.5) = <b>(2.5, 1.5)</b>. Un vector que «se parece más» al libro 1 porque le dimos más peso.</p>
+
+<div class="formula">
+  <div class="f-head">Atención sobre una base de datos de pares (key, value)</div>
+  <div class="f-ejemplo">α = (0.5, 0.25, 0.25),  v₁ = (4, 0),  v₂ = (0, 4),  v₃ = (2, 2)  →  0.5·(4, 0) + 0.25·(0, 4) + 0.25·(2, 2) = (2.5, 1.5)</div>
+  <div class="eq">
+    Attention(<span class="r-calc">q</span>, 𝒟) = <span class="big"><span class="lim">m</span><span class="o sym" data-s="sum">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="alphaAtt">α(q, k<sub>i</sub>)</span> <span class="r-calc">v</span><span class="sub">i</span>
+    <span class="lbl">𝒟 = {(k₁, v₁), …, (k<sub>m</sub>, v<sub>m</sub>)}: aquí 𝒟 es la «base de datos» de pares, no el conjunto de entrenamiento</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La atención de la query sobre la base de datos es la suma, sobre los m pares, del peso de atención de cada key multiplicado por su value.» En corto: <strong>un promedio ponderado de los values</strong>.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">q</dt><dd>La query: el vector que representa qué se está buscando en este momento.</dd>
+      <dt class="r-calc">k<sub>i</sub>, v<sub>i</sub></dt><dd>La key y el value del elemento i. La key sirve para <em>comparar</em>; el value es lo que se <em>entrega</em>.</dd>
+      <dt class="r-calc">α(q, k<sub>i</sub>)</dt><dd>El peso de atención del elemento i: cuánto aporta su value al resultado. Ojo: esta α no es la tasa de aprendizaje.</dd>
+      <dt class="r-dato">m</dt><dd>Cuántos pares hay. En una frase, el número de tokens.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un solo peso vale 1 y los demás 0: la salida es exactamente ese value. Es una búsqueda exacta, como abrir un solo libro.</li>
+      <li>…todos los pesos valen 1/m: la salida es el promedio simple de los values (average pooling). Se le presta la misma atención a todos (examen de práctica, A7: verdadero).</li>
+      <li>…los pesos son no negativos y suman 1: la salida es una <strong>combinación convexa</strong> de los values, así que siempre queda «entre» ellos. Con v₁ = (4, 0), v₂ = (0, 4), v₃ = (2, 2), ninguna salida puede tener una coordenada mayor que 4.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="pesos-softmax" data-toc="Los pesos: softmax">De dónde salen los pesos: un softmax</h3>
+<p>Para fabricar pesos que sean no negativos y sumen 1, la atención hace dos pasos. Primero calcula un <strong>score</strong> (puntaje) a(q, k<sub>i</sub>) que mide qué tan parecidas son la query y cada key. Luego pasa los scores por el <a href="00_matematicas.html#softmax">softmax</a>, el mismo que convierte scores en probabilidades en clasificación multiclase.</p>
+<p>Con números: scores (2, 1, 0) ⇒ exponenciales e² = 7.389, e¹ = 2.718, e⁰ = 1; suman 11.107; pesos 7.389/11.107 = 0.665, 2.718/11.107 = 0.245 y 1/11.107 = 0.090. Suman 1.</p>
+
+<div class="formula">
+  <div class="f-head">Pesos de atención</div>
+  <div class="f-ejemplo">a = (2, 1, 0)  →  e<sup>a</sup> = (7.389, 2.718, 1)  →  suma 11.107  →  α = (0.665, 0.245, 0.090)</div>
+  <div class="eq">
+    <span class="r-calc">α</span>(<span class="r-calc">q</span>, <span class="r-calc">k</span><span class="sub">i</span>) = <span class="frac"><span class="num"><span class="sym" data-s="exp">e</span><span class="sup"><span class="sym" data-s="aScore">a(q, k<sub>i</sub>)</span></span></span><span class="den"><span class="sym" data-s="sum">Σ</span><span class="sub">j</span> e<span class="sup"><span class="r-calc">a</span>(q, k<sub>j</sub>)</span></span></span> = <span class="sym" data-s="softmax">softmax</span><span class="sub">i</span>( <span class="r-calc">a</span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El peso del elemento i es e elevado a su score, dividido entre la suma de e elevado a los scores de todos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">a(q, k<sub>i</sub>)</dt><dd>El score: un número cualquiera (positivo o negativo) que dice qué tan bien encaja la key i con la query. La función a se elige: producto punto escalado o aditiva (siguiente sección).</dd>
+      <dt>e<sup>(·)</sup></dt><dd>La exponencial: vuelve positivo cualquier score y agranda las diferencias.</dd>
+      <dt>Σ<sub>j</sub></dt><dd>La suma sobre todas las keys: el denominador hace que los pesos sumen 1.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…sumas la misma constante a todos los scores: los pesos no cambian (se cancela arriba y abajo). Solo importan las <strong>diferencias</strong> entre scores.</li>
+      <li>…multiplicas todos los scores por 10: las diferencias crecen y el softmax se vuelve casi un «escoge el máximo» (one-hot). Esto será el problema de la sección 4.</li>
+      <li>…todos los scores son iguales: pesos 1/m, average pooling.</li>
+    </ul>
+  </div>
+</div>
+<p>La slide lista por qué el softmax conviene aquí: los pesos <strong>suman 1</strong>, son <strong>no negativos</strong>, la función es <strong>diferenciable</strong> (se puede entrenar con backprop) y su gradiente no desaparece del todo mientras los pesos no estén saturados. Y aunque las matrices sean enormes, la operación es sencilla: comparar, normalizar, promediar.</p>
+
+<h3 id="bahdanau" data-toc="Bahdanau: contexto dinámico">La atención de Bahdanau: un contexto distinto en cada paso</h3>
+<p>Bahdanau et al. (2014) aplicaron esto al encoder-decoder. En vez de un contexto fijo h<sub>T</sub>, el decoder recibe en cada paso t′ un contexto <strong>recalculado</strong>: la query es su propio estado anterior, y las keys y los values son los estados del encoder.</p>
+<div class="formula">
+  <div class="f-head">Contexto dinámico del decoder (Bahdanau)</div>
+  <div class="f-ejemplo">Traduciendo «The cat sat», al generar «gato»: α(s, h₁) = 0.1 (The),  α(s, h₂) = 0.8 (cat),  α(s, h₃) = 0.1 (sat)  →  c = 0.1·h₁ + 0.8·h₂ + 0.1·h₃</div>
+  <div class="eq">
+    <span class="sym" data-s="ctx">c<sub>t′</sub></span> = <span class="big"><span class="lim">T</span><span class="o">Σ</span><span class="lim">t=1</span></span> <span class="r-calc">α</span>( <span class="sym" data-s="sdec">s<sub>t′−1</sub></span>, <span class="sym" data-s="h">h</span><span class="sub">t</span> ) <span class="r-calc">h</span><span class="sub">t</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El contexto del paso t prima es la suma, sobre todas las posiciones de la entrada, del peso de atención entre el estado anterior del decoder y el estado del encoder en t, por ese mismo estado.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">c<sub>t′</sub></dt><dd>El contexto que usa el decoder para generar su token número t′. Cambia en cada paso.</dd>
+      <dt class="r-calc">s<sub>t′−1</sub></dt><dd>El estado oculto del decoder en el paso anterior: hace de <strong>query</strong>.</dd>
+      <dt class="r-calc">h<sub>t</sub></dt><dd>El estado oculto del encoder en la posición t: hace de <strong>key y de value</strong> a la vez.</dd>
+      <dt class="r-dato">T</dt><dd>La longitud de la entrada. t recorre la entrada y t′ recorre la salida (de ahí la prima).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…α pone todo el peso en t = T: recuperas el encoder-decoder clásico, con h<sub>T</sub> como único contexto.</li>
+      <li>…la frase es muy larga: ya no hay cuello de botella, porque todos los h<sub>t</sub> siguen disponibles en cada paso.</li>
+    </ul>
+  </div>
+</div>
+<p>Los seis pasos del mecanismo, tal como los resume la slide: (1) la query representa lo que busca el decoder; (2) las keys representan cada token de entrada; (3) los values son la información de cada token; (4) se calcula un score entre la query y cada key; (5) el softmax convierte los scores en pesos que suman 1; (6) el contexto es la suma de los values ponderados por sus pesos. El laboratorio de abajo hace exactamente esos pasos.</p>
+
+<h3 id="lab-atencion" class="lab" data-toc="Lab: atención a mano">Laboratorio: atención a mano en la biblioteca</h3>
+<p>Tres libros: el 1 es de gatos, k₁ = (2, 0); el 2 es de leyes, k₂ = (0, 2); el 3 trata de los dos, k₃ = (1, 1). Sus contenidos son v₁ = (4, 0), v₂ = (0, 4), v₃ = (2, 2). La query empieza en q = (1, 0.5): «quiero gatos, y un poco de leyes». Avanza paso a paso; después mueve la query.</p>
+<div class="widget" id="labAtt">
+  <div class="widget-head"><div class="wt">Producto punto escalado, softmax y suma ponderada</div><div class="ws">d = 2, así que se divide entre √2 ≈ 1.414. Las columnas se llenan conforme avanzas.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div>
+        <div class="scroll"><table class="tbl" id="attTabla"></table></div>
+        <div class="calcline" id="attCalc"></div>
+        <div id="attRead" style="margin-top:10px"></div>
+      </div>
+      <div><div id="attCtrl"></div><div id="attSel"></div><button class="btn" id="attPerm" type="button">Permutar los pares (k, v)</button></div>
+    </div>
+  </div>
+  <div class="widget-foot"></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con q = (1, 0.5): scores (2, 1, 1.5), escalados (1.414, 0.707, 1.061), pesos α = (0.456, 0.225, 0.320) y salida (2.462, 1.538). La salida queda «entre» los tres values, más cerca del libro de gatos.</li>
+    <li>Pulsa «Permutar los pares» varias veces: las filas cambian de lugar, los pesos viajan con su libro y la salida es <strong>idéntica</strong>. A la atención no le importa el orden de los pares; esta propiedad volverá en la sección 6.</li>
+    <li>Cambia a «sin dividir entre √d»: los pesos quedan (0.506, 0.186, 0.307), más concentrados en el libro 1. Ahora sube q a (3, 1.5): sin escalar, el libro 1 sube a cerca del 80 %.</li>
+    <li>Pon q = (0, 0): todos los scores son 0 y los pesos son 1/3 cada uno. La salida es el promedio (2, 2): average pooling.</li>
+  </ol>
+</div>
+
+<!-- ============ 4. ESCALADO ============ -->
+<h2 id="escalado"><span class="num">Sección 4</span>Producto punto escalado, y por qué √d</h2>
+
+<p>¿Cómo se calcula el score a(q, k)? La opción que usan los Transformers es el <a href="00_matematicas.html#producto-punto">producto punto</a> dividido entre la raíz de la dimensión. Con q = (1, 0.5) y k₁ = (2, 0): qᵀk₁ = 1·2 + 0.5·0 = 2, y como d = 2, el score es 2/√2 = 1.414.</p>
+
+<div class="formula">
+  <div class="f-head">Score de producto punto escalado</div>
+  <div class="f-ejemplo">q = (1, 0.5),  k = (2, 0),  d = 2  →  qᵀk = 1·2 + 0.5·0 = 2  →  a = 2 / √2 = 1.414</div>
+  <div class="eq">
+    <span class="sym" data-s="aScore">a(q, k<sub>i</sub>)</span> = <span class="frac"><span class="num"><span class="r-calc">q</span><span class="sym" data-s="transp">ᵀ</span><span class="r-calc">k</span><span class="sub">i</span></span><span class="den">√<span class="sym" data-s="dk">d</span></span></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El score es el producto punto de la query con la key i, dividido entre raíz de d.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">qᵀk<sub>i</sub></dt><dd>Producto punto: q₁k₁ + q₂k₂ + … Es grande y positivo si los dos vectores apuntan hacia el mismo lado, 0 si son perpendiculares y negativo si apuntan en sentidos opuestos.</dd>
+      <dt class="r-hiper">d</dt><dd>La dimensión de q y de k (la slide escribe d; el notebook y el formulario escriben d<sub>k</sub>; es lo mismo). Lo eliges al diseñar la red. Exige que q y k tengan la <strong>misma</strong> dimensión.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…no divides entre √d y d es grande: los scores son enormes, el softmax se satura y el gradiente casi desaparece (laboratorio de abajo).</li>
+      <li>…q y k viven en espacios de distinta dimensión: el producto punto no está definido. Se podría proyectar uno con una matriz M, pero en la práctica no se hace; se usa la atención aditiva o se proyectan los dos a la misma d.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="por-que-raiz" data-toc="Por qué dividir entre √d">Por qué precisamente √d</h3>
+<p>Supón que cada coordenada de q y de k es aleatoria, con media 0 y varianza 1, todas independientes. El producto punto es una suma de d términos q<sub>j</sub>k<sub>j</sub>, y cada término tiene media 0 y varianza 1. La <a href="00_matematicas.html#esperanza">varianza de una suma de términos independientes</a> es la suma de sus varianzas:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">qᵀk = q₁k₁ + q₂k₂ + … + q<sub>d</sub>k<sub>d</sub></div><div class="d-por">Escribimos el producto punto como suma de d términos.</div></li>
+  <li><div class="d-ex">Var(q<sub>j</sub>k<sub>j</sub>) = E[q<sub>j</sub>²] · E[k<sub>j</sub>²] = 1 · 1 = 1</div><div class="d-por"><b>Producto de independientes con media 0:</b> la varianza del producto es el producto de los segundos momentos, y cada uno vale 1.</div></li>
+  <li><div class="d-ex">Var(qᵀk) = 1 + 1 + … + 1 = <b>d</b></div><div class="d-por"><b>Varianza de una suma de independientes:</b> se suman las varianzas. La desviación estándar es √d.</div></li>
+  <li><div class="d-ex">Var(qᵀk / √d) = d / d = <b>1</b></div><div class="d-por"><b>Dividir entre una constante c divide la varianza entre c²:</b> con c = √d, la varianza vuelve a 1, sin importar d.</div></li>
+  <li><div class="d-ex">d = 64:  desviación de qᵀk = 8;  tras dividir entre 8, desviación 1</div><div class="d-por"><b>Verificación:</b> sin escalar, con d = 64 es normal ver scores como 8 y −8; e<sup>16</sup> ≈ 8.9 millones de veces más peso para uno que para otro.</div></li>
+</ol>
+<p>¿Y qué se rompe con scores tan grandes? El softmax se vuelve casi <strong>one-hot</strong>: un peso ≈ 1 y los demás ≈ 0. Eso tiene dos costos. Primero, la atención deja de mezclar: solo copia un value. Segundo, y más grave para entrenar, la derivada del softmax respecto a su propio score es αᵢ(1 − αᵢ), que vale 0 cuando αᵢ es 0 o 1. Es la misma saturación que viste con la sigmoide en el <a href="04_entrenamiento2.html#gradientes-que-se-apagan">artefacto 04</a>: el gradiente casi no pasa y la red no aprende qué mirar.</p>
+
+<h3 id="lab-raiz" class="lab" data-toc="Lab: ¿por qué √d?">Laboratorio: ¿por qué √d<sub>k</sub>?</h3>
+<p>Una query y 6 keys con coordenadas aleatorias N(0, 1). Las barras grises son los pesos sin escalar; las naranjas, escalados entre √d. Las estadísticas de la derecha promedian 300 sorteos (semilla fija). Empieza en d = 2 y sube hasta 512.</p>
+<div class="widget" id="labEsc">
+  <div class="widget-head"><div class="wt">Pesos de atención con y sin dividir entre √d</div><div class="ws">Cambia d; «otro sorteo» saca otra query y otras keys para las barras.</div></div>
+  <div class="widget-body">
+    <div id="escSel"></div>
+    <div class="lab-grid">
+      <div><canvas id="escCanvas"></canvas>
+        <div class="legend"><span><i style="background:var(--text-3)"></i>sin escalar: softmax(qᵀk)</span><span><i style="background:var(--accent)"></i>escalado: softmax(qᵀk/√d)</span></div></div>
+      <div><div id="escRead"></div><div class="status info" id="escStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot"><button class="btn" id="escOtro" type="button">Otro sorteo</button><span class="pill" id="escPill"></span></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>La desviación de los scores sin escalar crece como √d: 1.56 con d = 2, 5.70 con d = 32 y 21.97 con d = 512 (√512 ≈ 22.6). Escalados se quedan cerca de 1 en todos los casos.</li>
+    <li>El peso máximo promedio sin escalar sube de 0.48 (d = 2) a 0.96 (d = 512): casi one-hot. Escalado se mantiene alrededor de 0.40–0.42.</li>
+    <li>El «tamaño del gradiente», max αᵢ(1 − αᵢ), sin escalar cae de 0.21 a 0.025 al pasar de d = 2 a d = 512. Escalado se queda en 0.21–0.23: el gradiente sigue vivo.</li>
+    <li>Con d = 512, pulsa «otro sorteo» varias veces: casi siempre una barra gris llega cerca de 1 y las demás desaparecen.</li>
+  </ol>
+</div>
+
+<h3 id="forma-matricial" data-toc="Forma matricial">Todas las queries a la vez: la forma matricial</h3>
+<p>En un Transformer no hay una sola query: cada token de la secuencia tiene la suya. Si apilas las T queries como filas de una matriz Q, y lo mismo con las keys (K) y los values (V), las T atenciones salen de un solo cálculo de <a href="00_matematicas.html#matriz-vector">matrices</a>. Es la fórmula del formulario del examen y del notebook:</p>
+<div class="eq">
+  Attn(<span class="sym" data-s="QKV">Q, K, V</span>) = softmax( <span class="frac"><span class="num"><span class="r-calc">Q</span><span class="r-calc">K</span>ᵀ</span><span class="den">√<span class="r-hiper">d<sub>k</sub></span></span></span> ) <span class="r-calc">V</span>
+  <span class="lbl">Q y K: (T, d<sub>k</sub>) · QKᵀ: (T, T), una fila por query y una columna por key · el softmax se aplica fila por fila · resultado: (T, d<sub>v</sub>)</span>
+</div>
+<p>Se lee: «la matriz de scores es Q por K transpuesta entre raíz de d<sub>k</sub>; se le aplica softmax a cada fila y el resultado multiplica a V». La entrada (i, j) de QKᵀ es el score de la query i contra la key j: «¿cuánto debería mirar el token i al token j?». Que todo sea una multiplicación de matrices es justamente lo que lo hace <strong>paralelizable</strong>, a diferencia de la RNN.</p>
+
+<h3 id="aditiva" data-toc="Atención aditiva">La alternativa: atención aditiva</h3>
+<p>La forma original de Bahdanau no usa producto punto. Pasa q y k por una pequeña red de una capa con tanh. Un ejemplo de juguete en una dimensión, con W<sub>q</sub> = 1, W<sub>k</sub> = 2, w<sub>v</sub> = 3, q = 0.5 y k = 0.25: tanh(1·0.5 + 2·0.25) = tanh(1) = 0.762, y el score es 3·0.762 = 2.285.</p>
+<div class="formula">
+  <div class="f-head">Score de atención aditiva</div>
+  <div class="f-ejemplo">W<sub>q</sub> = 1,  W<sub>k</sub> = 2,  w<sub>v</sub> = 3,  q = 0.5,  k = 0.25  →  tanh(0.5 + 0.5) = tanh(1) = 0.762  →  a = 3 · 0.762 = 2.285</div>
+  <div class="eq">
+    <span class="r-calc">a</span>(<span class="r-calc">q</span>, <span class="r-calc">k</span>) = <span class="r-param">w</span><span class="sub r-param">v</span>ᵀ <span class="sym" data-s="tanh">tanh</span>( <span class="r-param">W</span><span class="sub r-param">q</span> <span class="r-calc">q</span> + <span class="r-param">W</span><span class="sub r-param">k</span> <span class="r-calc">k</span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El score es w sub v transpuesta por la tangente hiperbólica de W sub q por la query más W sub k por la key.» Después, igual que antes, va a un softmax.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">W<sub>q</sub>, W<sub>k</sub></dt><dd>Matrices aprendidas que llevan q y k a un espacio común. Pueden tener distinto número de columnas, así que q y k pueden tener dimensiones distintas.</dd>
+      <dt class="r-param">w<sub>v</sub></dt><dd>Vector aprendido que convierte el resultado en un solo número (el score).</dd>
+      <dt>tanh</dt><dd>La no linealidad: permite relaciones entre q y k más complejas que «apuntan hacia el mismo lado».</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…q y k son muy grandes: tanh se queda entre −1 y 1, así que el score no explota (la «estabilidad numérica» de la slide).</li>
+      <li>…q y k tienen dimensiones muy distintas o pequeñas: aquí la aditiva tiene ventaja, porque el producto punto ni siquiera estaría definido.</li>
+    </ul>
+  </div>
+</div>
+<p>Las ventajas que lista la slide: flexibilidad dimensional, más expresividad por la no linealidad, estabilidad numérica y buen desempeño cuando las dimensiones son pequeñas o distintas. Los Transformers usan el producto punto escalado porque es una sola multiplicación de matrices, muy rápida en GPU, y el √d resuelve su problema de escala.</p>
+
+<!-- ============ 5. MULTI-HEAD ============ -->
+<h2 id="multi-head"><span class="num">Sección 5</span>Multi-head attention</h2>
+
+<p>Una sola atención produce, para cada token, <em>una</em> forma de repartir los pesos. Pero en una frase hay muchas relaciones a la vez: el verbo con su sujeto, cada palabra con la anterior, un pronombre con el sustantivo al que se refiere. Con un solo reparto de pesos, el modelo tiene que escoger. La solución es calcular <strong>varias atenciones en paralelo</strong>, cada una con sus propias proyecciones. Cada una es una <strong>cabeza</strong> (head).</p>
+<p>Un ejemplo de tamaños con números del Transformer original: el modelo representa cada token con d<sub>model</sub> = 512 números y usa h = 8 cabezas. Cada cabeza proyecta esos 512 números a vectores de d<sub>h</sub> = 512/8 = 64 dimensiones, hace su atención ahí, y devuelve un vector de 64. Se concatenan las 8 salidas (8 × 64 = 512) y una última matriz W<sub>o</sub> las mezcla.</p>
+
+<div class="formula">
+  <div class="f-head">Multi-head attention</div>
+  <div class="f-ejemplo">d<sub>model</sub> = 512,  h = 8  →  cada cabeza trabaja en d<sub>h</sub> = 512/8 = 64  →  concatenar 8 salidas de 64 = 512  →  ·W<sub>o</sub> (512 × 512) = 512</div>
+  <div class="eq">
+    <span class="sym" data-s="hhead">h<sub>i</sub></span> = f( <span class="sym" data-s="WQKV">W<sub>i</sub><sup>(q)</sup></span><span class="sym" data-s="q">q</span>, <span class="r-param">W</span><span class="sub">i</span><span class="sup">(k)</span><span class="sym" data-s="k">k</span>, <span class="r-param">W</span><span class="sub">i</span><span class="sup">(v)</span><span class="sym" data-s="v">v</span> ),  i = 1, …, <span class="sym" data-s="nheads">h</span><br>
+    MultiHead = [ <span class="r-calc">h</span><span class="sub">1</span>, …, <span class="r-calc">h</span><span class="sub">h</span> ] <span class="r-param">W</span><span class="sub r-param">o</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La cabeza i es la atención f aplicada a la query, la key y el value, cada uno multiplicado antes por su propia matriz de la cabeza i. La salida es la concatenación de todas las cabezas, multiplicada por W sub o.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">h<sub>i</sub></dt><dd>La salida de la cabeza i. Ojo: aquí h <em>no</em> es la unidad oculta de una red ni el estado de una RNN; es el resultado de una cabeza.</dd>
+      <dt class="r-hiper">h</dt><dd>Sin subíndice, el <strong>número de cabezas</strong>. La slide usa la misma letra para las dos cosas.</dd>
+      <dt class="r-param">W<sub>i</sub><sup>(q)</sup>, W<sub>i</sub><sup>(k)</sup>, W<sub>i</sub><sup>(v)</sup></dt><dd>Las proyecciones de la cabeza i (la slide también las escribe W<sup>Q</sup>, W<sup>K</sup>, W<sup>V</sup>). Cada cabeza tiene las suyas: por eso cada una puede aprender a mirar algo distinto.</dd>
+      <dt>f</dt><dd>La atención de una cabeza: normalmente el producto punto escalado + softmax + suma ponderada.</dd>
+      <dt>[ … ]</dt><dd>Concatenar: pegar los vectores uno detrás de otro.</dd>
+      <dt class="r-param">W<sub>o</sub></dt><dd>La matriz de salida (W<sup>O</sup>): mezcla lo que encontró cada cabeza y lo regresa a d<sub>model</sub>.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…h = 1: una sola cabeza con d<sub>h</sub> = d<sub>model</sub>. Una sola «vista» de la secuencia.</li>
+      <li>…subes h manteniendo d<sub>model</sub> fijo: más vistas, pero cada una en menos dimensiones (d<sub>h</sub> más chico). El número de parámetros <strong>no cambia</strong> (cuenta abajo).</li>
+      <li>…d<sub>model</sub> no es divisible entre h: no se puede partir parejo. Por eso el notebook exige d_model % num_heads == 0.</li>
+    </ul>
+  </div>
+</div>
+<p><strong>Contar parámetros</strong> (sin sesgos). Las matrices de query de las 8 cabezas son de 512 × 64; juntas forman una matriz de 512 × 512. Igual con keys y values, y W<sub>o</sub> es de 512 × 512. Total: 4 × 512² = <b>1 048 576</b>. Con una sola cabeza de 512 dimensiones las cuatro matrices también son de 512 × 512: <strong>el mismo número</strong>. Multi-head no encarece el modelo; reparte la misma capacidad en varias vistas. Por eso la slide dice que es «más expresivo sin incrementar demasiado la complejidad».</p>
+
+<div class="scroll"><table class="tbl">
+  <tr><th>Aspecto</th><th>Self-attention (una cabeza)</th><th>Multi-head attention</th></tr>
+  <tr><td>Definición</td><td>Cada token atiende a todos los demás en una sola matriz de atención</td><td>Varias auto-atenciones en paralelo con distintas proyecciones</td></tr>
+  <tr><td>Perspectiva</td><td>Una sola «vista» de la secuencia</td><td>Varias vistas simultáneas que capturan distintos patrones</td></tr>
+  <tr><td>Capacidad expresiva</td><td>Limitada: puede pasar por alto relaciones</td><td>Más rica: cada cabeza se enfoca en dependencias distintas</td></tr>
+  <tr><td>Analogía</td><td>Una lupa</td><td>Muchas lupas enfocando detalles distintos a la vez</td></tr>
+  <tr><td>Uso</td><td>Base del mecanismo</td><td>Núcleo de los Transformers modernos</td></tr>
+</table></div>
+
+<h3 id="lab-cabezas" class="lab" data-toc="Lab: dos cabezas">Laboratorio: dos cabezas, dos preguntas</h3>
+<p>La frase «el gato come pescado». Cada token es un vector de 4 números: dos dicen qué tipo de palabra es (sustantivo, verbo) y dos codifican su posición como un ángulo (cos, sin de 45° × posición). Las proyecciones de cada cabeza están puestas a mano para que se vea lo que puede aprender una red: la <strong>cabeza 1</strong> rota la posición de la query 45° hacia atrás, así que su query se parece a la key del token <em>anterior</em>; la <strong>cabeza 2</strong> hace que el verbo busque sustantivos. Cada cabeza entrega como value el tipo de palabra (2 números); se concatenan (4 números) y aquí W<sub>o</sub> es la identidad para que se lea fácil.</p>
+<div class="widget" id="labMH">
+  <div class="widget-head"><div class="wt">Mapas de atención por cabeza, y qué pasa al apagar una</div><div class="ws">Filas = queries (quién mira). Columnas = keys (a quién mira). Cada fila suma 1.</div></div>
+  <div class="widget-body">
+    <div class="heat-grid">
+      <div><div class="cv-t">Cabeza 1: «¿quién estaba antes?»</div><canvas id="mh1"></canvas></div>
+      <div><div class="cv-t">Cabeza 2: «el verbo busca sustantivos»</div><canvas id="mh2"></canvas></div>
+    </div>
+    <div class="mini">Salida concatenada [h₁, h₂] por token</div>
+    <div id="mhSel"></div>
+    <div class="mat-row" id="mhMat"></div>
+    <div id="mhRead"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Cabeza 1: «gato» pone 0.767 en «el», «come» pone 0.628 en «gato» y «pescado» pone 0.628 en «come»: cada uno mira al anterior. «el» no tiene anterior y se mira a sí mismo (0.950).</li>
+    <li>Cabeza 2: «come» reparte 0.472 y 0.472 entre «gato» y «pescado» (sujeto y objeto). Los demás tokens no tienen nada que buscar con esta cabeza (su query es cero) y le dan 0.25 a todos: average pooling.</li>
+    <li>Apaga la cabeza 2: la salida de «come» cambia mucho más (0.945) que la de los demás (0.559). Apaga la cabeza 1: casi no cambia «el» (0.048, no tenía anterior que mirar) y cambian mucho «come» (0.663) y «pescado» (0.725). Este es el experimento de ablación para medir la importancia de una cabeza: apagarla (o reemplazar su salida por un promedio) y medir cuánto empeora la pérdida en validación, idealmente por tipo de token o de tarea.</li>
+  </ol>
+</div>
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>En un modelo entrenado nadie le asigna a cada cabeza «su» relación. Las cabezas aprenden lo que reduzca la pérdida, y muchas veces lo que aprenden no tiene una interpretación limpia como las de este laboratorio. Las frases de la slide («una cabeza para concordancia sujeto-verbo, otra para dependencias largas») son la intuición, no una garantía.</p>
+</div>
+
+<!-- ============ 6. POSICIONAL ============ -->
+<h2 id="posicional"><span class="num">Sección 6</span>Self-attention y codificación posicional</h2>
+
+<p>En el encoder-decoder de Bahdanau, la atención conecta <strong>dos secuencias distintas</strong>: el decoder (queries) consulta al encoder (keys y values). En los Transformers aparece además la <strong>self-attention</strong> (auto-atención): queries, keys y values salen de la <strong>misma</strong> secuencia, así que cada token atiende a todos los tokens de su propia frase. Desde la primera capa, cada representación incorpora contexto de toda la frase.</p>
+<div class="cmp">
+  <div class="col"><h5>Atención encoder-decoder (cross-attention)</h5><div class="cb">Entre secuencias distintas: input → output. Q del decoder; K y V del encoder.</div></div>
+  <div class="col"><h5>Self-attention</h5><div class="cb">Dentro de la misma secuencia: input → input. Q, K y V salen de los mismos tokens, con matrices W<sup>Q</sup>, W<sup>K</sup>, W<sup>V</sup> distintas.</div></div>
+</div>
+
+<h3 id="orden" data-toc="La atención no ve el orden">El problema: la atención no ve el orden</h3>
+<p>Recuerda lo que viste en el laboratorio de la biblioteca: permutar los pares (k, v) no cambiaba la salida. La suma Σ αᵢvᵢ no sabe en qué orden estaban los sumandos. En self-attention eso significa que «el gato come pescado» y «pescado come el gato» son, para la atención sola, <strong>el mismo conjunto de tokens</strong>: el token «gato» recibe exactamente la misma salida en las dos frases, aunque en una sea el sujeto y en la otra el objeto.</p>
+<p>Precisión de lenguaje: la slide dice que la self-attention es «invariante al orden». Lo exacto es que si permutas los tokens de entrada, las salidas se permutan igual (cada token conserva su salida, solo cambia de lugar). Para el examen basta con la idea: <strong>sin información de posición, el modelo no distingue frases con las mismas palabras en distinto orden</strong>.</p>
+
+<h3 id="lab-orden" class="lab" data-toc="Lab: ¿importa el orden?">Laboratorio: ¿importa el orden?</h3>
+<p>Self-attention con W<sup>Q</sup> = W<sup>K</sup> = W<sup>V</sup> = identidad (q = k = v = el embedding) sobre las dos frases. Cada palabra tiene un embedding de 4 números (el = (2, 0, 0, 0), gato = (0, 2, 0, 0), come = (0, 0, 2, 0), pescado = (0, 0, 0, 2)). La fila resaltada es la salida de «gato».</p>
+<div class="widget" id="labOrden">
+  <div class="widget-head"><div class="wt">La salida de «gato» en dos órdenes</div><div class="ws">Activa la codificación posicional (d = 4) y compara.</div></div>
+  <div class="widget-body">
+    <div id="ordSel"></div>
+    <div class="mat-row" id="ordMat"></div>
+    <div id="ordRead"></div>
+    <div class="status info" id="ordStatus"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Sin posición, la salida de «gato» es (0.193, 1.422, 0.193, 0.193) en las dos frases: diferencia 0. Las filas de las dos tablas son las mismas, solo que en otro orden.</li>
+    <li>Con posición, la salida de «gato» pasa a (1.039, 2.143, 0.047, 1.036) en la primera frase y (0.504, 0.762, 0.343, 2.045) en la segunda: diferencia 1.817. Ahora el modelo sí puede tratar distinto al sujeto y al objeto.</li>
+    <li>Esta es la ablación del notebook de la Tarea 8 («quitar la codificación posicional»): sin ella, el mini GPT solo sabe qué caracteres hay en su ventana, no en qué orden.</li>
+  </ol>
+</div>
+
+<h3 id="pe" data-toc="Codificación sinusoidal">La solución: sumar la posición</h3>
+<p>Antes de la primera capa, a cada embedding se le <strong>suma</strong> un vector que depende solo de su posición: la codificación posicional (positional encoding, PE). Hay dos maneras: <strong>aprendida</strong> (una tabla de vectores entrenables, uno por posición, como otro embedding) o <strong>sinusoidal</strong> (fija, con senos y cosenos). Primero un caso de la sinusoidal con d = 4 y la posición 1: las dimensiones 0 y 1 usan frecuencia 1, y las dimensiones 2 y 3 usan frecuencia 1/10000<sup>2/4</sup> = 1/100.</p>
+<div class="formula">
+  <div class="f-head">Codificación posicional sinusoidal</div>
+  <div class="f-ejemplo">d = 4, pos = 1:  PE = (sin 1, cos 1, sin 0.01, cos 0.01) = (0.841, 0.540, 0.010, 1.000)<br>d = 4, pos = 2:  PE = (sin 2, cos 2, sin 0.02, cos 0.02) = (0.909, −0.416, 0.020, 1.000)</div>
+  <div class="eq">
+    <span class="sym" data-s="PE">PE<span class="sub">(<span class="r-dato">pos</span>, 2i)</span></span> = sin( <span class="frac"><span class="num"><span class="r-dato">pos</span></span><span class="den"><span class="r-hiper">10000</span><span class="sup">2i/<span class="sym" data-s="dmodel">d</span></span></span></span> )<br>
+    PE<span class="sub">(<span class="r-dato">pos</span>, 2i+1)</span> = cos( <span class="frac"><span class="num"><span class="r-dato">pos</span></span><span class="den"><span class="r-hiper">10000</span><span class="sup">2i/<span class="r-hiper">d</span></span></span></span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«En la posición pos, la dimensión par 2i vale el seno de pos entre diez mil elevado a 2i entre d, y la dimensión impar siguiente vale el coseno de lo mismo.» Cada par de dimensiones es una onda con su propia frecuencia.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">pos</dt><dd>La posición del token en la secuencia: 0, 1, 2, …</dd>
+      <dt>2i, 2i + 1</dt><dd>Las dimensiones del vector, de dos en dos: i = 0 da las dimensiones 0 y 1, i = 1 da la 2 y la 3, etc.</dd>
+      <dt class="r-hiper">d</dt><dd>La dimensión del embedding (d<sub>model</sub>): PE tiene que medir lo mismo para poder sumarse.</dd>
+      <dt class="r-hiper">10000</dt><dd>Una constante fija de diseño que controla qué tan lentas son las ondas más lentas.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…miras las primeras dimensiones (i chico): la onda cambia rápido, como el segundero de un reloj. Distingue posiciones vecinas.</li>
+      <li>…miras las últimas dimensiones (i cerca de d/2): la onda cambia lentísimo, como la manecilla de las horas. Distingue posiciones lejanas.</li>
+      <li>…la secuencia es más larga que las de entrenamiento: la fórmula da un vector para cualquier pos, así que la sinusoidal se puede usar; la aprendida no tiene vector para posiciones que nunca vio.</li>
+    </ul>
+  </div>
+</div>
+<p>La intuición de la slide: es como darle <strong>coordenadas</strong> a cada palabra. Diferentes dimensiones codifican distintas escalas de posición, posiciones cercanas tienen codificaciones parecidas y la fórmula sirve para secuencias más largas que las vistas en entrenamiento.</p>
+
+<h3 id="lab-pe" class="lab" data-toc="Lab: las ondas de la posición">Laboratorio: las ondas de la posición</h3>
+<p>Arriba, el vector PE de las posiciones 0 a 49 (una fila por posición; naranja = positivo, azul = negativo). Abajo, qué tan parecido es el vector de la posición elegida al de cada otra posición: PE(p)·PE(p′) dividido entre d/2, que vale 1 cuando p′ = p.</p>
+<div class="widget" id="labPE">
+  <div class="widget-head"><div class="wt">Codificación sinusoidal y similitud entre posiciones</div><div class="ws">Mueve la posición y cambia d.</div></div>
+  <div class="widget-body">
+    <div id="peSel"></div>
+    <div id="peCtrl"></div>
+    <div class="cv-t">PE(pos, dimensión): filas = posiciones 0 a 49, columnas = dimensiones</div>
+    <canvas id="peHeat"></canvas>
+    <div class="cv-t" style="margin-top:12px">Similitud PE(p)·PE(p′) / (d/2) contra p′</div>
+    <canvas id="peSim"></canvas>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>En el mapa, las columnas de la izquierda alternan rápido (frecuencia alta) y las de la derecha casi no cambian: es el reloj con segundero y horario.</li>
+    <li>Con d = 16 y p = 20, la similitud es 1 en p′ = 20, 0.94 en 19 y 21, 0.80 en 18 y 22: vecinos parecidos.</li>
+    <li>La similitud no baja de forma perfectamente monótona: tiene ondulaciones (con d = 16, en p′ = 14 vuelve a 0.81). Con d = 64 las ondulaciones se suavizan. «Cercanos se parecen» es cierto cerca del pico, no como regla exacta a cualquier distancia.</li>
+  </ol>
+</div>
+
+<div class="scroll"><table class="tbl">
+  <tr><th>Aspecto</th><th>Sinusoidal (fija)</th><th>Aprendida</th></tr>
+  <tr><td>Qué es</td><td>Vectores de senos y cosenos de distintas frecuencias</td><td>Un vector entrenable por posición, como un embedding</td></tr>
+  <tr><td>Generalización</td><td>Está definida para secuencias más largas que las vistas en entrenamiento</td><td>Limitada a las longitudes vistas en entrenamiento</td></tr>
+  <tr><td>Interpretabilidad</td><td>Fácil de visualizar: posiciones cercanas se parecen</td><td>Más difícil de interpretar</td></tr>
+  <tr><td>Parámetros</td><td>Ninguno</td><td>Proporcionales a la longitud máxima (longitud × d)</td></tr>
+  <tr><td>Uso</td><td>Transformer original (Vaswani et al., 2017)</td><td>Muy usada en modelos como BERT y GPT</td></tr>
+</table></div>
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>«La codificación posicional aprendida generaliza mejor que la sinusoidal a secuencias más largas que las vistas en entrenamiento» es <strong>falso</strong> (examen de práctica, A8): la aprendida no tiene vector para una posición que nunca vio; la sinusoidal se define para cualquier posición y por eso extrapola mejor, aunque no perfectamente.</p>
+</div>
+
+<!-- ============ 7. MÁSCARAS ============ -->
+<h2 id="mascaras"><span class="num">Sección 7</span>Máscaras de atención</h2>
+
+<p>La matriz de scores S = QKᵀ/√d<sub>k</sub> tiene una entrada S<sub>ij</sub> por cada par de tokens: «¿cuánta atención debería poner el token i sobre el token j?». A veces hay pares que <strong>no deben</strong> comunicarse. La máscara lo impide sin tocar los parámetros: antes del softmax se le suma una matriz M que vale 0 donde se permite mirar y −∞ donde no.</p>
+<p>Con números, una fila de scores (2, 1, 0) donde el tercer token está prohibido: (2, 1, 0) + (0, 0, −∞) = (2, 1, −∞). Exponenciales: (7.389, 2.718, 0), porque e<sup>−∞</sup> = 0. Suma 10.107, pesos <b>(0.731, 0.269, 0)</b>. El tercero desapareció y los otros dos se repartieron todo.</p>
+<div class="formula">
+  <div class="f-head">Atención con máscara aditiva</div>
+  <div class="f-ejemplo">fila de S = (2, 1, 0),  fila de M = (0, 0, −∞)  →  S + M = (2, 1, −∞)  →  e<sup>·</sup> = (7.389, 2.718, 0)  →  A = (0.731, 0.269, 0)</div>
+  <div class="eq">
+    <span class="sym" data-s="Aatt">A</span> = softmax( <span class="sym" data-s="Smat">S</span> + <span class="sym" data-s="Mmask">M</span> ),     M<span class="sub">ij</span> = 0 si i puede atender a j;   M<span class="sub">ij</span> = −∞ si no
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La matriz de atención es el softmax, fila por fila, de los scores más la máscara; la máscara vale cero donde se permite mirar y menos infinito donde no.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">S</dt><dd>Los scores ya escalados, QKᵀ/√d<sub>k</sub>: una fila por query y una columna por key.</dd>
+      <dt>M</dt><dd>La máscara: no se aprende. La fija el diseño (causal) o los datos (dónde hay [PAD]).</dd>
+      <dt class="r-calc">A</dt><dd>Los pesos de atención finales. Cada fila suma 1; donde M = −∞, el peso es exactamente 0. (No confundir con la matriz A de LoRA de la sección 12.)</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…enmascaras una key: su peso es 0 y los demás pesos de esa fila se reescalan para seguir sumando 1.</li>
+      <li>…enmascaras <em>toda</em> una fila: el softmax queda 0/0 y da NaN. Por eso en la máscara causal cada token siempre puede verse a sí mismo (la diagonal nunca se enmascara).</li>
+      <li>…usaras un número grande en vez de −∞ (por ejemplo −10⁹): en la práctica es lo que hacen las implementaciones, con el mismo efecto.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="padding" data-toc="Padding mask">Padding mask: ignorar el relleno</h3>
+<p>Las frases de un mini-batch tienen longitudes distintas, pero el tensor tiene que ser rectangular. Se rellenan las cortas con un token especial: «el gato duerme [PAD] [PAD]». Ningún token debe prestarle atención al relleno, porque no es parte de la frase: la padding mask pone −∞ en las <strong>columnas</strong> de los [PAD]. (Las filas de los [PAD] se calculan igual, pero su salida no se usa y no entra a la pérdida.)</p>
+
+<h3 id="causal" data-toc="Causal mask">Causal mask: no ver el futuro</h3>
+<p>Un modelo autoregresivo aprende P(x<sub>t</sub> | x<sub>1</sub>, …, x<sub>t−1</sub>). Durante el entrenamiento se le muestra la frase completa y se le pide predecir cada token a partir de los anteriores, todos a la vez. Si el token de la posición t pudiera mirar las posiciones siguientes, vería la respuesta. La máscara causal prohíbe el triángulo superior: el token i solo mira a j ≤ i.</p>
+<div class="scroll"><table class="tbl" style="max-width:360px">
+  <tr><th></th><th class="c">x₁</th><th class="c">x₂</th><th class="c">x₃</th><th class="c">x₄</th></tr>
+  <tr><td>x₁</td><td class="c">✓</td><td class="c">×</td><td class="c">×</td><td class="c">×</td></tr>
+  <tr><td>x₂</td><td class="c">✓</td><td class="c">✓</td><td class="c">×</td><td class="c">×</td></tr>
+  <tr><td>x₃</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">×</td></tr>
+  <tr><td>x₄</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td></tr>
+</table></div>
+
+<h3 id="lab-mascaras" class="lab" data-toc="Lab: máscaras">Laboratorio: máscaras sobre «el gato duerme [PAD] [PAD]»</h3>
+<p>Los scores S están fijos (ya escalados). Los [PAD] tienen scores de 0.8 con todos: si nadie los enmascara, se roban atención. Cambia de máscara y mira qué celdas quedan tachadas (M = −∞), cómo se reparten los pesos A y que cada fila sigue sumando 1.</p>
+<div class="widget" id="labMask">
+  <div class="widget-head"><div class="wt">A = softmax(S + M) con cuatro máscaras</div><div class="ws">Celdas tachadas: M = −∞, peso exactamente 0.</div></div>
+  <div class="widget-body">
+    <div id="maskSel"></div>
+    <div class="heat-grid">
+      <div><div class="cv-t">Scores S (sin máscara)</div><div class="mat-row" id="maskS"></div></div>
+      <div><div class="cv-t">Pesos A = softmax(S + M)</div><canvas id="maskA"></canvas></div>
+    </div>
+    <div id="maskRead"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Sin máscara, «duerme» le da 0.140 a cada [PAD]: el 28 % de su atención se va al relleno.</li>
+    <li>Con padding: las columnas de [PAD] quedan en 0 y «duerme» pasa a (0.118, 0.645, 0.237) sobre «el», «gato», «duerme».</li>
+    <li>Con causal: «el» solo se ve a sí mismo (peso 1) y «gato» reparte (0.289, 0.711). La fila de «duerme» queda igual que con padding, porque los [PAD] ya estaban en su futuro.</li>
+    <li>Con causal sola, la fila del primer [PAD] todavía se mira a sí mismo (0.25 a cada uno de los cuatro primeros). Con las dos máscaras juntas, ningún token mira al relleno.</li>
+  </ol>
+</div>
+
+<h3 id="sin-causal" data-toc="Ablación: sin máscara causal">Ablación: entrenar un decoder sin máscara causal</h3>
+<p>Este es el ejercicio 5 de la Tarea 8 y una pregunta directa del temario. Si quitas la máscara causal de un modelo tipo GPT:</p>
+<ul>
+  <li><strong>En entrenamiento</strong>, el token de la posición t puede mirar x<sub>t+1</sub>, que es justo lo que tiene que predecir. La red aprende a copiar la respuesta de la posición siguiente: la pérdida de entrenamiento (y la de validación, si se calcula igual, con la frase completa) <strong>se desploma</strong>. Parece un modelo excelente.</li>
+  <li><strong>En generación</strong>, el futuro todavía no existe: el modelo genera un token a la vez y solo tiene el pasado. La «estrategia» que aprendió (mirar hacia adelante) no sirve, y el texto generado <strong>degenera</strong>: repeticiones, caracteres sin sentido.</li>
+</ul>
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>La respuesta tiene dos partes y se necesitan las dos: «la pérdida de entrenamiento baja muchísimo <strong>por fuga de información</strong> (el objetivo es visible), y la generación se arruina porque en inferencia ese futuro no está disponible». Es la versión de secuencias de la fuga de información (data leakage) que viste en el diagnóstico del artefacto 05.</p>
+</div>
+
+<!-- ============ 8. BLOQUE ============ -->
+<h2 id="bloque"><span class="num">Sección 8</span>El bloque Transformer</h2>
+
+<p>El Transformer (Vaswani et al., 2017, «Attention is All You Need») reemplaza la recurrencia y las convoluciones con atención. Tiene un encoder, que procesa la entrada, y un decoder, que genera la salida. Los dos son pilas de N bloques iguales (N = 6 en el original), y todo es paralelizable.</p>
+<div class="cmp">
+  <div class="col"><h5>Una capa del encoder</h5><div class="cb">
+    1. Multi-head self-attention: cada token atiende a todos los de la entrada.<br>
+    2. Residual + LayerNorm.<br>
+    3. Feed-forward por posición: dos capas lineales con ReLU o GELU en medio, la misma red para cada token.<br>
+    4. Residual + LayerNorm.</div></div>
+  <div class="col"><h5>Una capa del decoder</h5><div class="cb">
+    1. <b>Masked</b> multi-head self-attention: cada posición solo ve las anteriores (máscara causal).<br>
+    2. Multi-head <b>cross-attention</b>: Q del decoder; K y V de la salida del encoder.<br>
+    3. Feed-forward por posición.<br>
+    Cada subcapa con residual + LayerNorm.</div></div>
+</div>
+
+<h3 id="residual" data-toc="Residual y LayerNorm">Residual y LayerNorm alrededor de cada subcapa</h3>
+<p>Cada subcapa (atención o feed-forward) no reemplaza su entrada: le <strong>suma una corrección</strong>.</p>
+<div class="eq">
+  salida = LayerNorm( <span class="r-calc">x</span> + Sublayer(<span class="r-calc">x</span>) )
+  <span class="lbl">la misma idea que <a href="06_cnn.html#resnet">ResNet</a> en CNN (artefacto 06): h<sub>k+1</sub> = h<sub>k</sub> + F(h<sub>k</sub>)</span>
+</div>
+<p>Dicho con palabras: «a lo que ya tenías, súmale lo que la subcapa propone cambiar, y normaliza». Si a la subcapa no le conviene cambiar nada, le basta con producir algo cercano a cero, y la información pasa intacta. Para el gradiente es una autopista: la derivada de x + Sublayer(x) respecto a x es 1 + (derivada de la subcapa), así que siempre hay un camino por el que el gradiente llega a las primeras capas sin multiplicarse por factores pequeños capa tras capa. <strong>LayerNorm</strong> normaliza, para cada token por separado, sus d<sub>model</sub> números a media 0 y varianza 1 (con escala y desplazamiento aprendidos), como viste en el <a href="05_regularizacion.html#bn-chico">artefacto 05</a>; no depende del batch, así que funciona igual en entrenamiento y en inferencia. Las dos cosas juntas evitan que los gradientes desaparezcan o exploten y permiten apilar muchas capas.</p>
+<div class="note fix">
+  <span class="tag">Dos versiones válidas</span>
+  <p>La slide aplica LayerNorm <em>después</em> de cada subcapa (post-LN, como el Transformer original). El notebook de la Tarea 8 la aplica <em>antes</em>: x + Sublayer(LayerNorm(x)) (pre-LN), que en la práctica entrena más estable. Las dos existen; si en el examen te piden el bloque «de la slide», escribe post-LN.</p>
+</div>
+
+<h3 id="lab-forma" class="lab" data-toc="Lab: sigue la forma del tensor">Laboratorio: sigue la forma del tensor</h3>
+<p>Un decoder tipo GPT con T = 6 tokens, d<sub>model</sub> = 512, h = 8 cabezas, d<sub>ff</sub> = 2048 y un vocabulario de |V| = 32 000. Avanza y mira la forma en cada paso. La forma (T, d<sub>model</sub>) se conserva a lo largo de todo el bloque: por eso se pueden apilar N bloques iguales.</p>
+<div class="widget" data-pasos>
+  <div class="widget-head"><div class="wt">Un token por renglón, d<sub>model</sub> números por token</div><div class="ws">Pasos declarativos: lee la forma y el porqué.</div></div>
+  <div class="widget-body">
+    <div class="paso"><div class="stepinfo"><div class="sh">0 · Texto → IDs</div><div class="sb">«la ley fue aprobada por mayoría» → el tokenizador la parte en 6 tokens y cada token se cambia por su número en el vocabulario. Forma: <b>(6,)</b>, seis enteros entre 0 y 31 999.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">1 · Embedding + posición</div><div class="sb">Cada ID se reemplaza por su fila de la tabla de embeddings (32 000 × 512) y se le suma PE(pos). Forma: <b>(6, 512)</b>. Desde aquí, cada renglón es un token.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">2 · Proyecciones Q, K, V</div><div class="sb">Q = XW<sup>Q</sup>, K = XW<sup>K</sup>, V = XW<sup>V</sup>, cada una (6, 512), y se parten en 8 cabezas de 64: forma <b>(8, 6, 64)</b>.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">3 · Scores, máscara y softmax</div><div class="sb">Por cabeza, QKᵀ/√64 da una matriz <b>(6, 6)</b>: cada token contra cada token. Se suma la máscara causal (−∞ arriba de la diagonal) y softmax por fila. Forma total <b>(8, 6, 6)</b>.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">4 · Suma ponderada y concatenar</div><div class="sb">Cada cabeza: A · V → (6, 64). Se concatenan las 8 → <b>(6, 512)</b> y se multiplica por W<sup>O</sup> (512 × 512) → (6, 512).</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">5 · Residual + LayerNorm</div><div class="sb">LayerNorm(X + atención). Forma <b>(6, 512)</b>: la misma que la entrada, por eso la suma es posible.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">6 · Feed-forward por posición</div><div class="sb">Cada renglón, por separado y con la misma red: 512 → 2048 (ReLU o GELU) → 512. Forma intermedia <b>(6, 2048)</b>, salida (6, 512). Aquí los tokens no se mezclan entre sí: solo la atención los mezcla.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">7 · Residual + LayerNorm, y repetir N veces</div><div class="sb">Otra vez (6, 512). Este bloque se apila N veces (6 en el Transformer original; 96 en GPT-3) sin cambiar la forma.</div></div></div>
+    <div class="paso"><div class="stepinfo"><div class="sh">8 · Capa lineal + softmax</div><div class="sb">Una capa lineal de 512 → 32 000 da los logits <b>(6, 32 000)</b>; el softmax de cada renglón es P(siguiente token | lo anterior). La pérdida es la cross-entropy contra el token real siguiente, en las 6 posiciones a la vez (la misma cabeza de clasificación multiclase del <a href="03_entrenamiento1.html#categorica">artefacto 03</a>).</div></div></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>La única operación que mezcla información <em>entre</em> tokens es la atención (paso 3–4). El feed-forward trabaja token por token.</li>
+    <li>La forma (6, 512) entra y sale de cada bloque: residual y apilamiento dependen de eso.</li>
+    <li>La matriz de atención es (T, T): su costo crece con el cuadrado de la longitud. Con T = 6 son 36 scores por cabeza; con T = 6 000, 36 millones.</li>
+  </ol>
+</div>
+
+<h3 id="flujo" data-toc="El flujo completo">El flujo completo, en cuatro pasos</h3>
+<ol>
+  <li>Embeddings de la entrada + codificación posicional → encoder.</li>
+  <li>El encoder produce representaciones contextuales: un vector por token de entrada que ya «sabe» de toda la frase.</li>
+  <li>El decoder recibe sus propios embeddings + posición y va generando la salida: su self-attention mira solo el pasado (máscara causal) y su cross-attention consulta al encoder.</li>
+  <li>Capa final lineal + softmax: predicción del siguiente token.</li>
+</ol>
+<p>¿Por qué desplazó a las RNN? Porque en entrenamiento las T posiciones se procesan <strong>a la vez</strong> (multiplicaciones de matrices, ideales para GPU) y porque cualquier token llega a cualquier otro en <strong>un solo paso</strong> de atención, en lugar de T pasos de recurrencia en los que el gradiente se desvanece.</p>
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>El temario pide «poder narrar el flujo completo». Practica decirlo sin ver: <em>tokens → embeddings + posición → [multi-head self-attention → residual + LayerNorm → feed-forward por posición → residual + LayerNorm] × N → lineal + softmax</em>, y para el decoder agrega la máscara causal y la cross-attention.</p>
+</div>
+
+<!-- ============ 9. NLP ============ -->
+<h2 id="nlp"><span class="num">Sección 9</span>Transformers para NLP: tokens, objetivos y cabezas</h2>
+
+<p>El mismo esqueleto sirve para casi cualquier tarea de texto. El pipeline general de la slide:</p>
+<div class="flow">
+  <div class="node"><div class="t">Texto</div><div class="d">«el servicio fue bueno»</div></div>
+  <div class="node"><div class="t">Tokenización → IDs</div><div class="d">subpalabras y su número</div></div>
+  <div class="node"><div class="t">Embeddings</div><div class="d">token + posición [+ segmento]</div></div>
+  <div class="node aqui"><div class="t">Transformer</div><div class="d">N bloques</div></div>
+  <div class="node"><div class="t">Cabeza de tarea</div><div class="d">clasificar, etiquetar, generar</div></div>
+  <div class="node"><div class="t">Pérdida / decodificación</div><div class="d">entrenar o generar</div></div>
+</div>
+<p>Se cambia solo la cabeza o el esquema de decodificación. Y casi siempre hay dos fases: <strong>preentrenamiento</strong> auto-supervisado en corpus enormes y <strong>fine-tuning</strong> en la tarea específica (la misma lógica de transfer learning del <a href="05_regularizacion.html#transfer">artefacto 05</a>).</p>
+
+<h3 id="tokenizacion" data-toc="Tokenización y OOV">Tokenización: ni palabras ni caracteres</h3>
+<div class="cmp">
+  <div class="col bad"><h5>Palabras completas</h5><div class="cb">Vocabulario enorme (cada conjugación es otra palabra) y el problema <strong>OOV</strong> (out-of-vocabulary): una palabra que no se vio en entrenamiento no tiene representación. Antes se cambiaba por <code>&lt;unk&gt;</code>, y se perdía la información.</div></div>
+  <div class="col bad"><h5>Caracteres</h5><div class="cb">No hay OOV (el notebook de la Tarea 8 usa caracteres por eso), pero las secuencias son muy largas, la atención cuesta T², y cada token trae poco significado.</div></div>
+</div>
+<p>Las <strong>subpalabras</strong> (BPE, WordPiece, Unigram) son el punto medio: las palabras frecuentes quedan como un solo token y las raras se arman con pedazos. La slide también menciona los tokens especiales (<code>[CLS]</code>, <code>[SEP]</code>, <code>[PAD]</code>, <code>&lt;s&gt;</code>, <code>&lt;/s&gt;</code>), el padding o truncado a una longitud máxima con su máscara, y decisiones de normalización (mayúsculas, signos).</p>
+<p><strong>BPE</strong> (byte pair encoding) se entrena así: empieza con caracteres, cuenta qué par de tokens aparece junto más veces en el corpus y lo fusiona en un token nuevo. Repite. Después de muchas fusiones, los tokens son letras, pedazos de palabras y palabras frecuentes completas.</p>
+
+<h3 id="lab-bpe" class="lab" data-toc="Lab: BPE paso a paso">Laboratorio: BPE paso a paso</h3>
+<p>Un corpus de juguete con sus frecuencias: ley (8), leyes (4), votar (5), votaron (3), votó (2), vota (4). El símbolo «_» marca el fin de palabra. Cada paso cuenta los pares adyacentes ponderados por frecuencia y fusiona el más frecuente; en un empate gana el par que aparece primero.</p>
+<div class="widget" id="labBPE">
+  <div class="widget-head"><div class="wt">Fusiones de BPE sobre un corpus de 6 palabras</div><div class="ws">«Siguiente» hace una fusión. El token nuevo aparece resaltado.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div>
+        <div class="calcline" id="bpeCalc"></div>
+        <div class="mini">Pares más frecuentes antes de fusionar</div>
+        <div class="scroll"><table class="tbl" id="bpePares" style="margin:6px 0"></table></div>
+        <div class="mini">Así queda cada palabra del corpus</div>
+        <div class="wlist" id="bpeWords"></div>
+        <div class="mini">Palabras que nunca se vieron</div>
+        <div class="wlist" id="bpeTest"></div>
+      </div>
+      <div><div id="bpeRead"></div><canvas id="bpeCanvas" style="margin-top:10px"></canvas>
+        <div class="legend"><span><i style="background:var(--g2)"></i>tokens en el corpus</span><span><i style="background:var(--accent)"></i>tamaño del vocabulario × 5</span></div></div>
+    </div>
+  </div>
+  <div class="widget-foot"></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>La primera fusión es «v + o» (14 apariciones: 5 + 3 + 2 + 4). Empata con «o + t», y gana «vo» por aparecer primero; la segunda fusión, «vo + t», la completa.</li>
+    <li>Tras 10 fusiones, el corpus pasa de 140 tokens a 47 y el vocabulario de 12 a 22 símbolos: <strong>secuencias más cortas a cambio de un vocabulario más grande</strong>. Ese es el compromiso entre OOV y longitud.</li>
+    <li>«votaremos» nunca apareció, y aun así se parte en votar · e · m · o · s · _. «rey» queda r · e · y · _: no se fusionó «ey» porque las fusiones aprendidas fueron «l + e» y luego «le + y». Nunca hace falta <code>&lt;unk&gt;</code>: en el peor caso se baja a caracteres.</li>
+  </ol>
+</div>
+
+<h3 id="perplejidad-tokens" data-toc="Perplejidad y tokenizador">Por qué la tokenización cambia la perplejidad</h3>
+<p>La <a href="07_rnn.html#perplejidad">perplejidad</a> (artefacto 07) es exp del promedio, <strong>por token</strong>, de −log P(token). Si dos modelos parten el mismo texto en distinto número de tokens, su perplejidad mide cosas distintas: un modelo de caracteres hace muchas predicciones fáciles (vocabulario chico) y otro de subpalabras pocas predicciones difíciles (vocabulario grande). El número no es comparable. Lo comparable es la <strong>log-verosimilitud total del mismo texto</strong>, o la misma cantidad repartida por carácter (bits por carácter). El ejercicio 8 lo hace con números.</p>
+
+<h3 id="objetivos" data-toc="Objetivos de preentrenamiento">Objetivos de preentrenamiento y cabezas</h3>
+<div class="scroll"><table class="tbl">
+  <tr><th>Familia</th><th>Objetivo de preentrenamiento</th><th>Para qué tarea</th><th>Dónde va la cabeza</th></tr>
+  <tr><td>Encoder-only (BERT, RoBERTa)</td><td><b>MLM</b> (masked language modeling): tapar ~15 % de los tokens y predecirlos viendo los dos lados. Históricamente también NSP/SOP (relación entre oraciones), hoy menos críticas.</td><td>Clasificar (sentimiento, tema), etiquetar por token (NER, PoS), QA extractivo</td><td>Clasificación: <code>[CLS]</code> → capa lineal. Por token: una proyección por token. QA: cabezas de inicio y fin</td></tr>
+  <tr><td>Decoder-only (GPT)</td><td><b>LM causal</b>: predecir el siguiente token, con máscara causal</td><td>Generación libre o condicionada: diálogo, historias, código</td><td>Lineal + softmax sobre el vocabulario, y muestreo</td></tr>
+  <tr><td>Encoder-decoder (T5, BART)</td><td><b>Denoising seq2seq</b>: corromper la entrada (tapar, permutar, borrar spans) y reconstruirla</td><td>Traducción, resumen, paráfrasis, transferencia de estilo</td><td>El decoder genera la salida</td></tr>
+</table></div>
+<p>Todos producen representaciones reutilizables. En el <strong>fine-tuning</strong> se agrega la cabeza que pida la tarea (softmax para clasificar, MSE para regresión, por token, de span o de LM) y se usan estrategias que ya conoces: congelar parte del modelo, tasas de aprendizaje por capa, early stopping. Con pocos datos, métodos de <strong>parámetros eficientes</strong>: adapters, LoRA (sección 12) y prompt tuning.</p>
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>«Un modelo encoder-only tipo BERT es la elección natural para generar texto libre»: <strong>falso</strong> (A9 del examen de práctica). BERT se entrena viendo contexto de ambos lados y no genera de izquierda a derecha. Para generar: decoder-only con máscara causal, o encoder-decoder para seq2seq.</p>
+</div>
+<p>Métricas típicas en NLP (de la slide): accuracy y precision/recall/F1 (micro o macro) para clasificación y NER, exact match y F1 de tokens para QA extractivo, BLEU y ROUGE para traducción y resumen, y perplejidad para modelos de lenguaje. Sus límites, en la sección 13.</p>
+
+<!-- ============ 10. LLMs ============ -->
+<h2 id="llm"><span class="num">Sección 10</span>LLMs: escala y dónde se gasta el cómputo</h2>
+
+<p>Un LLM (large language model) es un Transformer, casi siempre decoder-only, entrenado para predecir el siguiente token, llevado a escala masiva. GPT-3 (Brown et al., 2020) tenía 175 mil millones de parámetros (175B), 96 capas, 96 cabezas de atención, 300 mil millones de tokens de entrenamiento y contexto de 2 048 tokens. La slide advierte que en 2026 esas cifras son históricas: los modelos actuales manejan contextos de cientos de miles o millones de tokens y corpus de decenas de billones de tokens, y la escala de GPT-3 es la de un modelo «pequeño». La gráfica de tamaños de la slide cuenta la historia hasta 2022, cuando la receta era crecer en parámetros.</p>
+<details>
+  <summary>Para profundizar: de dónde salen los 175B</summary>
+  <div class="dbody">
+    <p>Con las cuentas de la sección 5, cada bloque tiene unos 4d² parámetros de atención y unos 8d² del feed-forward (d<sub>ff</sub> = 4d: dos matrices de d × 4d): unos 12d² por bloque. El artículo de GPT-3 reporta d<sub>model</sub> = 12 288 (este número no está en la slide). Con 96 bloques: 12 × 96 × 12 288² ≈ 174 mil millones, a lo que se suman los embeddings. Coincide con los 175B.</p>
+  </div>
+</details>
+
+<h3 id="computo" data-toc="Tres vías de cómputo">Tres lugares donde se gasta el cómputo</h3>
+<ol>
+  <li><strong>Preentrenamiento:</strong> aprender los parámetros con muchísimos datos y cómputo.</li>
+  <li><strong>Post-entrenamiento:</strong> SFT, preferencias y RL para cambiar el comportamiento (sección 11).</li>
+  <li><strong>Inferencia o test-time compute:</strong> gastar más cómputo al contestar una pregunta concreta: más pasos o tokens de razonamiento, varias soluciones candidatas, verificación o búsqueda, uso iterativo de herramientas.</li>
+</ol>
+<p>Más cómputo en inferencia puede dar mejores respuestas, pero cuesta más latencia y dinero. Por eso un mismo modelo puede operar con distintos <strong>reasoning budgets</strong> (presupuestos de razonamiento): rápido y barato para tareas sencillas, más cómputo para las difíciles.</p>
+
+<h3 id="moe" data-toc="Mixture-of-Experts">Mixture-of-Experts: parámetros totales contra activos</h3>
+<p>Según la slide, en 2026 casi todos los modelos de frontera son <strong>MoE</strong>: el feed-forward de cada bloque se reemplaza por muchos «expertos» (varias redes feed-forward) y un <strong>router</strong> que, para cada token, elige solo los top-k (por ejemplo 2 de 64). Un ejemplo con números redondos: 2B de parámetros compartidos (atención, embeddings) y 16 expertos de 3B cada uno, con top-2. El modelo tiene 2 + 16 × 3 = <b>50B</b> parámetros totales, pero cada token usa solo 2 + 2 × 3 = <b>8B</b>. Cuesta por token como un modelo de 8B.</p>
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>«El modelo A tiene 400B parámetros y el B 70B, así que A es más caro de usar» ya no se sigue. Con MoE el número total de parámetros se desacopla del costo por token. Pregunta por los <strong>parámetros activos</strong> y el costo por token, no por el total. Lo calculas en el laboratorio de la sección 12.</p>
+</div>
+
+<h3 id="multimodal" data-toc="Multimodales y prompting">Multimodales y prompting</h3>
+<p><strong>ViT</strong> (Vision Transformer) corta una imagen en parches y trata cada parche como un token: el mismo Transformer de esta clase, aplicado a visión. <strong>CLIP</strong> alinea imágenes y textos en un espacio común entrenando con pares (imagen, descripción): es la base de «buscar imágenes con palabras». Los modelos de frontera de 2026 leen texto, imágenes y documentos en un solo modelo.</p>
+<p>Con un LLM se interactúa mediante <strong>prompts</strong>: zero-shot (solo la instrucción), few-shot (algunos ejemplos de entrada y salida dentro del prompt) y chain-of-thought (pedir el razonamiento intermedio). Ninguno cambia los pesos del modelo.</p>
+
+<!-- ============ 11. ASISTENTE ============ -->
+<h2 id="asistente"><span class="num">Sección 11</span>De LM base a asistente</h2>
+
+<p>Un LLM base hace una sola cosa: continuar texto con el token más plausible. Completar no es lo mismo que ayudar. Si le escribes una pregunta, puede continuarla con más preguntas, como si fuera parte de un examen; no tiene noción de «no sé» ni de «eso no debería contestarlo». Los asistentes que usamos son un LLM base más <strong>etapas adicionales de entrenamiento</strong>.</p>
+<div class="flow">
+  <div class="node"><div class="t">LM base</div><div class="d">Datos: billones de tokens de texto. Señal: siguiente token.</div></div>
+  <div class="node"><div class="t">SFT</div><div class="d">Datos: miles de pares (instrucción, respuesta) curados. Señal: siguiente token.</div></div>
+  <div class="node"><div class="t">RLHF / DPO</div><div class="d">Datos: comparaciones humanas «A mejor que B». Señal: preferencia.</div></div>
+  <div class="node aqui"><div class="t">RLVR</div><div class="d">Datos: problemas con verificador (tests, respuesta exacta). Señal: ¿es correcto?</div></div>
+</div>
+
+<h3 id="sft" data-toc="SFT">Instruction tuning (SFT)</h3>
+<p>El <strong>supervised fine-tuning</strong> sigue entrenando el modelo base con pares (instrucción, respuesta deseada) escritos o curados por humanos. El objetivo es <strong>el mismo de siempre</strong>, predecir el siguiente token; lo único que cambia son los datos. Con eso el modelo aprende el formato de ser asistente: responder, no continuar. Y basta con pocos datos comparado con el preentrenamiento (miles de ejemplos contra billones de tokens).</p>
+
+<h3 id="rlhf" data-toc="RLHF y DPO">RLHF y DPO: aprender de comparaciones</h3>
+<p>El problema que resuelve: para una persona es fácil juzgar cuál de dos respuestas es mejor y difícil escribir la respuesta perfecta. La receta de InstructGPT (Ouyang et al., 2022):</p>
+<ol>
+  <li>Humanos comparan pares de respuestas del modelo.</li>
+  <li>Con esas comparaciones se entrena un <strong>modelo de recompensa</strong> que predice qué respuesta preferiría un humano.</li>
+  <li>El LLM se optimiza con aprendizaje por refuerzo (RL) para maximizar esa recompensa.</li>
+</ol>
+<p><strong>DPO</strong> (direct preference optimization, Rafailov et al., 2023) es la variante más simple y muy usada hoy: optimiza directamente sobre las comparaciones, <strong>sin entrenar un modelo de recompensa</strong> aparte ni hacer RL.</p>
+<div class="note fix">
+  <span class="tag">Ojo</span>
+  <p>Esto es alineación <em>como técnica</em>: hace que el modelo se comporte como prefieren quienes etiquetaron. La pregunta normativa, «¿las preferencias de quién?», sigue abierta y no la resuelve ningún algoritmo.</p>
+</div>
+
+<h3 id="rlvr" data-toc="RLVR y razonamiento">RLVR: recompensas verificables</h3>
+<p>En dominios donde el éxito se puede <strong>verificar mecánicamente</strong> no hacen falta ni modelo de recompensa ni preferencias humanas: en matemáticas, ¿la respuesta final es correcta?; en código, ¿pasan los tests? Se entrena con RL directamente contra esa señal (la receta de DeepSeek-R1, 2025). El modelo aprende solo a pensar más, con cadenas largas de razonamiento, porque pensar más gana más recompensa. Así nacen los <strong>modelos de razonamiento</strong> (2024 en adelante): gastan más cómputo en inferencia, mejoran mucho en razonamiento y cuestan más en latencia.</p>
+<p>De ahí la observación de la slide: el progreso 2024–2026 fue <strong>más rápido en matemáticas y código</strong> que en juicio abierto, porque avanza más rápido donde hay verificador. Y la moraleja del escalamiento: ya no solo «más parámetros y más datos», también «más pensamiento por pregunta».</p>
+
+<h3 id="lab-etapas" class="lab" data-toc="Lab: una pregunta, cuatro modelos">Laboratorio: una instrucción, cuatro etapas</h3>
+<p>La misma instrucción a un modelo en cada etapa. Las respuestas son <strong>ilustrativas</strong>, escritas para mostrar el tipo de comportamiento; no son salidas reales de un modelo.</p>
+<div class="widget" id="labEtapas">
+  <div class="widget-head"><div class="wt">Qué cambia en cada etapa del post-entrenamiento</div><div class="ws">Elige la etapa.</div></div>
+  <div class="widget-body">
+    <div id="etSel"></div>
+    <div class="etapa" id="etCard"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Base contra SFT: la diferencia no es «saber más», es el <strong>formato</strong>. El objetivo de entrenamiento es idéntico (siguiente token); cambian los datos.</li>
+    <li>SFT contra RLHF/DPO: la señal pasa de «imita esta respuesta» a «esta respuesta es mejor que aquella». Es más barato de etiquetar y permite enseñar cosas difíciles de escribir, como reconocer incertidumbre.</li>
+    <li>RLVR solo aplica donde hay verificador: el ejemplo cambia de instrucción (de resumir a calcular) a propósito, porque un resumen no tiene un «correcto» mecánico.</li>
+  </ol>
+</div>
+
+<!-- ============ 12. ADAPTAR ============ -->
+<h2 id="adaptar"><span class="num">Sección 12</span>¿Prompt, RAG, fine-tuning o agente?</h2>
+
+<h3 id="lora" data-toc="LoRA">Fine-tuning eficiente: LoRA</h3>
+<p>Hacer fine-tuning completo de un modelo de miles de millones de parámetros es caro y delicado. <strong>LoRA</strong> (low-rank adaptation, Hu et al., 2021) congela los pesos originales W y aprende solo una corrección ΔW escrita como producto de dos matrices delgadas. Un caso: una matriz W de 4096 × 4096 tiene 16 777 216 números. Con rango r = 8, A es de 4096 × 8 y B de 8 × 4096: juntas tienen 4096·8 + 8·4096 = <b>65 536</b> números, el <b>0.39 %</b>.</p>
+<div class="formula">
+  <div class="f-head">Corrección de rango bajo (LoRA)</div>
+  <div class="f-ejemplo">W: 4096 × 4096 = 16&nbsp;777&nbsp;216 (congelada)  ·  A: 4096 × 8,  B: 8 × 4096<br>→  8·(4096 + 4096) = 65&nbsp;536 entrenables  →  65&nbsp;536 / 16&nbsp;777&nbsp;216 = 0.39 %</div>
+  <div class="eq">
+    <span class="r-param">W</span><span class="sub">nueva</span> = <span class="r-param">W</span> + <span class="sym" data-s="deltaW">ΔW</span>,     Δ<span class="r-param">W</span> = <span class="sym" data-s="Alora">AB</span>,     <span class="r-param">A</span> ∈ ℝ<span class="sup">d × <span class="sym" data-s="rlora">r</span></span>,  <span class="r-param">B</span> ∈ ℝ<span class="sup"><span class="r-hiper">r</span> × k</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El peso nuevo es el peso original, que no se toca, más delta W, que es A por B; A tiene d renglones y r columnas, B tiene r renglones y k columnas.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">W</dt><dd>Una matriz de pesos del modelo preentrenado, de d × k. Se congela: no recibe gradiente.</dd>
+      <dt class="r-param">A, B</dt><dd>Las dos matrices diminutas que sí se entrenan. Su producto tiene la misma forma que W. (Esta A no es la matriz de atención.)</dd>
+      <dt class="r-hiper">r</dt><dd>El rango: cuántas «direcciones» de cambio se permiten. Lo eliges (4, 8, 16 son típicos), y es mucho menor que d y k.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…duplicas r: se duplican los parámetros entrenables (r(d + k) es lineal en r); sigue siendo una fracción mínima.</li>
+      <li>…r = min(d, k): ΔW puede ser cualquier matriz y ya no ahorras nada.</li>
+      <li>…combinas LoRA con cuantización (QLoRA): el modelo congelado se guarda en baja precisión y se puede hacer fine-tuning de modelos grandes en una sola GPU.</li>
+    </ul>
+  </div>
+</div>
+<p>La slide resume: se entrena menos del 1 % de los parámetros con un rendimiento cercano al fine-tuning completo.</p>
+
+<h3 id="rag" data-toc="RAG">RAG: buscar antes de contestar</h3>
+<p>El conocimiento de un LLM está <strong>congelado en sus pesos</strong>: tiene fecha de corte, no conoce los documentos internos de una institución y, cuando no sabe, puede alucinar. <strong>RAG</strong> (retrieval-augmented generation, Lewis et al., 2020): antes de generar, se buscan los documentos relevantes (con embeddings y búsqueda semántica) y se pegan al prompt. El modelo responde citando el corpus, así que la respuesta es <strong>verificable</strong> y el conocimiento se <strong>actualiza sin reentrenar</strong>: basta con cambiar los documentos. Para gobierno es el patrón dominante: leyes, expedientes y normas cambian, y la trazabilidad de la fuente es obligatoria.</p>
+
+<h3 id="agentes" data-toc="Agentes">Agentes y herramientas</h3>
+<p>Un agente es un LLM que además <strong>actúa</strong>: llama funciones, busca, ejecuta código, lee archivos, en un ciclo de razonar → actuar → observar (ReAct, Yao et al., 2022). La slide aclara que ReAct es el patrón original de prompting y la línea base conceptual; los agentes de frontera de 2026 además entrenan su política de uso de herramientas con RL sobre tareas completas. El modelo decide qué herramienta usar; el sistema alrededor decide qué le está permitido. Y cambia la habilidad que importa: de escribir el código a especificar y verificar el trabajo del agente.</p>
+
+<h3 id="lab-costos" class="lab" data-toc="Lab: calculadora de costos">Laboratorio: calculadora de LoRA y MoE</h3>
+<p>Arriba, cuánto entrena LoRA para una matriz cuadrada d × d. Abajo, parámetros totales contra activos de un MoE. Estado inicial: el ejemplo de la sección 10 (2B compartidos, 16 expertos de 3B, top-2).</p>
+<div class="widget" id="labCostos">
+  <div class="widget-head"><div class="wt">Lo que se entrena y lo que se usa por token</div><div class="ws">Todo se calcula con las fórmulas del texto.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div><div class="mini">LoRA sobre una matriz cuadrada</div><div id="loraSel"></div><div id="loraCtrl"></div>
+        <div class="mini">MoE</div><div id="moeCtrl"></div></div>
+      <div><div id="loraRead"></div><div id="moeRead" style="margin-top:10px"></div><div class="status info" id="moeStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con d = 4096 y r = 8: 65 536 parámetros, 0.39 %. Sube r a 64: 524 288, todavía el 3.1 %.</li>
+    <li>MoE inicial: 50B totales y 8B activos por token. Sube los expertos a 64 sin tocar top-k: el total llega a 194B y los activos siguen en 8B.</li>
+    <li>Sube top-k de 2 a 4: los activos pasan a 14B y el costo por token casi se duplica, aunque el total no cambie.</li>
+  </ol>
+</div>
+
+<h3 id="decidir" data-toc="El árbol de decisión">El árbol de decisión</h3>
+<div class="scroll"><table class="tbl">
+  <tr><th>Necesitas…</th><th>Opción</th></tr>
+  <tr><td>Cambiar el formato o el tono; tarea estándar</td><td>Prompting (zero o few-shot)</td></tr>
+  <tr><td>Responder sobre documentos propios o cambiantes, con fuentes</td><td>RAG</td></tr>
+  <tr><td>Comportamiento especializado consistente, mucho volumen, datos etiquetados</td><td>Fine-tuning (LoRA)</td></tr>
+  <tr><td>Tareas de varios pasos con acciones</td><td>Agente + herramientas</td></tr>
+</table></div>
+<p>En la práctica se combinan. La regla de la slide: empezar siempre por lo más barato (prompting) y escalar solo si la evaluación lo justifica.</p>
+
+<h3 id="lab-arbol" class="lab" data-toc="Lab: elige la opción">Laboratorio: elige la opción</h3>
+<p>Seis encargos de dependencias públicas. Elige una opción en cada uno y lee la retroalimentación.</p>
+<div class="widget" id="labArbol">
+  <div class="widget-head"><div class="wt">¿Prompting, RAG, fine-tuning o agente?</div><div class="ws">No hay una sola respuesta posible en todos, pero sí una mejor justificada.</div></div>
+  <div class="widget-body" id="arbolCasos"></div>
+  <div class="widget-foot"><span class="pill" id="arbolPill"></span></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Las palabras clave que deciden: «documentos que cambian» y «citar la fuente» llevan a RAG; «miles al año, categorías fijas, datos etiquetados» llevan a fine-tuning; «varios pasos con acciones» lleva a agente.</li>
+    <li>RAG no es para clasificar: recupera conocimiento, no enseña un comportamiento consistente.</li>
+    <li>Si un caso se resuelve bien con prompting, todo lo demás es costo extra que necesita justificarse con evaluación.</li>
+  </ol>
+</div>
+
+<!-- ============ 13. EVALUACIÓN ============ -->
+<h2 id="evaluacion"><span class="num">Sección 13</span>Evaluación de LLMs</h2>
+
+<h3 id="metricas" data-toc="BLEU, ROUGE, perplejidad">BLEU, ROUGE y perplejidad, y por qué no bastan</h3>
+<ul>
+  <li><strong>BLEU</strong> mide cuántos n-gramas (secuencias de n palabras) de la respuesta generada aparecen en una respuesta de referencia. Se usó mucho en traducción automática.</li>
+  <li><strong>ROUGE</strong> también compara n-gramas con una referencia, pero enfatiza cuánto del contenido de la referencia fue recuperado. Se usa en resumen automático.</li>
+  <li><strong>Perplejidad</strong> mide qué tan bien predice el modelo los tokens observados: menor perplejidad, mayor probabilidad al texto.</li>
+</ul>
+<p>El problema de BLEU y ROUGE, con el ejemplo de la slide. Referencia: «parís es la capital de francia». Respuesta: «la capital francesa es parís». Dicen lo mismo. De los 5 unigramas de la respuesta, 4 están en la referencia (la, capital, es, parís): 4/5 = 0.8. Pero de sus 4 bigramas (la capital, capital francesa, francesa es, es parís) solo «la capital» está en la referencia: <b>1/4 = 0.25</b>. Cuanto más largos los n-gramas, más castiga una paráfrasis correcta. En generación abierta hay muchas respuestas correctas escritas de formas distintas.</p>
+<p>El problema de la perplejidad: mide qué tan bien el modelo predice texto, no si la respuesta es verdadera, sigue la instrucción, resuelve el problema o es segura. Un modelo puede asignar alta probabilidad a texto muy fluido y falso.</p>
+<div class="eq">fluidez  ≠  veracidad  ≠  utilidad</div>
+
+<h3 id="benchmarks" data-toc="Benchmarks y jueces">Benchmarks, LLM-as-judge y evaluación humana</h3>
+<p>Las baterías estándar (conocimiento, razonamiento, código) permiten comparar modelos, pero tienen trampas: <strong>contaminación</strong> (el test estaba en los datos de entrenamiento; es el «elegir con el test» del artefacto 01, a escala de internet), <strong>saturación</strong> (todos sacan casi 100 %) y <strong>teaching to the test</strong>. Regla práctica: un benchmark público mide lo que el benchmark mide, no tu caso de uso. La respuesta del campo en 2026: benchmarks que solo puntúan problemas fechados después del corte del modelo y evaluaciones privadas donde solo se publica el agregado. Para decidir un despliegue: un conjunto de evaluación <strong>propio</strong>, con datos reales del problema, que el proveedor nunca haya visto.</p>
+<p>La <strong>evaluación humana</strong> es el estándar de oro, cara y lenta. <strong>LLM-as-judge</strong> usa otro LLM para calificar respuestas contra una rúbrica: escalable y barato, útil como primer filtro, pero con sesgos conocidos (prefiere respuestas largas, prefiere su propio estilo, es sensible al orden en que ve las opciones). Buena práctica: validar al juez contra una muestra calificada por humanos antes de confiar en él.</p>
+
+<h3 id="alucinacion" data-toc="Alucinación y calibración">Alucinación, calibración y red-teaming</h3>
+<ul>
+  <li><strong>Alucinación:</strong> una afirmación fluida y falsa. Se mide con conjuntos de verificación factual y con la tasa de citas correctas (crítico en RAG).</li>
+  <li><strong>Calibración:</strong> ¿la confianza que expresa el modelo corresponde a su tasa de acierto? Es el ECE de la Tarea 5, ahora sobre texto.</li>
+  <li><strong>Red-teaming:</strong> buscar activamente cómo hacer fallar al modelo (jailbreaks, sesgos, fugas de datos) antes de que lo hagan los usuarios.</li>
+</ul>
+
+<h3 id="despliegue" data-toc="Evaluación para despliegue público">Evaluación para despliegue público: los cinco mínimos</h3>
+<p>Si una agencia va a desplegar un LLM, la slide pide como mínimo:</p>
+<ol>
+  <li>Un conjunto de evaluación propio y fuera del alcance del proveedor.</li>
+  <li>Métricas por subgrupo: ¿funciona igual para todos los ciudadanos?</li>
+  <li>Tasa de alucinación y citas verificables, si informa decisiones.</li>
+  <li>Monitoreo continuo después del despliegue (los modelos y los datos cambian).</li>
+  <li>Una ruta de escalamiento a un humano y responsabilidad clara.</li>
+</ol>
+<p>«Salió bien en el benchmark» no es una evaluación de despliegue.</p>
+
+<h3 id="politicas" data-toc="Transformers y políticas públicas">Transformers y políticas públicas</h3>
+<p>Todo lo de hoy (tokenización → embeddings → atención → fine-tuning) es el pipeline de trabajos aplicados que cita la slide: clasificación multi-etiqueta de legislación de la UE con BERT (Chalkidis et al., 2019), predicción de votos nominales a partir del texto de las iniciativas (Korn y Newman, 2020) y revisión de documentos legales a escala (Wei et al., 2019). Y los LLMs como herramienta de investigación social: Gilardi, Alizadeh y Kubli (2023) encontraron que ChatGPT supera a anotadores de crowdsourcing en tareas de clasificación de texto político, lo que cambia la economía de etiquetar datos; Ziems et al. (2024) revisan usos y límites en ciencia social computacional; Dell (2025) es una guía para economistas.</p>
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>Cuando usas un LLM como <strong>instrumento de medición</strong> (clasificar quejas, codificar discursos), su sesgo es sesgo de medición. Hay que validarlo como cualquier instrumento: contra una muestra etiquetada por humanos y por subgrupo.</p>
+</div>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 14</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. El examen trae un formulario con la atención escalada, multi-head, la codificación posicional y la perplejidad; aquí puedes usar: √2 ≈ 1.414, e<sup>0.707</sup> ≈ 2.028, e<sup>1.414</sup> ≈ 4.113, e<sup>2.121</sup> ≈ 8.342, e ≈ 2.718, e² ≈ 7.389, ln 0.2 ≈ −1.609, ln 0.1 ≈ −2.303, ln 0.5 ≈ −0.693, ln 0.6 ≈ −0.511, ln 2 ≈ 0.693.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · calcular a mano una atención pequeña</span>
+  <div class="e-enun">Query q = (1, 2). Tres pares con d = 2: k₁ = (1, 0), v₁ = (2, 0); k₂ = (0, 1), v₂ = (0, 2); k₃ = (1, 1), v₃ = (1, 1). (a) Calcula los scores escalados, los pesos softmax y la salida. (b) ¿Qué cambia si permutas el orden de los tres pares?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Los productos punto son 1, 2 y 3. Divide entre √2 y usa las exponenciales del recuadro.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) Productos punto: qᵀk₁ = 1, qᵀk₂ = 2, qᵀk₃ = 1 + 2 = 3. Escalados entre √2: (0.707, 1.414, 2.121). Exponenciales: (2.028, 4.113, 8.342), suma 14.484. Pesos: α = (0.140, 0.284, 0.576). Salida: 0.140·(2, 0) + 0.284·(0, 2) + 0.576·(1, 1) = (0.280 + 0.576, 0.568 + 0.576) = <b>(0.856, 1.144)</b>.</p>
+    <p>(b) Nada. Cada peso depende solo de q y de su propia key, y la suma ponderada no depende del orden de los sumandos: los pesos se permutan junto con sus pares y la salida es la misma.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §3 · por qué dividir entre √d<sub>k</sub></span>
+  <div class="e-enun">En una capa con d<sub>k</sub> = 64, las coordenadas de q y k son aproximadamente independientes con media 0 y varianza 1. (a) ¿Qué desviación estándar esperas para qᵀk? (b) Si tres scores sin escalar son (8, 0, −8), ¿qué pesos da el softmax? ¿Y si los escalas? (c) ¿Qué le pasa al entrenamiento sin el escalado?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) Var(qᵀk) = d<sub>k</sub> = 64 (suma de 64 términos de varianza 1), desviación √64 = <b>8</b>.</p>
+    <p>(b) Sin escalar: softmax(8, 0, −8) ≈ (0.9997, 0.0003, 0.0000): casi one-hot. Escalados entre 8 quedan (1, 0, −1): softmax = (0.665, 0.245, 0.090).</p>
+    <p>(c) Con el softmax saturado, la derivada αᵢ(1 − αᵢ) es casi 0 para todos los pesos: el gradiente casi no llega a W<sup>Q</sup> y W<sup>K</sup>, y la red no aprende a qué mirar. Además la atención deja de promediar y solo copia un value. Dividir entre √d<sub>k</sub> deja la desviación de los scores en 1 para cualquier d<sub>k</sub>.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · máscaras aditivas, padding y causal</span>
+  <div class="e-enun">Tres tokens con scores escalados S = [[2, 1, 0], [1, 3, 1], [0, 2, 2]] (fila = query, columna = key). (a) Escribe la máscara causal M y calcula A = softmax(S + M) fila por fila. (b) Ahora el token 3 es un [PAD]. Con causal + padding, ¿qué filas cambian?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>e<sup>−∞</sup> = 0: en cada fila haz el softmax solo sobre las columnas permitidas.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) M = [[0, −∞, −∞], [0, 0, −∞], [0, 0, 0]]. Fila 1: solo (2) ⇒ (1, 0, 0). Fila 2: softmax(1, 3) = (e/(e + e³), e³/(e + e³)) = <b>(0.119, 0.881, 0)</b>. Fila 3: softmax(0, 2, 2) = (1, 7.389, 7.389)/15.778 = <b>(0.063, 0.468, 0.468)</b>.</p>
+    <p>(b) La padding mask pone −∞ en la columna 3. Las filas 1 y 2 ya la tenían prohibida por la causal: no cambian. La fila 3 pasa a softmax(0, 2) = <b>(0.119, 0.881, 0)</b>. (Esa fila es la del [PAD]; su salida de todos modos no entra a la pérdida.)</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §3 · qué degenera sin máscara causal</span>
+  <div class="e-enun">Un equipo entrena un mini GPT y, por un error, la atención no tiene máscara causal. Reportan con orgullo que la pérdida de entrenamiento bajó mucho más rápido que en la versión anterior. ¿Qué esperas ver en la pérdida y en el texto generado? ¿Por qué?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>La pérdida de entrenamiento baja muchísimo por <b>fuga de información</b>: en la posición t, la atención puede ver x<sub>t+1</sub>, que es justo el objetivo, y la red aprende a copiarlo. Si la validación se calcula igual (frase completa, sin máscara), también se ve bien: el número engaña.</p>
+    <p>En generación el modelo produce un token a la vez y el futuro no existe: lo que aprendió (mirar adelante) no le sirve y el texto degenera (repeticiones, basura). La pérdida «buena» no medía la tarea real. Corrección: máscara causal (−∞ arriba de la diagonal) y evaluar generando.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §3 · invariancia al orden y codificación posicional</span>
+  <div class="e-enun">(a) Sin codificación posicional, ¿por qué el token «gato» recibe la misma salida de self-attention en «el gato come pescado» y en «pescado come el gato»? (b) Calcula PE para pos = 2 con d = 4. (c) ¿Cuál extrapola mejor a secuencias más largas que las de entrenamiento, la sinusoidal o la aprendida?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) La query de «gato» es la misma (depende solo de su embedding), y las keys y values son los mismos cuatro vectores, solo en otro orden. Los pesos dependen de q y de cada key, y la suma ponderada no depende del orden: misma salida. La atención ve un conjunto, no una secuencia.</p>
+    <p>(b) i = 0: frecuencia 1; i = 1: frecuencia 1/10000<sup>2/4</sup> = 1/100. PE = (sin 2, cos 2, sin 0.02, cos 0.02) = <b>(0.909, −0.416, 0.020, 1.000)</b>.</p>
+    <p>(c) La sinusoidal: la fórmula da un vector para cualquier posición. La aprendida solo tiene vectores para las posiciones vistas (y además agrega longitud × d parámetros).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · multi-head: qué gana sobre una sola cabeza</span>
+  <div class="e-enun">Una capa de atención con d<sub>model</sub> = 512 y h = 8 cabezas. (a) ¿Qué dimensión tiene cada cabeza? (b) ¿Cuántos parámetros tienen W<sup>Q</sup>, W<sup>K</sup>, W<sup>V</sup> y W<sup>O</sup> juntas, sin sesgos? (c) ¿Cuántos tendría una sola cabeza de 512? Entonces, ¿qué se gana? (d) ¿Cómo medirías si la cabeza 3 importa?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) d<sub>h</sub> = 512/8 = <b>64</b>.</p>
+    <p>(b) Las 8 proyecciones de query (512 × 64 cada una) suman una de 512 × 512; igual keys y values; W<sup>O</sup> es 512 × 512. Total 4 · 512² = <b>1 048 576</b>.</p>
+    <p>(c) Lo mismo, 1 048 576. Multi-head no agrega parámetros: reparte la capacidad en 8 atenciones con proyecciones distintas, cada una con su propio reparto de pesos, para capturar varias relaciones a la vez (una sola cabeza tiene un solo reparto por token).</p>
+    <p>(d) Ablación: apagar la cabeza 3 (poner su salida en 0 o en su promedio) sin reentrenar y medir cuánto empeora la pérdida o la métrica en validación; comparar con apagar otras cabezas, y de preferencia desglosar por tipo de ejemplo.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §3 · BPE: qué problema resuelve</span>
+  <div class="e-enun">Corpus: casa (5), casas (3), cosa (2), con «_» como fin de palabra y empezando en caracteres. (a) ¿Cuáles son las dos primeras fusiones de BPE y cuántas veces aparece cada par? (b) ¿Cuántos tokens tiene el corpus al inicio, tras la primera y tras la segunda fusión? (c) ¿Cómo se parte «cosas»?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Cuenta cada par dentro de cada palabra y multiplica por la frecuencia de la palabra. «as» aparece dos veces dentro de «casas».</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) Pares al inicio: «as» = 5 (casa) + 3·2 (casas) = <b>11</b>; «sa» = 5 + 3 + 2 = 10; «ca» = 8; «a_» = 7. Primera fusión: <b>a + s → as</b>. Ahora: c·as·a·_ ; c·as·as·_ ; c·o·s·a·_. Pares: «c + as» = 5 + 3 = <b>8</b>, «a + _» = 7, «as + a» = 5. Segunda fusión: <b>c + as → cas</b>.</p>
+    <p>(b) Inicio: 5·5 + 3·6 + 2·5 = <b>53</b>. Tras la primera: 5·4 + 3·4 + 2·5 = <b>42</b>. Tras la segunda: 5·3 + 3·3 + 2·5 = <b>34</b>. El vocabulario creció de 5 a 7 símbolos.</p>
+    <p>(c) Con las fusiones «as» y «cas»: «cosas» → c·o·s·as·_ («cas» no aplica porque no hay «c» seguida de «as»). Nunca es OOV: en el peor caso queda en caracteres.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §3 · por qué BPE cambia la perplejidad</span>
+  <div class="e-enun">Dos modelos evalúan el mismo texto de 12 caracteres. El modelo A usa subpalabras: lo parte en 3 tokens y les asigna probabilidades 0.2, 0.1 y 0.5. El modelo B usa caracteres: 12 tokens, cada uno con probabilidad 0.6. El equipo dice: «B es mucho mejor, tiene perplejidad 1.67 contra 4.64». ¿Tienen razón? Calcula algo comparable.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>Perplejidades: A = exp((1.609 + 2.303 + 0.693)/3) = exp(1.535) = 4.64; B = exp(0.511) = 1/0.6 = 1.67. Pero son promedios <b>por token</b> con tokens distintos: no se comparan.</p>
+    <p>Comparable: la log-verosimilitud total del mismo texto. A: −4.605 nats (probabilidad del texto 0.2·0.1·0.5 = 0.010). B: −12·0.511 = −6.130 nats (probabilidad 0.6¹² = 0.0022). En bits por carácter: A = 4.605/(0.693·12) = <b>0.554</b>; B = 6.130/(0.693·12) = <b>0.737</b>. <b>A es mejor</b>: le da casi 5 veces más probabilidad al texto. Conclusión: comparar con el mismo tokenizador, o en log-verosimilitud total / bits por carácter.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §4 · LoRA y MoE</span>
+  <div class="e-enun">(a) Con LoRA de rango r = 8 sobre una matriz de 4096 × 4096, ¿cuántos parámetros se entrenan y qué fracción es? (b) Un proveedor ofrece un MoE con 2B de parámetros compartidos y 16 expertos de 3B, con top-2; otro ofrece un modelo denso de 20B. ¿Cuál tiene más parámetros totales? ¿Cuál cuesta más por token?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) A: 4096 × 8 y B: 8 × 4096 ⇒ 8·(4096 + 4096) = <b>65 536</b>, contra 4096² = 16 777 216: <b>0.39 %</b>. W se queda congelada.</p>
+    <p>(b) MoE: total 2 + 16·3 = <b>50B</b>; activos por token 2 + 2·3 = <b>8B</b>. Denso: 20B totales y 20B activos. El MoE tiene más parámetros totales pero <b>cuesta menos por token</b> (8B contra 20B). Por eso hay que comparar parámetros activos, no totales (la memoria para guardar los 50B sí es mayor).</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §4 · SFT, RLHF, DPO, RLVR y el árbol de decisión</span>
+  <div class="e-enun">(a) Llena para SFT, RLHF, DPO y RLVR: qué datos usa y qué señal optimiza. (b) ¿Por qué el progreso reciente fue más rápido en matemáticas y código? (c) Una fiscalía quiere un asistente que conteste preguntas del personal sobre sus 3 000 lineamientos internos, que se actualizan cada mes, citando el lineamiento. ¿Prompting, RAG, fine-tuning o agente?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>(a) <b>SFT:</b> pares (instrucción, respuesta) curados; señal: siguiente token (el mismo objetivo del preentrenamiento). <b>RLHF:</b> comparaciones humanas entre pares de respuestas → un modelo de recompensa → RL que maximiza esa recompensa. <b>DPO:</b> las mismas comparaciones, optimizadas directamente, sin modelo de recompensa. <b>RLVR:</b> problemas con verificador mecánico (respuesta exacta, tests); señal: correcto o incorrecto, con RL.</p>
+    <p>(b) Porque ahí existe un verificador mecánico: RLVR puede entrenar con muchísima señal barata y confiable, sin humanos. En juicio abierto no hay un «correcto» automático.</p>
+    <p>(c) <b>RAG</b>: el conocimiento está en documentos propios que cambian cada mes y hay que citar la fuente. Fine-tuning congelaría los lineamientos en los pesos (habría que reentrenar cada mes) y no da trazabilidad; prompting solo no conoce los lineamientos; un agente no hace falta si no hay acciones de varios pasos. Evaluar con preguntas reales y tasa de citas correctas.</p>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 15</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">encoder-decoder</div><div class="def">Arquitectura en dos partes: una lee la entrada y la resume; la otra genera la salida a partir de ese resumen. Sirve cuando entrada y salida tienen distinto tamaño (traducción).</div></div>
+  <div class="item"><div class="term">vector de contexto (context vector)</div><div class="def">En el encoder-decoder recurrente, el último estado del encoder, usado como resumen de toda la entrada. Su tamaño fijo es el cuello de botella.</div></div>
+  <div class="item"><div class="term">atención (attention)</div><div class="def">Promedio ponderado de values, con pesos que salen de comparar una query con cada key (softmax de los scores).</div></div>
+  <div class="item"><div class="term">query, key, value</div><div class="def">Lo que se busca, la etiqueta con la que se compara cada elemento y el contenido que entrega. En un Transformer salen de multiplicar cada embedding por W<sup>Q</sup>, W<sup>K</sup> y W<sup>V</sup>.</div></div>
+  <div class="item"><div class="term">attention pooling</div><div class="def">El nombre de la operación Σ α(q, kᵢ) vᵢ. Con pesos iguales es average pooling.</div></div>
+  <div class="item"><div class="term">pesos de atención</div><div class="def">Los α(q, kᵢ): no negativos y suman 1. En esta slide α no es la tasa de aprendizaje.</div></div>
+  <div class="item"><div class="term">producto punto escalado</div><div class="def">Score qᵀk/√d. Dividir entre √d mantiene la varianza de los scores en 1 y evita que el softmax se sature.</div></div>
+  <div class="item"><div class="term">atención aditiva</div><div class="def">Score w<sub>v</sub>ᵀ tanh(W<sub>q</sub>q + W<sub>k</sub>k). Funciona aunque q y k tengan distinta dimensión. Es la de Bahdanau.</div></div>
+  <div class="item"><div class="term">self-attention</div><div class="def">Atención dentro de una misma secuencia: queries, keys y values salen de los mismos tokens.</div></div>
+  <div class="item"><div class="term">cross-attention</div><div class="def">Atención entre dos secuencias: las queries del decoder consultan las keys y values del encoder.</div></div>
+  <div class="item"><div class="term">multi-head attention</div><div class="def">Varias atenciones (cabezas) en paralelo, cada una con sus proyecciones; se concatenan y se mezclan con W<sup>O</sup>. Mismos parámetros que una sola cabeza del mismo tamaño.</div></div>
+  <div class="item"><div class="term">codificación posicional (positional encoding)</div><div class="def">Vector que depende de la posición y se suma al embedding, porque la atención por sí sola no ve el orden. Sinusoidal (fija) o aprendida.</div></div>
+  <div class="item"><div class="term">máscara de padding</div><div class="def">−∞ en las columnas de los tokens [PAD], para que nadie les preste atención.</div></div>
+  <div class="item"><div class="term">máscara causal</div><div class="def">−∞ arriba de la diagonal: cada token solo atiende a sí mismo y a los anteriores. Sin ella, un decoder ve su respuesta durante el entrenamiento.</div></div>
+  <div class="item"><div class="term">autoregresivo</div><div class="def">Que genera un token a la vez, cada uno condicionado a los anteriores: P(x<sub>t</sub> | x<sub>&lt;t</sub>).</div></div>
+  <div class="item"><div class="term">conexión residual</div><div class="def">Sumar la entrada a la salida de una subcapa: x + Sublayer(x). Da un camino directo a la señal y al gradiente; viene de ResNet.</div></div>
+  <div class="item"><div class="term">LayerNorm</div><div class="def">Normaliza los números de cada token a media 0 y varianza 1 (con escala y desplazamiento aprendidos). No depende del batch.</div></div>
+  <div class="item"><div class="term">feed-forward por posición</div><div class="def">Una red de dos capas aplicada a cada token por separado, con los mismos pesos para todos. No mezcla tokens.</div></div>
+  <div class="item"><div class="term">token y tokenización por subpalabras</div><div class="def">El token es la unidad que procesa el modelo. Las subpalabras (BPE, WordPiece, Unigram) equilibran el tamaño del vocabulario y la longitud de las secuencias.</div></div>
+  <div class="item"><div class="term">BPE (byte pair encoding)</div><div class="def">Construye el vocabulario fusionando, una y otra vez, el par de tokens adyacentes más frecuente del corpus.</div></div>
+  <div class="item"><div class="term">OOV (out-of-vocabulary)</div><div class="def">Una palabra que no está en el vocabulario. Con subpalabras se arma con pedazos en lugar de volverse &lt;unk&gt;.</div></div>
+  <div class="item"><div class="term">MLM (masked language modeling)</div><div class="def">Objetivo de BERT: tapar ~15 % de los tokens y predecirlos viendo los dos lados.</div></div>
+  <div class="item"><div class="term">LM causal</div><div class="def">Objetivo de GPT: predecir el siguiente token viendo solo los anteriores.</div></div>
+  <div class="item"><div class="term">denoising seq2seq</div><div class="def">Objetivo de T5 y BART: corromper la entrada (tapar, permutar, borrar) y reconstruirla con un encoder-decoder.</div></div>
+  <div class="item"><div class="term">fine-tuning</div><div class="def">Seguir entrenando un modelo preentrenado en una tarea específica, normalmente con una cabeza nueva.</div></div>
+  <div class="item"><div class="term">LoRA</div><div class="def">Fine-tuning que congela W y entrena una corrección ΔW = AB de rango bajo r. Entrena menos del 1 % de los parámetros.</div></div>
+  <div class="item"><div class="term">MoE (mixture-of-experts)</div><div class="def">Bloque con muchos expertos y un router que activa solo los top-k por token. Separa parámetros totales de parámetros activos.</div></div>
+  <div class="item"><div class="term">test-time compute</div><div class="def">Cómputo gastado al responder (razonar más, varias candidatas, verificar). Los reasoning budgets lo regulan.</div></div>
+  <div class="item"><div class="term">SFT (supervised fine-tuning)</div><div class="def">Entrenar el modelo base con pares (instrucción, respuesta). Mismo objetivo, datos distintos.</div></div>
+  <div class="item"><div class="term">RLHF y modelo de recompensa</div><div class="def">Comparaciones humanas → modelo que predice la preferencia → RL que maximiza esa recompensa.</div></div>
+  <div class="item"><div class="term">DPO</div><div class="def">Optimiza el modelo directamente sobre las comparaciones, sin modelo de recompensa ni RL.</div></div>
+  <div class="item"><div class="term">RLVR</div><div class="def">RL con recompensas verificables mecánicamente (respuesta exacta, tests que pasan). Produce modelos de razonamiento.</div></div>
+  <div class="item"><div class="term">RAG</div><div class="def">Buscar documentos relevantes y pegarlos al prompt antes de generar. Conocimiento actualizable y citable sin reentrenar.</div></div>
+  <div class="item"><div class="term">agente</div><div class="def">LLM que actúa con herramientas en un ciclo razonar → actuar → observar.</div></div>
+  <div class="item"><div class="term">perplejidad</div><div class="def">exp del promedio por token de −log P. No es comparable entre tokenizadores distintos.</div></div>
+  <div class="item"><div class="term">BLEU y ROUGE</div><div class="def">Métricas de coincidencia de n-gramas contra una referencia (BLEU: traducción; ROUGE: resumen). Castigan paráfrasis correctas.</div></div>
+  <div class="item"><div class="term">contaminación</div><div class="def">Cuando el test de un benchmark estuvo en los datos de entrenamiento: el resultado se infla.</div></div>
+  <div class="item"><div class="term">LLM-as-judge</div><div class="def">Usar un LLM para calificar respuestas con una rúbrica. Barato, pero prefiere respuestas largas, su propio estilo y depende del orden.</div></div>
+  <div class="item"><div class="term">alucinación</div><div class="def">Afirmación fluida y falsa.</div></div>
+  <div class="item"><div class="term">calibración</div><div class="def">Que la confianza expresada corresponda a la tasa de acierto real.</div></div>
+  <div class="item"><div class="term">red-teaming</div><div class="def">Buscar activamente cómo hacer fallar al modelo antes de que lo hagan los usuarios.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>.</p>
+
+<nav class="serie" data-actual="08"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/Transformers.Rmd</code>, <code>notebooks/Transformers.ipynb</code> y <code>tareas/Tarea8.ipynb</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  function dot(a, b){ var s = 0; for(var i=0;i<a.length;i++) s += a[i]*b[i]; return s; }
+  /* softmax que acepta −∞ (posiciones enmascaradas) */
+  function softmaxM(z){
+    var fin = z.filter(isFinite), m = Math.max.apply(null, fin);
+    var e = z.map(function(v){ return isFinite(v) ? Math.exp(v - m) : 0; });
+    var s = e.reduce(function(a, b){ return a + b; }, 0);
+    return e.map(function(v){ return v/s; });
+  }
+  function f3(x){ return DL.fmt(x, 3); }
+  function vec(v, d){ return "(" + v.map(function(x){ return DL.fmt(x, d === undefined ? 3 : d); }).join(", ") + ")"; }
+
+  /* ---------- componente local: mapa de calor de una matriz de pesos ----------
+     M: matriz con valores en [0,1] o NaN (= enmascarado); filas y columnas: etiquetas */
+  function mapaAtencion(canvas, filas, cols, obtener){
+    var nf = filas.length, nc = cols.length;
+    return DL.grafica(canvas, {x:[0, nc], y:[0, nf], alto: 46 + 34*nf, ejes:false, margen:{l:74, r:8, t:8, b:30}}, function(g){
+      var M = obtener();
+      for(var i=0;i<nf;i++) for(var j=0;j<nc;j++){
+        var v = M[i][j], y0 = nf - i - 1;
+        if(isNaN(v)){
+          g.rect(j, y0, 1, 1, {color:"border", relleno:true, alfa:0.35, ancho:1});
+          g.texto(j + 0.5, y0 + 0.5, "×", {color:"text-3", alinear:"center", tam:13});
+          continue;
+        }
+        g.rect(j, y0, 1, 1, {color:DL.mezclar("surface", "accent", Math.min(1, v)), relleno:true, alfa:1, borde:false});
+        g.rect(j, y0, 1, 1, {color:"border", ancho:1});
+        g.texto(j + 0.5, y0 + 0.5, v.toFixed(2), {color: v > 0.5 ? "surface" : "text", alinear:"center", tam:11.5});
+      }
+      filas.forEach(function(t, i){ g.texto(0, nf - i - 0.5, t, {alinear:"right", dx:-6, tam:11.5}); });
+      cols.forEach(function(t, j){ g.texto(j + 0.5, 0, t, {alinear:"center", base:"top", dy:6, tam:11}); });
+    });
+  }
+
+  /* ================= Lab 1: atención a mano ================= */
+  (function(){
+    var K0 = [[2, 0], [0, 2], [1, 1]], V0 = [[4, 0], [0, 4], [2, 2]], nombres0 = ["1 · gatos", "2 · leyes", "3 · los dos"];
+    var q = [1, 0.5], escalar = true, perm = 0, pasos;
+    function orden(){ return [0, 1, 2].map(function(i){ return (i + perm) % 3; }); }
+    function calc(){
+      var o = orden(), K = o.map(function(i){ return K0[i]; }), V = o.map(function(i){ return V0[i]; });
+      var s = K.map(function(k){ return dot(q, k); });
+      var a = s.map(function(x){ return escalar ? x/Math.SQRT2 : x; });
+      var e = a.map(Math.exp), se = e.reduce(function(x, y){ return x + y; }, 0);
+      var al = e.map(function(x){ return x/se; });
+      var out = [0, 1].map(function(j){ return al.reduce(function(t, w, i){ return t + w*V[i][j]; }, 0); });
+      return {o:o, K:K, V:V, s:s, a:a, e:e, se:se, al:al, out:out};
+    }
+    function render(i){
+      var c = calc(), dv = escalar ? "÷√2" : "÷1";
+      var h = '<tr><th>libro</th><th class="c">k</th><th class="c">v</th><th class="c">qᵀk</th><th class="c">' + dv + '</th><th class="c">e<sup>a</sup></th><th class="c">α</th></tr>';
+      c.o.forEach(function(idx, r){
+        h += '<tr' + (i >= 4 && c.al[r] === Math.max.apply(null, c.al) ? ' class="on"' : '') + '><td class="nw">' + nombres0[idx] + '</td><td class="c">' + vec(c.K[r], 0) + '</td><td class="c">' + vec(c.V[r], 0) + '</td>' +
+          '<td class="c">' + (i >= 1 ? DL.fmt(c.s[r], 2) : "·") + '</td><td class="c">' + (i >= 2 ? f3(c.a[r]) : "·") + '</td>' +
+          '<td class="c">' + (i >= 3 ? f3(c.e[r]) : "·") + '</td><td class="c">' + (i >= 4 ? f3(c.al[r]) : "·") + '</td></tr>';
+      });
+      $("attTabla").innerHTML = h;
+      var t;
+      if(i === 0) t = "Query q = " + vec(q, 2) + ". Pulsa «Siguiente» para comparar q con cada key.";
+      else if(i === 1) t = "Producto punto: qᵀk = q₁k₁ + q₂k₂. Fila 1: " + DL.fmt(q[0], 2) + "·" + c.K[0][0] + " + " + DL.fmt(q[1], 2) + "·" + c.K[0][1] + " = <b>" + DL.fmt(c.s[0], 2) + "</b>";
+      else if(i === 2) t = escalar ? "Escalar: cada score entre √d = √2 ≈ 1.414. Fila 1: " + DL.fmt(c.s[0], 2) + " / 1.414 = <b>" + f3(c.a[0]) + "</b>" : "Sin escalar: los scores se usan tal cual.";
+      else if(i === 3) t = "Exponencial de cada score; suma = " + c.e.map(f3).join(" + ") + " = <b>" + f3(c.se) + "</b>";
+      else if(i === 4) t = "Normalizar: α = e<sup>a</sup> / " + f3(c.se) + " → <b>" + vec(c.al) + "</b> (suman " + DL.fmt(c.al.reduce(function(x, y){ return x + y; }, 0), 3) + ")";
+      else t = "Salida = Σ αᵢvᵢ = " + c.al.map(function(w, r){ return f3(w) + "·" + vec(c.V[r], 0); }).join(" + ") + " = <b>" + vec(c.out) + "</b>";
+      $("attCalc").innerHTML = t;
+      DL.readout($("attRead"), [["q", vec(q, 2)], ["α (en orden de libro)", vec(c.o.map(function(_, r){ return c.al[c.o.indexOf(r)]; }))], ["salida", i >= 5 ? vec(c.out) : "pulsa hasta el paso 5"]]);
+    }
+    function rerender(){ if(pasos) pasos.ir(pasos.actual()); }
+    var ctrl = $("attCtrl");
+    DL.control(ctrl, {etiqueta:"q₁ (gatos)", min:-2, max:3, paso:0.1, valor:q[0], alCambiar:function(v){ q[0] = v; rerender(); }});
+    DL.control(ctrl, {etiqueta:"q₂ (leyes)", min:-2, max:3, paso:0.1, valor:q[1], alCambiar:function(v){ q[1] = v; rerender(); }});
+    DL.selector($("attSel"), {opciones:[{v:true, t:"dividir entre √d"}, {v:false, t:"sin dividir"}], valor:true, alCambiar:function(v){ escalar = v; rerender(); }});
+    $("attPerm").onclick = function(){ perm = (perm + 1) % 3; rerender(); };
+    pasos = DL.pasos($("labAtt"), {total:6, render:render});
+  })();
+
+  /* ================= Lab 2: por qué √d ================= */
+  (function(){
+    var M = 6, d = 2, semilla = 1, cache = {};
+    function estad(d){
+      if(cache[d]) return cache[d];
+      var r = DL.rng(7), sc = [], maxNo = 0, maxSi = 0, gNo = 0, gSi = 0, N = 300;
+      for(var t=0;t<N;t++){
+        var q = []; for(var i=0;i<d;i++) q.push(r.normal());
+        var s = []; for(var j=0;j<M;j++){ var k = []; for(var i2=0;i2<d;i2++) k.push(r.normal()); s.push(dot(q, k)); }
+        var a1 = DL.softmax(s), a2 = DL.softmax(s.map(function(v){ return v/Math.sqrt(d); }));
+        maxNo += Math.max.apply(null, a1); maxSi += Math.max.apply(null, a2);
+        gNo += Math.max.apply(null, a1.map(function(a){ return a*(1-a); }));
+        gSi += Math.max.apply(null, a2.map(function(a){ return a*(1-a); }));
+        Array.prototype.push.apply(sc, s);
+      }
+      var m = sc.reduce(function(a, b){ return a + b; }, 0)/sc.length;
+      var sd = Math.sqrt(sc.reduce(function(a, b){ return a + (b-m)*(b-m); }, 0)/sc.length);
+      cache[d] = {sd:sd, maxNo:maxNo/N, maxSi:maxSi/N, gNo:gNo/N, gSi:gSi/N};
+      return cache[d];
+    }
+    var actual;
+    function sorteo(){
+      var r = DL.rng(100 + semilla), q = []; for(var i=0;i<d;i++) q.push(r.normal());
+      var s = []; for(var j=0;j<M;j++){ var k = []; for(var i2=0;i2<d;i2++) k.push(r.normal()); s.push(dot(q, k)); }
+      actual = {s:s, no:DL.softmax(s), si:DL.softmax(s.map(function(v){ return v/Math.sqrt(d); }))};
+    }
+    sorteo();
+    var g =DL.grafica($("escCanvas"), {x:[0, M], y:[0, 1.05], alto:270, etiquetaY:"α", opcionesEjes:{ticksX:[]}}, function(g){
+      for(var j=0;j<M;j++){
+        g.rect(j + 0.12, 0, 0.36, actual.no[j], {color:"text-3", relleno:true, alfa:0.75, borde:false});
+        g.rect(j + 0.52, 0, 0.36, actual.si[j], {color:"accent", relleno:true, alfa:0.9, borde:false});
+        g.texto(j + 0.5, 0, "k" + (j + 1), {alinear:"center", base:"top", dy:6, tam:11});
+      }
+    });
+    function actualizar(){
+      sorteo();
+      var e = estad(d);
+      DL.readout($("escRead"), [["d", d], ["√d", DL.fmt(Math.sqrt(d), 2)], ["desv. de qᵀk", DL.fmt(e.sd, 2)], ["desv. escalada", DL.fmt(e.sd/Math.sqrt(d), 2)],
+        ["α máx. sin escalar", f3(e.maxNo)], ["α máx. escalado", f3(e.maxSi)], ["gradiente sin escalar", f3(e.gNo)], ["gradiente escalado", f3(e.gSi)]]);
+      $("escStatus").textContent = e.maxNo > 0.85 ? "Sin escalar, el softmax ya es casi one-hot: copia un solo value y el gradiente casi no pasa." :
+        "Todavía hay mezcla en los dos casos. Sube d para ver la saturación.";
+      $("escPill").textContent = "sorteo " + semilla + " · scores de este sorteo entre " + DL.fmt(Math.min.apply(null, actual.s), 1) + " y " + DL.fmt(Math.max.apply(null, actual.s), 1);
+      g.redibujar();
+    }
+    DL.selector($("escSel"), {opciones:[2, 8, 32, 128, 512].map(function(v){ return {v:v, t:"d = " + v}; }), valor:2, alCambiar:function(v){ d = v; actualizar(); }});
+    $("escOtro").onclick = function(){ semilla++; actualizar(); };
+    actualizar();
+  })();
+
+  /* ================= Lab 3: dos cabezas ================= */
+  (function(){
+    var toks = ["el", "gato", "come", "pescado"], tipo = [[0, 0], [1, 0], [0, 1], [1, 0]], th = Math.PI/4;
+    var X = tipo.map(function(t, p){ return [t[0], t[1], Math.cos(th*p), Math.sin(th*p)]; });
+    var cabezas = [
+      function(x){ var c = x[2], s = x[3], cq = Math.cos(-th), sq = Math.sin(-th);
+        return {q:[6*(c*cq - s*sq), 6*(c*sq + s*cq)], k:[c, s], v:[x[0], x[1]]}; },
+      function(x){ return {q:[4*x[1], 0], k:[x[0], 0], v:[x[0], x[1]]}; }
+    ];
+    var res = cabezas.map(function(f){
+      var P = X.map(f);
+      var A = P.map(function(p){ return DL.softmax(P.map(function(o){ return dot(p.q, o.k)/Math.SQRT2; })); });
+      var O = A.map(function(r){ return [0, 1].map(function(j){ return r.reduce(function(s, a, i){ return s + a*P[i].v[j]; }, 0); }); });
+      return {A:A, O:O};
+    });
+    mapaAtencion($("mh1"), toks, toks, function(){ return res[0].A; });
+    mapaAtencion($("mh2"), toks, toks, function(){ return res[1].A; });
+    var apagada = -1;
+    function render(){
+      var full = toks.map(function(_, t){ return res[0].O[t].concat(res[1].O[t]); });
+      var abl = toks.map(function(_, t){ return [0, 1].map(function(h){ return h === apagada ? [0, 0] : res[h].O[t]; }).reduce(function(a, b){ return a.concat(b); }, []); });
+      $("mhMat").innerHTML = DL.matriz(abl, {titulo:"salida · columnas 1–2: cabeza 1 · 3–4: cabeza 2", forma:"(4 tokens, 4)", dec:3,
+        clase:function(i, j){ return apagada >= 0 && Math.floor(j/2) === apagada ? "dim" : ""; }});
+      var filas = toks.map(function(t, i){
+        var dlt = Math.sqrt(full[i].reduce(function(s, v, j){ return s + (v - abl[i][j])*(v - abl[i][j]); }, 0));
+        return ["‖Δ salida‖ de «" + t + "»", apagada < 0 ? "—" : f3(dlt)];
+      });
+      DL.readout($("mhRead"), filas);
+    }
+    DL.selector($("mhSel"), {opciones:[{v:-1, t:"las dos activas"}, {v:0, t:"apagar cabeza 1"}, {v:1, t:"apagar cabeza 2"}], valor:-1, alCambiar:function(v){ apagada = v; render(); }});
+    render();
+  })();
+
+  /* ================= codificación posicional (compartida) ================= */
+  function pe(pos, d){
+    var o = []; for(var j=0;j<d;j++){ var i2 = j - (j % 2), ang = pos/Math.pow(10000, i2/d); o.push(j % 2 ? Math.cos(ang) : Math.sin(ang)); } return o;
+  }
+
+  /* ================= Lab 4: ¿importa el orden? ================= */
+  (function(){
+    var E = {el:[2, 0, 0, 0], gato:[0, 2, 0, 0], come:[0, 0, 2, 0], pescado:[0, 0, 0, 2]};
+    var f1 = ["el", "gato", "come", "pescado"], f2 = ["pescado", "come", "el", "gato"], conPE = false;
+    function self(fr){
+      var Xs = fr.map(function(w, p){ return E[w].map(function(v, j){ return v + (conPE ? pe(p, 4)[j] : 0); }); });
+      return Xs.map(function(q){ var a = DL.softmax(Xs.map(function(k){ return dot(q, k)/2; }));
+        return [0, 1, 2, 3].map(function(j){ return a.reduce(function(s, ai, i){ return s + ai*Xs[i][j]; }, 0); }); });
+    }
+    function tabla(fr, O){
+      return DL.matriz(O, {titulo:"«" + fr.join(" ") + "»", forma:fr.map(function(w, i){ return i + ":" + w; }).join(" · "), dec:3,
+        clase:function(i){ return fr[i] === "gato" ? "hl" : ""; }});
+    }
+    function render(){
+      var o1 = self(f1), o2 = self(f2), g1 = o1[f1.indexOf("gato")], g2 = o2[f2.indexOf("gato")];
+      var dif = Math.sqrt(g1.reduce(function(s, v, i){ return s + (v - g2[i])*(v - g2[i]); }, 0));
+      if(dif < 1e-9) dif = 0;   /* ruido de redondeo: las dos salidas son idénticas */
+      $("ordMat").innerHTML = tabla(f1, o1) + tabla(f2, o2);
+      DL.readout($("ordRead"), [["«gato» en la frase 1", vec(g1)], ["«gato» en la frase 2", vec(g2)], ["diferencia ‖·‖", f3(dif)]]);
+      var st = $("ordStatus");
+      st.className = "status " + (dif < 1e-9 ? "bad" : "ok");
+      st.textContent = dif < 1e-9 ? "Idénticas: sin posición, la atención ve el mismo conjunto de tokens en las dos frases." : "Distintas: la posición sumada al embedding cambia las queries y las keys, y con ellas los pesos.";
+    }
+    DL.selector($("ordSel"), {opciones:[{v:false, t:"sin codificación posicional"}, {v:true, t:"con codificación posicional"}], valor:false, alCambiar:function(v){ conPE = v; render(); }});
+    render();
+  })();
+
+  /* ================= Lab 5: ondas de la posición ================= */
+  (function(){
+    var d = 16, p = 20, NP = 50;
+    var gh = DL.grafica($("peHeat"), {x:[0, d], y:[0, NP], alto:300, ejes:false, margen:{l:40, r:8, t:6, b:24}}, function(g){
+      g.o.x = [0, d];
+      for(var pos=0;pos<NP;pos++){
+        var v = pe(pos, d);
+        for(var j=0;j<d;j++){
+          var c = v[j] >= 0 ? DL.mezclar("surface", "accent", v[j]) : DL.mezclar("surface", "g2", -v[j]);
+          g.rect(j, NP - pos - 1.04, 1.04, 1.08, {color:c, relleno:true, alfa:1, borde:false});
+        }
+      }
+      g.rect(0, NP - p - 1, d, 1, {color:"text", ancho:2});
+      [0, 10, 20, 30, 40, 49].forEach(function(pos){ g.texto(0, NP - pos - 0.5, String(pos), {alinear:"right", dx:-5, tam:10.5, color:"text-3"}); });
+      g.texto(0, 0, "dim 0", {base:"top", dy:5, tam:10.5, color:"text-3"});
+      g.texto(d, 0, "dim " + (d - 1), {alinear:"right", base:"top", dy:5, tam:10.5, color:"text-3"});
+    });
+    var gs = DL.grafica($("peSim"), {x:[0, NP - 1], y:[0, 1.05], alto:220, etiquetaX:"p′", etiquetaY:"similitud"}, function(g){
+      var pts = []; for(var q=0;q<NP;q++) pts.push([q, dot(pe(p, d), pe(q, d))/(d/2)]);
+      g.vertical(p, {color:"text-3", guiones:true, ancho:1});
+      g.polilinea(pts, {color:"accent", ancho:2});
+      g.puntos(pts, {color:"accent", radio:2.5});
+    });
+    function redibujar(){ gh.o.x = [0, d]; gh.redibujar(); gs.redibujar(); }
+    DL.selector($("peSel"), {opciones:[16, 32, 64].map(function(v){ return {v:v, t:"d = " + v}; }), valor:16, alCambiar:function(v){ d = v; redibujar(); }});
+    DL.control($("peCtrl"), {etiqueta:"posición p", min:0, max:49, paso:1, valor:p, formato:function(v){ return String(v); }, alCambiar:function(v){ p = v; redibujar(); }});
+  })();
+
+  /* ================= Lab 6: máscaras ================= */
+  (function(){
+    var toks = ["el", "gato", "duerme", "[PAD]", "[PAD]"], pad = [0, 0, 0, 1, 1];
+    var S = [[1.0, 0.5, 0.2, 0.8, 0.8], [0.6, 1.5, 1.2, 0.8, 0.8], [0.3, 2.0, 1.0, 0.8, 0.8], [0.8, 0.8, 0.8, 0.8, 0.8], [0.8, 0.8, 0.8, 0.8, 0.8]];
+    var modo = "n", A;
+    function permitido(i, j){ if(modo.indexOf("p") >= 0 && pad[j]) return false; if(modo.indexOf("c") >= 0 && j > i) return false; return true; }
+    function calc(){ A = S.map(function(r, i){ var w = softmaxM(r.map(function(v, j){ return permitido(i, j) ? v : -Infinity; })); return w.map(function(v, j){ return permitido(i, j) ? v : NaN; }); }); }
+    calc();
+    $("maskS").innerHTML = DL.matriz(S, {forma:"(5, 5) · fila = query, columna = key", dec:1, clase:function(i, j){ return pad[j] ? "hl2" : ""; }});
+    var g = mapaAtencion($("maskA"), toks, toks, function(){ return A; });
+    function render(){
+      calc(); g.redibujar();
+      var fil = toks.map(function(t, i){ var s = A[i].reduce(function(a, v){ return a + (isNaN(v) ? 0 : v); }, 0); var pp = A[i].reduce(function(a, v, j){ return a + (pad[j] && !isNaN(v) ? v : 0); }, 0);
+        return ["fila «" + t + "» · suma " + DL.fmt(s, 3), "a [PAD]: " + DL.fmt(pp, 3)]; });
+      DL.readout($("maskRead"), fil);
+    }
+    DL.selector($("maskSel"), {opciones:[{v:"n", t:"sin máscara"}, {v:"p", t:"padding"}, {v:"c", t:"causal"}, {v:"pc", t:"causal + padding"}], valor:"n", alCambiar:function(v){ modo = v; render(); }});
+    render();
+  })();
+
+  /* ================= Lab 7: BPE ================= */
+  (function(){
+    var corpus = [["ley", 8], ["leyes", 4], ["votar", 5], ["votaron", 3], ["votó", 2], ["vota", 4]];
+    var pruebas = ["votaremos", "leyó", "rey"], N = 10;
+    function fusionar(t, par){ var o = [], i = 0; while(i < t.length){ if(i < t.length - 1 && t[i] === par[0] && t[i+1] === par[1]){ o.push(par[0] + par[1]); i += 2; } else { o.push(t[i]); i++; } } return o; }
+    var estados = [], palabras = corpus.map(function(c){ return Array.from(c[0]).concat(["_"]); });
+    var vocab = []; palabras.forEach(function(t){ t.forEach(function(s){ if(vocab.indexOf(s) < 0) vocab.push(s); }); });
+    var fusiones = [];
+    function total(){ return palabras.reduce(function(s, t, i){ return s + t.length*corpus[i][1]; }, 0); }
+    for(var it=0; it<=N; it++){
+      var cuenta = {}, orden = [];
+      palabras.forEach(function(t, w){ for(var i=0;i<t.length-1;i++){ var k = t[i] + "\u0001" + t[i+1]; if(!(k in cuenta)){ cuenta[k] = 0; orden.push(k); } cuenta[k] += corpus[w][1]; } });
+      var top = orden.slice().sort(function(a, b){ return (cuenta[b] - cuenta[a]) || (orden.indexOf(a) - orden.indexOf(b)); }).slice(0, 5);
+      estados.push({palabras:palabras.map(function(t){ return t.slice(); }), vocab:vocab.length, tokens:total(), top:top.map(function(k){ return [k.split("\u0001"), cuenta[k]]; }), fusiones:fusiones.slice()});
+      if(it === N) break;
+      var mejor = top[0].split("\u0001");
+      fusiones.push(mejor); vocab.push(mejor[0] + mejor[1]);
+      palabras = palabras.map(function(t){ return fusionar(t, mejor); });
+    }
+    function chips(t, nuevo){ return '<div class="toks">' + t.map(function(s){ return '<span' + (s === nuevo ? ' class="nuevo"' : '') + '>' + s + '</span>'; }).join("") + '</div>'; }
+    function partir(w, fs){ var t = Array.from(w).concat(["_"]); fs.forEach(function(f){ t = fusionar(t, f); }); return t; }
+    var g = DL.grafica($("bpeCanvas"), {x:[0, N], y:[0, 150], alto:200, etiquetaX:"fusiones", etiquetaY:"cuenta"}, function(g){
+      var k = g.paso || 0;
+      g.polilinea(estados.map(function(e, i){ return [i, e.tokens]; }), {color:"g2", ancho:1.5, alfa:0.35});
+      g.polilinea(estados.map(function(e, i){ return [i, e.vocab*5]; }), {color:"accent", ancho:1.5, alfa:0.35});
+      g.polilinea(estados.slice(0, k + 1).map(function(e, i){ return [i, e.tokens]; }), {color:"g2", ancho:2.5});
+      g.polilinea(estados.slice(0, k + 1).map(function(e, i){ return [i, e.vocab*5]; }), {color:"accent", ancho:2.5});
+      g.puntos([[k, estados[k].tokens]], {color:"g2", radio:5}); g.puntos([[k, estados[k].vocab*5]], {color:"accent", radio:5});
+    });
+    DL.pasos($("labBPE"), {total:N + 1, etiqueta:"fusión", render:function(k){
+      var e = estados[k], ant = k > 0 ? estados[k - 1] : null, nuevo = k > 0 ? e.fusiones[k - 1].join("") : null;
+      $("bpeCalc").innerHTML = k === 0 ? "Inicio: cada palabra partida en caracteres + «_». Pulsa «Siguiente» para la primera fusión." :
+        "Fusión " + k + ": «" + e.fusiones[k - 1][0] + "» + «" + e.fusiones[k - 1][1] + "» → <b>«" + nuevo + "»</b> (aparece " + ant.top[0][1] + " veces)";
+      $("bpePares").innerHTML = '<tr><th>par</th><th class="c">veces</th></tr>' + (k === 0 ? e : ant).top.map(function(p, i){
+        return '<tr' + (k > 0 && i === 0 ? ' class="on"' : '') + '><td class="nw">«' + p[0][0] + '» + «' + p[0][1] + '»</td><td class="c">' + p[1] + '</td></tr>'; }).join("");
+      $("bpeWords").innerHTML = corpus.map(function(c, i){ return '<div class="w"><b>' + c[0] + ' (' + c[1] + ')</b>' + chips(e.palabras[i], nuevo) + '</div>'; }).join("");
+      $("bpeTest").innerHTML = pruebas.map(function(w){ return '<div class="w"><b>' + w + '</b>' + chips(partir(w, e.fusiones), nuevo) + '</div>'; }).join("");
+      DL.readout($("bpeRead"), [["fusiones", k], ["vocabulario", e.vocab], ["tokens en el corpus", e.tokens], ["tokens por palabra (prom.)", DL.fmt(e.tokens/26, 2)]]);
+      g.paso = k; g.redibujar();
+    }});
+  })();
+
+  /* ================= Lab 8: etapas del post-entrenamiento ================= */
+  (function(){
+    var P1 = "Resume en una frase para qué sirve una ley de transparencia.";
+    var etapas = {
+      base:{n:"Modelo base", datos:"Billones de tokens de texto de internet, libros y código.", senal:"Predecir el siguiente token.", cambia:"Nada todavía: sabe mucho del lenguaje, pero solo continúa texto.",
+        p:P1, r:"Resume en una frase para qué sirve una ley de protección de datos.\nResume en una frase para qué sirve un reglamento interno.\nPregunta 4. Explica la diferencia entre..."},
+      sft:{n:"+ SFT", datos:"Miles de pares (instrucción, respuesta) escritos o curados por personas.", senal:"La misma: predecir el siguiente token, ahora de las respuestas de ejemplo.", cambia:"El formato: responde en lugar de continuar.",
+        p:P1, r:"Una ley de transparencia obliga a las instituciones públicas a publicar información y a responder solicitudes de la ciudadanía, para que se pueda vigilar cómo usan el poder y los recursos."},
+      rlhf:{n:"+ RLHF o DPO", datos:"Comparaciones humanas: para una misma instrucción, ¿cuál de dos respuestas es mejor?", senal:"La preferencia humana: con RLHF, un modelo de recompensa + RL; con DPO, directo sobre las comparaciones.", cambia:"El estilo preferido: más claro, al grano, reconoce lo que no sabe y evita lo dañino.",
+        p:P1, r:"Sirve para que la ciudadanía pueda saber qué hace el gobierno y con qué recursos: obliga a publicar información y a responder solicitudes. Los detalles (plazos, excepciones) cambian según el país; si me dices cuál, te los precisa la ley correspondiente."},
+      rlvr:{n:"+ RLVR", datos:"Problemas con verificador mecánico: respuesta numérica exacta o tests de código.", senal:"¿La respuesta final es correcta? Recompensa 1 o 0, con RL.", cambia:"Aprende a razonar más tiempo antes de contestar, porque eso gana recompensa. Solo aplica donde hay verificador.",
+        p:"Una dependencia atendió 1 240 solicitudes en 8 semanas. ¿Cuántas atendió por semana en promedio?", r:"Razonamiento: promedio = total / semanas = 1 240 / 8.\n8 × 150 = 1 200; faltan 40; 40 / 8 = 5; total 155.\nComprobación: 155 × 8 = 1 240.\nRespuesta: 155 solicitudes por semana.   [verificador: correcto → recompensa 1]"}
+    };
+    function render(k){
+      var e = etapas[k];
+      $("etCard").innerHTML = '<div class="et">' + e.n + '</div><dl><dt>Datos</dt><dd>' + e.datos + '</dd><dt>Señal</dt><dd>' + e.senal + '</dd><dt>Qué cambia</dt><dd>' + e.cambia + '</dd></dl>' +
+        '<div class="mini">Instrucción</div><div class="salida">' + e.p + '</div><div class="mini">Respuesta ilustrativa</div><div class="salida">' + e.r + '</div>';
+    }
+    DL.selector($("etSel"), {opciones:[{v:"base", t:"LM base"}, {v:"sft", t:"+ SFT"}, {v:"rlhf", t:"+ RLHF / DPO"}, {v:"rlvr", t:"+ RLVR"}], valor:"base", alCambiar:render});
+    render("base");
+  })();
+
+  /* ================= Lab 9: calculadora de LoRA y MoE ================= */
+  (function(){
+    var d = 4096, r = 8, E = 16, k = 2, pe_ = 3, comp = 2;
+    function fmtN(x){ return String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+    function render(){
+      var lora = r*(d + d), full = d*d;
+      DL.readout($("loraRead"), [["W (congelada)", fmtN(full)], ["A + B", fmtN(lora)], ["fracción", DL.fmt(100*lora/full, 2) + " %"]]);
+      var tot = comp + E*pe_, act = comp + Math.min(k, E)*pe_;
+      DL.readout($("moeRead"), [["parámetros totales", DL.fmt(tot, 0) + "B"], ["activos por token", DL.fmt(act, 0) + "B"], ["activos / totales", DL.fmt(100*act/tot, 1) + " %"]]);
+      $("moeStatus").textContent = "Costo por token ≈ el de un modelo denso de " + DL.fmt(act, 0) + "B; la memoria para guardarlo, la de " + DL.fmt(tot, 0) + "B.";
+    }
+    DL.selector($("loraSel"), {opciones:[1024, 4096, 8192].map(function(v){ return {v:v, t:"d = " + v}; }), valor:4096, alCambiar:function(v){ d = v; render(); }});
+    DL.control($("loraCtrl"), {etiqueta:"rango r", min:1, max:64, paso:1, valor:r, formato:function(v){ return String(v); }, alCambiar:function(v){ r = v; render(); }});
+    var mc = $("moeCtrl"), ent = function(v){ return String(v); };
+    DL.control(mc, {etiqueta:"expertos", min:1, max:64, paso:1, valor:E, formato:ent, alCambiar:function(v){ E = v; render(); }});
+    DL.control(mc, {etiqueta:"top-k (activos por token)", min:1, max:8, paso:1, valor:k, formato:ent, alCambiar:function(v){ k = v; render(); }});
+    DL.control(mc, {etiqueta:"parámetros por experto (B)", min:1, max:10, paso:1, valor:pe_, formato:ent, alCambiar:function(v){ pe_ = v; render(); }});
+    DL.control(mc, {etiqueta:"compartidos (B)", min:0, max:20, paso:1, valor:comp, formato:ent, alCambiar:function(v){ comp = v; render(); }});
+    render();
+  })();
+
+  /* ================= Lab 10: árbol de decisión ================= */
+  (function(){
+    var OP = [{v:"prompt", t:"Prompting"}, {v:"rag", t:"RAG"}, {v:"ft", t:"Fine-tuning (LoRA)"}, {v:"agente", t:"Agente"}];
+    var casos = [
+      {t:"Una oficina de comunicación quiere reescribir sus boletines en lenguaje claro, con tono amable. Tarea estándar, unos 20 boletines al mes.", ok:"prompt",
+        fb:{prompt:"Bien: cambiar formato y tono en una tarea estándar es lo que hace bien un prompt (con un par de ejemplos, few-shot). Es lo más barato.", rag:"No hace falta buscar documentos: el boletín ya viene en la entrada.", ft:"Para 20 boletines al mes y una tarea estándar, entrenar es costo innecesario. Empieza por prompting.", agente:"No hay acciones de varios pasos; un agente solo agrega riesgo y costo."}},
+      {t:"Un ayuntamiento quiere que su personal pregunte sobre reglamentos municipales que se reforman cada trimestre, y cada respuesta debe citar el artículo.", ok:"rag",
+        fb:{prompt:"El modelo no conoce los reglamentos ni sus reformas, y sin fuentes no hay trazabilidad.", rag:"Bien: documentos propios que cambian y obligación de citar la fuente. Se actualiza cambiando el corpus, sin reentrenar.", ft:"Congelaría los reglamentos en los pesos: habría que reentrenar cada trimestre y no podrías citar.", agente:"No hacen falta acciones; basta con recuperar y responder."}},
+      {t:"Una secretaría recibe 40 000 quejas al año y quiere asignarlas a 8 categorías fijas. Tiene 5 000 quejas ya etiquetadas.", ok:"ft",
+        fb:{prompt:"Sirve como línea base rápida, pero desperdicia las 5 000 etiquetas y es menos consistente a ese volumen.", rag:"RAG recupera conocimiento; no es para clasificar.", ft:"Bien: comportamiento especializado y consistente, mucho volumen, datos etiquetados. LoRA sobre un modelo pequeño, evaluado con F1 por clase.", agente:"Clasificar no requiere acciones de varios pasos."}},
+      {t:"Un equipo quiere un sistema que descargue cada mañana los datos abiertos de calidad del aire, detecte estaciones sin reportar, redacte un aviso y lo envíe a cada responsable.", ok:"agente",
+        fb:{prompt:"Un prompt no descarga ni envía nada: hacen falta herramientas.", rag:"Buscar documentos no basta: hay que ejecutar pasos y actuar.", ft:"El problema no es el comportamiento del modelo sino la secuencia de acciones.", agente:"Bien: tarea de varios pasos con acciones (descargar, revisar, redactar, enviar). El sistema alrededor debe limitar qué puede hacer y alguien debe verificar."}},
+      {t:"Un instituto electoral quiere traducir al inglés comunicados ya publicados, sin terminología especial.", ok:"prompt",
+        fb:{prompt:"Bien: traducir es una tarea estándar que un LLM hace con una instrucción.", rag:"No hay conocimiento externo que recuperar.", ft:"Solo valdría si hubiera terminología muy propia y mucho volumen, y la evaluación mostrara que el prompting falla.", agente:"No hay acciones."}},
+      {t:"Un órgano de transparencia quiere responder preguntas de la ciudadanía sobre sus resoluciones publicadas (miles, crecen cada semana), con enlace a la resolución citada.", ok:"rag",
+        fb:{prompt:"El modelo no conoce las resoluciones nuevas y alucinaría citas.", rag:"Bien: corpus propio que crece, y la cita es obligatoria. Evalúa la tasa de citas correctas.", ft:"No da trazabilidad y quedaría desactualizado cada semana.", agente:"Recuperar y responder no requiere acciones de varios pasos."}}
+    ];
+    var resp = {};
+    var cont = $("arbolCasos");
+    function pill(){ var n = Object.keys(resp).length, b = Object.keys(resp).filter(function(i){ return resp[i] === casos[i].ok; }).length; $("arbolPill").textContent = n + " de " + casos.length + " respondidos · " + b + " con la opción mejor justificada"; }
+    casos.forEach(function(c, i){
+      var d = document.createElement("div"); d.className = "caso";
+      d.innerHTML = '<div class="ct"><b>' + (i + 1) + '.</b> ' + c.t + '</div><div class="sel"></div><div class="fb neu">Elige una opción.</div>';
+      cont.appendChild(d);
+      var fb = d.querySelector(".fb");
+      DL.selector(d.querySelector(".sel"), {opciones:OP, valor:null, alCambiar:function(v){
+        resp[i] = v; var bien = v === c.ok;
+        fb.className = "fb " + (bien ? "ok" : "mal");
+        fb.textContent = (bien ? "" : "Mejor justificada: " + OP.filter(function(o){ return o.v === c.ok; })[0].t + ". ") + c.fb[v];
+        pill();
+      }});
+    });
+    pill();
+  })();
+})();
+</script>
+</body>
+</html>
