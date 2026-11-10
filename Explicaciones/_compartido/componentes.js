@@ -30,7 +30,10 @@
     {id:"02", archivo:"02_redes_neuronales.html", titulo:"Redes neuronales"},
     {id:"03", archivo:"03_entrenamiento1.html",   titulo:"Entrenamiento 1: pérdidas y optimizadores"},
     {id:"04", archivo:"04_entrenamiento2.html",   titulo:"Entrenamiento 2: backprop, inicialización y desempeño"},
-    {id:"05", archivo:"05_regularizacion.html",   titulo:"Regularización"}
+    {id:"05", archivo:"05_regularizacion.html",   titulo:"Regularización"},
+    {id:"06", archivo:"06_cnn.html",              titulo:"Redes convolucionales"},
+    {id:"07", archivo:"07_rnn.html",              titulo:"Redes recurrentes y modelos de lenguaje"},
+    {id:"08", archivo:"08_transformers.html",     titulo:"Atención, Transformers y LLMs"}
   ];
 
   /* ---------------- utilidades numéricas ---------------- */

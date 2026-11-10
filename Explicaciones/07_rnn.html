@@ -1,0 +1,1264 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redes recurrentes</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: solo lo que no existe en estilos.css */
+  .corpus{font-family:ui-monospace,monospace; font-size:12.5px; color:var(--text-2); background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:8px 12px; margin:0 0 12px; line-height:1.7}
+  .lab-stack canvas + canvas{margin-top:12px}
+  @media (max-width:700px){ .cmp{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Redes recurrentes</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 07</div>
+  <h1>Redes recurrentes: memoria, gradientes a través del tiempo y modelos de lenguaje</h1>
+  <p class="lead">Cuando el orden importa, el modelo necesita memoria. Aquí ves cómo se modela una secuencia, primero contando (n-gramas y perplejidad) y luego con un estado oculto que viaja en el tiempo, por qué entrenarlo multiplica muchos factores y cómo las compuertas de LSTM y GRU dejan que la memoria sobreviva.</p>
+  <div class="meta">Fuente: <code>slides/RNN.Rmd</code> · Temario del Examen 2, sección 2 (y la Parte C para el split por tiempo) · Tarea 7 · Lectura de unos 55 minutos, sin contar los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+
+<p>Hasta ahora cada observación entraba a la red de golpe: un vector de tamaño fijo, una predicción. Pero mucho de lo que importa en política pública llega <strong>en orden</strong>: las palabras de una ley, las semanas de demanda de un servicio, los eventos de una estancia hospitalaria, las llamadas al 911 de cada hora. En esos datos, lo que pasó antes cambia el significado de lo que pasa ahora, y las secuencias tienen longitudes distintas.</p>
+
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Redes, backprop (clase 4), regularización (clase 5) y CNN: una arquitectura que explota la estructura del espacio (localidad, pesos compartidos).</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">¿Cómo usamos el pasado para predecir el presente? Modelos de lenguaje, perplejidad, RNN, BPTT, clipping, LSTM y GRU.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d">Atención y Transformers: en vez de comprimir todo el pasado en un estado, mirar directamente a cada token anterior.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p><strong>Una RNN es la misma capa aplicada en cada paso, con un estado que viaja de un paso al siguiente.</strong> Todo lo bueno de las RNNs (el número de parámetros no crece con la longitud de la secuencia) y todo lo malo (el gradiente es un producto de muchos factores, que se apaga o explota) sale de esa repetición. LSTM, GRU y el clipping son respuestas a lo malo.</p>
+</div>
+
+<!-- ============ 2. SECUENCIAS ============ -->
+<h2 id="secuencias"><span class="num">Sección 2</span>Secuencias como datos</h2>
+
+<p>Ahora el input es una lista ordenada x₁, x₂, …, x<sub>T</sub>. Cada <span class="sym" data-s="x">x</span><span class="sub r-dato">t</span> es el vector de características en el paso <span class="sym" data-s="indice_t"></span>, y <span class="sym" data-s="T">T</span> es la longitud de la secuencia, que puede cambiar de un ejemplo a otro (T<sub>i</sub>). Un documento es una secuencia de tokens; una estancia hospitalaria, una secuencia de eventos clínicos; un audio, una secuencia de ventanas de tiempo.</p>
+
+<p>Cambia también un supuesto que usábamos siempre. Antes tratábamos los ejemplos como <span class="sym" data-s="iid"></span> (independientes entre sí). Con secuencias, <strong>cada secuencia completa</strong> es una observación, pero <strong>dentro</strong> de ella los elementos dependen unos de otros: x<sub>t</sub> puede depender de x<sub>t−1</sub>, x<sub>t−2</sub>, … Justo esa dependencia es lo que queremos aprovechar.</p>
+
+<h3 id="tipos-salida">Tres formas de salida</h3>
+<div class="scroll"><table class="tbl">
+  <tr><th>Forma</th><th class="nw">Esquema</th><th>Ejemplos de la slide</th><th>Ejemplo de gobierno</th></tr>
+  <tr><td>Un solo output</td><td class="nw">(x₁, …, x<sub>T</sub>) → y</td><td>Clasificar un texto, un audio o un video completo</td><td>Clasificar un expediente completo como «urgente» o «no urgente»</td></tr>
+  <tr><td>Un output por paso</td><td class="nw">(x₁, …, x<sub>T</sub>) → (y₁, …, y<sub>T</sub>)</td><td>Etiquetado de palabras</td><td>Marcar cada palabra de una ley que es un nombre de dependencia</td></tr>
+  <tr><td>Otra secuencia</td><td class="nw">(x₁, …, x<sub>T</sub>) → (y₁, …, y<sub>S</sub>)</td><td>Traducción, transcripción, diálogo</td><td>Traducir un acta a una lengua indígena (S puede ser distinto de T)</td></tr>
+</table></div>
+<p>La slide también menciona tareas donde la secuencia es solo el output (describir una imagen con una frase, generar música o texto). La pregunta común a todas es: <strong>¿cómo usamos información pasada para predecir algo presente o futuro?</strong></p>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Por qué no meto toda la secuencia, palabra tras palabra, a una red densa como las de la clase 2?</div>
+<p>Por dos razones. Primero, la dimensión del input cambiaría con cada documento (T variable), y una red densa necesita un tamaño fijo. Segundo, aunque rellenaras todo a la misma longitud, la red tendría pesos <em>distintos</em> para «ley» en la posición 3 y «ley» en la posición 40: tendría que aprender lo mismo una vez por posición. Lo que queremos es una sola regla que se aplique en cada paso, igual que la CNN aplica el mismo filtro en cada lugar de la imagen.</p>
+
+<!-- ============ 3. AUTOREGRESIVOS ============ -->
+<h2 id="autoregresivos"><span class="num">Sección 3</span>Modelos autoregresivos y estacionariedad</h2>
+
+<p>Empieza por una serie de tiempo, como el precio diario de un índice bursátil (la slide usa el FTSE 100). Si solo tienes el pasado de la serie, lo que te interesa es la <span class="sym" data-s="P">probabilidad condicional</span> P(x<sub>t</sub> | x<sub>t−1</sub>, …, x₁), o una predicción puntual, el valor esperado <span class="sym" data-s="E">E[x<sub>t</sub> | x<sub>t−1</sub>, …, x₁]</span>. Un modelo que predice el siguiente valor de una serie a partir de sus propios valores anteriores se llama <strong>autoregresivo</strong>.</p>
+
+<p>La idea más simple sería una regresión sobre todos los valores pasados. El problema: el día 10 tienes 9 valores pasados; el día 1 000, 999. El número de inputs crece con t, y secuencias de distinta longitud producen vectores de distinta dimensión. Necesitamos controlar cuánta historia usa el modelo. La slide propone dos salidas:</p>
+
+<div class="cmp">
+  <div class="col"><h5>Opción 1 · Ventana fija de τ pasos</h5><div class="cb">
+    <p>P(x<sub>t</sub> | x<sub>t−1</sub>, …, x<sub>t−<span class="sym" data-s="tau">τ</span></sub>)</p>
+    <p><b>Gana:</b> input de dimensión fija τ; sirve cualquier modelo de ML tradicional; simple y a menudo funciona razonablemente bien.</p>
+    <p><b>Pierde:</b> todo lo anterior a t − τ se ignora <em>explícitamente</em>. Si lo importante pasó hace τ + 1 pasos, no hay forma de verlo.</p>
+  </div></div>
+  <div class="col"><h5>Opción 2 · Variable latente h<sub>t</sub></h5><div class="cb">
+    <p><span class="r-calc">h</span><sub>t</sub> = g(<span class="r-calc">h</span><sub>t−1</sub>, <span class="r-dato">x</span><sub>t</sub>), y luego P(x<sub>t+1</sub> | h<sub>t</sub>)</p>
+    <p><b>Gana:</b> un resumen de tamaño fijo de <em>todo</em> el pasado, que se actualiza paso a paso.</p>
+    <p><b>Pierde:</b> h<sub>t</sub> no se observa (es <strong>latente</strong>) y hay que aprender a resumir; nada garantiza que el resumen guarde lo que importa. Es la intuición detrás de las RNNs.</p>
+  </div></div>
+</div>
+
+<p>Un ejemplo de gobierno: para pronosticar la demanda semanal de un centro de salud, una ventana fija de τ = 4 usa solo el último mes. Si la demanda depende de lo que pasó en la misma semana del año anterior, esa ventana no lo ve; un estado oculto, en principio, podría recordarlo.</p>
+
+<h3 id="estacionariedad">Estacionariedad: ¿lo aprendido sigue sirviendo después?</h3>
+<p>Para entrenar con una secuencia larga, normalmente la cortamos en muchas ventanas y las usamos como ejemplos. Eso supone, al menos aproximadamente, que los patrones de una parte de la secuencia siguen siendo útiles en otras partes. A esa idea se le relaciona con la <strong>estacionariedad</strong> (stationarity). La slide da dos definiciones:</p>
+
+<div class="cmp">
+  <div class="col"><h5>Estricta</h5><div class="cb">
+    <p>(X<sub>t₁</sub>, …, X<sub>t<sub>k</sub></sub>) tiene <em>la misma distribución conjunta</em> que (X<sub>t₁+h</sub>, …, X<sub>t<sub>k</sub>+h</sub>).</p>
+    <p>Se lee: «si recorres toda la secuencia h pasos en el tiempo, nada en su comportamiento probabilístico cambia».</p>
+  </div></div>
+  <div class="col"><h5>Débil</h5><div class="cb">
+    <p><span class="sym" data-s="E">E[X<sub>t</sub>]</span> = <span class="r-calc">μ</span>,  <span class="sym" data-s="Var">Var(X<sub>t</sub>)</span> = <span class="r-calc">σ</span>²,  Cov(X<sub>t</sub>, X<sub>t+h</sub>) = <span class="r-calc">γ</span>(h)</p>
+    <p>Se lee: «la media y la varianza no cambian con t, y la relación entre dos momentos solo depende de cuánto los separa (h), no de cuándo ocurren».</p>
+  </div></div>
+</div>
+<p>Ojo con la notación: en estas fórmulas <b>h es un desfase</b> (cuántos pasos separan dos momentos), no el estado oculto; y γ(h) es la autocovarianza, no la γ de BatchNorm. En deep learning casi nunca se exige la definición estricta. Lo que importa en la práctica es que <strong>train, validación y test tengan dinámicas compatibles</strong>. Si la dinámica cambia (un cambio de régimen en una serie económica, el lenguaje político que evoluciona, un protocolo médico distinto en otro hospital, drift en datos administrativos), el modelo puede fallar aunque su validación se viera bien.</p>
+<p>Estrategias de la slide: tomar diferencias, quitar tendencias, ajustar estacionalidad, <strong>separar train y test respetando el tiempo</strong> y monitorear el drift.</p>
+
+<h3 id="lab-tendencia" class="lab" data-toc="Lab: quitar la tendencia">Laboratorio: quitar la tendencia</h3>
+<p>Una serie sintética de 120 semanas (con semilla): tendencia que sube 0.05 por semana, estacionalidad de periodo 12 y ruido. Las primeras 60 semanas son train y las últimas 60, validación (split cronológico). Las líneas horizontales marcan la media de cada mitad. <strong>Empieza</strong> con la serie original y luego cambia a diferencias.</p>
+<div class="widget" id="labEst">
+  <div class="widget-head"><div class="wt">¿Se parecen train y validación?</div><div class="ws">Línea vertical: corte entre train (izquierda) y validación (derecha).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="estCanvas"></canvas>
+      <div><div id="estSel"></div><div id="estRead"></div><div class="status info" id="estStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con la serie original, la media de train es 1.60 y la de validación 4.41: casi 3 unidades más (la tendencia sube 60 × 0.05 = 3 entre una mitad y otra). Un modelo entrenado solo con la primera mitad casi nunca vio valores tan altos.</li>
+    <li>Con la diferencia x<sub>t</sub> − x<sub>t−1</sub>, las dos medias quedan casi en 0 (0.02 y 0.03) y se parecen. Lo que el modelo aprende en train ahora sí describe la validación. La estacionalidad sigue ahí, como una onda.</li>
+    <li>Con la diferencia estacional x<sub>t</sub> − x<sub>t−12</sub> desaparece también la onda: queda ruido alrededor de 0.6 (12 × 0.05; las medias salen 0.61 y 0.54) en ambas mitades. Has quitado la tendencia y la estacionalidad.</li>
+  </ol>
+</div>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>Mezclar al azar las ventanas de una serie y repartirlas en train y validación. Las ventanas vecinas son casi idénticas, así que quedan «copias» de un lado y del otro, y el futuro se cuela en el entrenamiento: el error de validación sale optimista. Con series, el split es <strong>por tiempo</strong> (entrenas hasta una fecha y validas después) y, si hay varias unidades (centros, municipios), también <strong>por unidad</strong>.</p>
+</div>
+
+<!-- ============ 4. LENGUAJE ============ -->
+<h2 id="lenguaje"><span class="num">Sección 4</span>Modelos de lenguaje</h2>
+
+<p>Un modelo secuencial puede clasificar una secuencia, predecir un valor futuro, producir una secuencia nueva o <strong>estimar la probabilidad de una secuencia</strong>. Cuando hacemos esto último con texto, hablamos de un <strong>modelo de lenguaje</strong> (language model): una máquina que le pone probabilidad a P(x₁, …, x<sub>T</sub>). Con esa probabilidad puedes distinguir una frase plausible de una rara, y también generar texto un token a la vez.</p>
+
+<div class="formula">
+  <div class="f-head">Regla de la cadena para una secuencia</div>
+  <div class="f-ejemplo">P(deep, learning, is, fun) = P(deep) · P(learning | deep) · P(is | deep, learning) · P(fun | deep, learning, is).  Con 0.01 · 0.4 · 0.5 · 0.2 = 0.0004</div>
+  <div class="eq">
+    <span class="sym" data-s="P">P</span>(<span class="r-dato">x</span>₁, …, <span class="r-dato">x</span><sub>T</sub>) = P(<span class="r-dato">x</span>₁) · <span class="big"><span class="lim r-dato"><span class="sym" data-s="T">T</span></span><span class="o sym" data-s="prod">Π</span><span class="lim">t=2</span></span> P(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>t−1</sub>, …, <span class="r-dato">x</span>₁)
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de toda la frase es la probabilidad de la primera palabra, por la de la segunda dado la primera, por la de la tercera dado las dos anteriores, y así hasta la última.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">x<sub>t</sub></dt><dd>El token en la posición t (una palabra, un carácter, una subpalabra).</dd>
+      <dt class="r-dato">T</dt><dd>La longitud de la secuencia.</dd>
+      <dt>Π</dt><dd>El producto de todos los factores, de t = 2 a t = T (<a href="00_matematicas.html#producto">productoria, artefacto 00</a>).</dd>
+      <dt>P(x<sub>t</sub> | …)</dt><dd>«Qué tan probable es este token, sabiendo todo lo que vino antes». La barra se lee «dado».</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…un solo factor vale 0: toda la frase tiene probabilidad 0, por buena que sea el resto. Es el problema de los ceros que verás con los n-gramas.</li>
+      <li>…la frase es más larga: hay más factores menores que 1 y la probabilidad baja casi siempre. Por eso para comparar se usa un promedio por token (la perplejidad).</li>
+    </ul>
+  </div>
+</div>
+
+<p>La regla de la cadena no es una aproximación: es una identidad de probabilidad. Lo que hace es convertir el problema «ponle probabilidad a una frase entera» en el problema «<strong>predice el siguiente token dado el pasado</strong>», que es una clasificación como las de la clase 3, repetida en cada paso. A esta factorización se le escribe corto como P(x<sub>t</sub> | x<sub>&lt;t</sub>): «el token t dado todos los anteriores».</p>
+
+<h3 id="markov">Modelos de Markov: olvidar a propósito</h3>
+<p>El último factor de la regla de la cadena condiciona en toda la historia, que crece sin límite. Una simplificación clásica: suponer que el futuro depende solo de lo reciente. En un <strong>modelo de Markov de primer orden</strong>,</p>
+<div class="eq">P(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>t−1</sub>, …, <span class="r-dato">x</span>₁) = P(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>t−1</sub>)   ⇒   P(<span class="r-dato">x</span>₁, …, <span class="r-dato">x</span><sub>T</sub>) = P(<span class="r-dato">x</span>₁) · Π<sub>t=2</sub><sup>T</sup> P(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>t−1</sub>)<span class="lbl">Markov de orden 1</span></div>
+<p>En palabras: «para predecir la siguiente palabra, basta con la anterior». Si usas las últimas k, es un modelo de Markov <strong>de orden k</strong>. Es exactamente la ventana fija de la sección anterior, con τ = k. Con «deep learning is fun», el orden 1 reemplaza P(fun | deep, learning, is) por P(fun | is).</p>
+
+<h3 id="izquierda-derecha">¿Por qué de izquierda a derecha?</h3>
+<p>La factorización P(x<sub>t</sub> | x<sub>&lt;t</sub>) coincide con el orden en que se escribe el texto en muchos idiomas, deja entrenar con muchos pares «contexto → siguiente token» de una sola frase, y permite <strong>generar</strong> un token a la vez. No es la única opción: los modelos bidireccionales y los masked language models usan contexto de ambos lados (los verás en la sección de bidireccionales y en la clase de Transformers).</p>
+
+<!-- ============ 5. TEXTO ============ -->
+<h2 id="texto"><span class="num">Sección 5</span>Texto como secuencia: tokens, vocabulario y n-gramas</h2>
+
+<p>Una red no lee letras. La receta clásica para convertir texto en algo que la máquina procese:</p>
+<ol>
+  <li>Cargar el texto.</li>
+  <li>Dividirlo en <strong>tokens</strong> (las unidades que el modelo procesa en cada paso).</li>
+  <li>Construir un <strong>vocabulario</strong> (la lista de tokens distintos).</li>
+  <li>Asociar cada token con un índice numérico.</li>
+  <li>Convertir el texto en secuencias de índices. Después, esos índices se convierten en vectores mediante embeddings.</li>
+</ol>
+<p>Un token puede ser una palabra, un carácter, una subpalabra, o un byte o símbolo especial. La tokenización no es un detalle menor: cambia la longitud de las secuencias (por caracteres, «presupuesto» son 11 pasos; por palabras, 1), el tamaño del vocabulario y qué tan fácil es manejar palabras raras. En la tokenización clásica por palabras aparece un token especial, <code>&lt;unk&gt;</code> (unknown), para las palabras que nunca se vieron. Los tokenizadores modernos por subpalabras o bytes reducen ese problema, aunque no resuelven todos los de segmentación.</p>
+
+<h3 id="zipf">La ley de Zipf: pocas palabras lo son casi todo</h3>
+<p>Las frecuencias de las palabras son muy desiguales. La <strong>ley de Zipf</strong> dice, aproximadamente, que la palabra con ranking i (la más frecuente es i = 1) aparece</p>
+<div class="eq"><span class="r-calc">n</span><sub>i</sub> ∝ <span class="frac"><span class="num">1</span><span class="den">i<span class="sup r-hiper">α</span></span></span>   ⇔   log <span class="r-calc">n</span><sub>i</sub> = −<span class="r-hiper">α</span> log i + c<span class="lbl">ley de Zipf</span></div>
+<p>En palabras: «la frecuencia cae como una potencia del ranking». Con α = 1, la segunda palabra aparece la mitad de veces que la primera, la décima, una décima parte. En escala log-log es una recta con pendiente −α. Aquí <b>nᵢ es un conteo</b> y <b>α es la pendiente de esa recta</b> (un número que se estima de los datos), no la tasa de aprendizaje de la clase 3. La consecuencia: un puñado de palabras («de», «la», «que») aparecen muchísimo y la gran mayoría aparecen muy poco. Por eso modelar lenguaje contando frecuencias es difícil: casi todos los pares de palabras son raros.</p>
+
+<h3 id="ngramas">n-gramas: contar para predecir</h3>
+<p>Un <strong>n-grama</strong> es una secuencia de n tokens consecutivos. Para «deep learning is fun»: los unigramas son <code>deep</code>, <code>learning</code>, <code>is</code>, <code>fun</code>; los bigramas, <code>deep learning</code>, <code>learning is</code>, <code>is fun</code>; los trigramas, <code>deep learning is</code> y <code>learning is fun</code>. Un modelo de n-gramas estima la probabilidad del siguiente token usando solo los últimos n − 1: es un modelo de Markov de orden n − 1.</p>
+
+<div class="formula">
+  <div class="f-head">Estimador de bigramas</div>
+  <div class="f-ejemplo">En el corpus, «deep» aparece 100 veces y «deep learning» 40 veces  →  P̂(learning | deep) = 40 / 100 = 0.4</div>
+  <div class="eq">
+    P̂(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>t−1</sub>) = <span class="frac"><span class="num"><span class="r-calc">n</span>(<span class="r-dato">x</span><sub>t−1</sub>, <span class="r-dato">x</span><sub>t</sub>)</span><span class="den"><span class="r-calc">n</span>(<span class="r-dato">x</span><sub>t−1</sub>)</span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La probabilidad de que después de esta palabra venga aquella es: cuántas veces vi la pareja, entre cuántas veces vi la primera palabra.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">n(x<sub>t−1</sub>, x<sub>t</sub>)</dt><dd>El conteo del bigrama: cuántas veces aparece la pareja seguida en el corpus.</dd>
+      <dt class="r-calc">n(x<sub>t−1</sub>)</dt><dd>El conteo del contexto: cuántas veces aparece la palabra anterior. Aquí n es una función de conteo, no el número de observaciones.</dd>
+      <dt>P̂</dt><dd>El gorro dice «estimado a partir de los datos».</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…la pareja nunca apareció: el numerador es 0 y P̂ = 0. Si nunca viste (deep, tortilla), el modelo jura que es imposible.</li>
+      <li>…el contexto aparece muy poco: con n(c) = 1, cada probabilidad es 0 o 1. El estimador es extremadamente ruidoso.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="smoothing">Smoothing: no jurar que algo es imposible</h3>
+<p>Una probabilidad de cero es fatal: basta un bigrama no visto para que toda la frase tenga probabilidad 0 (y, como verás, perplejidad infinita). El <strong>smoothing</strong> regala un poco de probabilidad a los eventos no observados. Primero un caso: con n(c) = 4, n(c, w) = 0, <span class="sym" data-s="epsSmooth">ε</span> = 1 y un vocabulario de <span class="sym" data-s="V">|V|</span> = 16 tokens, la probabilidad pasa de 0 a (0 + 1)/(4 + 16) = 0.05.</p>
+
+<div class="formula">
+  <div class="f-head">Smoothing add-ε</div>
+  <div class="f-ejemplo">n(c) = 4,  n(c, w) = 2,  |V| = 16:   sin smoothing 2/4 = 0.5  ·  con ε = 1: (2 + 1)/(4 + 16) = 0.15  ·  un w no visto: 1/20 = 0.05</div>
+  <div class="eq">
+    P̂(<span class="r-dato">w</span> | <span class="r-dato">c</span>) = <span class="frac"><span class="num"><span class="r-calc">n</span>(c, w) + <span class="r-hiper">ε</span></span><span class="den"><span class="r-calc">n</span>(c) + <span class="r-hiper">ε</span> <span class="r-dato">|V|</span></span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«A cada conteo le sumo ε de regalo, como si hubiera visto cada palabra posible ε veces más; para que todo siga sumando 1, al denominador le sumo ε por cada palabra del vocabulario.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">c, w</dt><dd>El contexto (la palabra anterior) y la palabra candidata.</dd>
+      <dt class="r-hiper">ε</dt><dd>El «conteo de regalo». Lo eliges tú. No es el ε estabilizador de Adam o BatchNorm.</dd>
+      <dt class="r-dato">|V|</dt><dd>El tamaño del vocabulario: cuántos tokens distintos pueden venir después.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…ε = 0: vuelves al conteo puro, con sus ceros.</li>
+      <li>…ε sube: todas las probabilidades se acercan a 1/|V| (uniforme). Le quitas mucha probabilidad a lo que sí viste: en el ejemplo, 0.5 bajó a 0.15.</li>
+      <li>…|V| es enorme (50 000 palabras): con ε = 1 el denominador lo domina el regalo y el modelo se vuelve casi uniforme. Por eso en la práctica se usa ε pequeño o métodos más finos.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Aun con smoothing, los n-gramas tienen límites que la slide enumera: no aprenden significado, no generalizan a contextos largos, requieren almacenar muchas estadísticas, y <strong>tratan contextos casi iguales como completamente distintos</strong> («la ley de salud» y «la ley sanitaria» no comparten nada). Las redes neuronales atacan parte de esto con representaciones continuas: si «salud» y «sanitaria» tienen embeddings parecidos, lo aprendido de una ayuda a la otra.</p>
+
+<h3 id="lab-bigramas" class="lab" data-toc="Lab: bigramas y smoothing">Laboratorio: bigramas, ceros y smoothing</h3>
+<p>Un corpus de juguete de seis frases. Cada frase lleva <code>&lt;s&gt;</code> al inicio (para que la primera palabra también tenga contexto) y <code>&lt;/s&gt;</code> al final. El vocabulario de tokens que pueden venir después tiene |V| = 16. El laboratorio cuenta los bigramas en vivo, calcula P̂ de cada paso de la frase de prueba y su perplejidad (la definimos en la siguiente sección; por ahora, «más baja es mejor»). <strong>Empieza</strong> con la primera frase y ε = 0; luego elige la segunda.</p>
+<div class="widget" id="labBi">
+  <div class="widget-head"><div class="wt">Probabilidad de una frase con bigramas</div><div class="ws">Filas resaltadas: bigramas que nunca aparecieron en el corpus.</div></div>
+  <div class="widget-body">
+    <div class="corpus" id="biCorpus"></div>
+    <div id="biSel"></div>
+    <div class="lab-grid">
+      <div class="scroll" id="biTabla"></div>
+      <div><div id="biCtrl"></div><div id="biRead"></div><div class="status info" id="biStatus"></div></div>
+    </div>
+  </div>
+  <div class="widget-foot">
+    <button class="btn" id="biUnif">Modelo uniforme</button>
+    <button class="btn" id="biConteo">Modelo de bigramas</button>
+    <span class="pill">|V| = 16</span>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>«la ley de salud fue aprobada» con ε = 0: todos sus bigramas existen en el corpus y la perplejidad es 1.450. El modelo casi no duda, porque la frase es una combinación de pedazos que vio.</li>
+    <li>«la reforma fue publicada» con ε = 0: el bigrama «reforma fue» nunca apareció, P̂ = 0 y la perplejidad es infinita. Sube ε a 0.1 y baja a 4.928; con ε = 1 sube otra vez a 8.683, porque el regalo le quitó probabilidad a todo lo que sí vio.</li>
+    <li>Con la primera frase, sube ε de 0 a 1: la perplejidad crece de 1.450 a 5.703. El smoothing ayuda con lo no visto y castiga lo visto; ε es un hiperparámetro que se elige con validación.</li>
+    <li>Pulsa «modelo uniforme»: cada token recibe 1/16 y la perplejidad es exactamente 16 = |V|, con cualquier frase.</li>
+  </ol>
+</div>
+
+<!-- ============ 6. PERPLEJIDAD ============ -->
+<h2 id="perplejidad"><span class="num">Sección 6</span>Evaluar un modelo de lenguaje: cross-entropy y perplejidad</h2>
+
+<p>¿Cómo medimos qué tan bueno es un modelo de lenguaje? Le damos un texto real y vemos qué probabilidad le asignó a cada token que <em>sí</em> apareció. Si un modelo le daba 0.5 al token correcto y otro 0.01, el primero predice mejor. Para juntar muchos pasos usamos el promedio de los −log, que ya conoces de la clase 3 (<a href="03_entrenamiento1.html#categorica">cross-entropy</a>).</p>
+
+<div class="formula">
+  <div class="f-head">Cross-entropy promedio (negative log-likelihood por token)</div>
+  <div class="f-ejemplo">El modelo dio al token correcto 0.5, 0.25, 0.5, 0.125  →  −log: 0.693, 1.386, 0.693, 2.079  →  promedio = 4.852 / 4 = 1.213</div>
+  <div class="eq">
+    <span class="r-calc">CE</span> = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="n">n</span></span></span> <span class="big"><span class="lim r-dato">n</span><span class="o sym" data-s="sum">Σ</span><span class="lim">t=1</span></span> −<span class="sym" data-s="log">log</span> P(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>&lt;t</sub>)
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«En cada paso, toma la probabilidad que el modelo le dio al token que de verdad apareció, sácale menos logaritmo, y promedia sobre todos los pasos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">n</dt><dd>Cuántos tokens se predicen (la longitud del texto de evaluación). Es la misma n de la slide; no es la n de «n-grama».</dd>
+      <dt>P(x<sub>t</sub> | x<sub>&lt;t</sub>)</dt><dd>La probabilidad que el modelo le asignó al token correcto, dado lo anterior.</dd>
+      <dt>−log</dt><dd>Convierte una probabilidad en un «castigo»: 0 si la probabilidad era 1; enorme si era casi 0.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el modelo da probabilidad 1 a cada token correcto: cada −log vale 0 y CE = 0.</li>
+      <li>…un solo token recibe probabilidad 0: −log 0 = ∞ y la CE es infinita. Por eso los n-gramas necesitan smoothing.</li>
+    </ul>
+  </div>
+</div>
+
+<p>La CE está en «nats» y es difícil de imaginar. La perplejidad la regresa a una escala con sentido.</p>
+
+<div class="formula">
+  <div class="f-head">Perplejidad</div>
+  <div class="f-ejemplo">CE = 1.213  →  PPL = e<sup>1.213</sup> = 3.364.  Es lo mismo que (0.5 · 0.25 · 0.5 · 0.125)<sup>−1/4</sup> = (1/64)<sup>−1/4</sup> = 64<sup>1/4</sup> = 2<sup>1.75</sup> = 3.364</div>
+  <div class="eq">
+    <span class="sym" data-s="PPL">PPL</span> = <span class="sym" data-s="exp">exp</span>( <span class="frac"><span class="num">1</span><span class="den">n</span></span> <span class="big"><span class="lim r-dato">n</span><span class="o">Σ</span><span class="lim">t=1</span></span> −log P(<span class="r-dato">x</span><sub>t</sub> | <span class="r-dato">x</span><sub>&lt;t</sub>) ) = exp(<span class="r-calc">CE</span>)
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La perplejidad es e elevado a la cross-entropy. Se interpreta como el número efectivo de opciones entre las que el modelo duda en cada paso.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">PPL</dt><dd>Un número ≥ 1. Una perplejidad de 3.364 dice: «en promedio, el modelo estuvo tan indeciso como si eligiera al azar entre 3.4 opciones igual de probables».</dd>
+      <dt>exp</dt><dd>Deshace el log (<a href="00_matematicas.html#log-exp">log y exp, artefacto 00</a>): la perplejidad es el inverso de la media geométrica de las probabilidades.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…el modelo siempre da 1 al token correcto: PPL = 1. No duda nunca.</li>
+      <li>…el modelo es uniforme sobre <span class="sym" data-s="V">|V|</span> tokens: PPL = |V| exactamente (ver la derivación).</li>
+      <li>…las probabilidades del token correcto bajan: la PPL crece. Una PPL mayor que |V| significa que el modelo es <em>peor</em> que adivinar uniforme.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="derivacion-uniforme">Por qué el modelo uniforme tiene perplejidad |V|</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">P(x<sub>t</sub> | x<sub>&lt;t</sub>) = 1/|V|  para todo t</div><div class="d-por">El modelo uniforme reparte la probabilidad por igual entre los |V| tokens, sin mirar el contexto.</div></li>
+  <li><div class="d-ex">−log(1/|V|) = log |V|</div><div class="d-por"><b>Log de un recíproco:</b> log(1/a) = −log a, así que el menos se cancela (<a href="00_matematicas.html#log-exp">artefacto 00</a>).</div></li>
+  <li><div class="d-ex">CE = (1/n) · Σ<sub>t</sub> log |V| = (1/n) · n · log |V| = log |V|</div><div class="d-por"><b>Promedio de una constante:</b> sumar n veces lo mismo y dividir entre n da esa misma constante.</div></li>
+  <li><div class="d-ex">PPL = exp(log |V|) = |V|</div><div class="d-por"><b>exp y log se deshacen.</b></div></li>
+  <li><div class="d-ex">|V| = 16 → PPL = 16 ;  |V| = 50 000 → PPL = 50 000</div><div class="d-por"><b>Verificación:</b> es lo que marca el botón «modelo uniforme» del laboratorio. La perplejidad del uniforme es la línea base que cualquier modelo debe superar.</div></li>
+</ol>
+
+<div class="note fix">
+  <span class="tag">Trampa común: comparar perplejidades con tokenizaciones distintas</span>
+  <p>La perplejidad es <strong>por token</strong>, y la tokenización define qué es un token. Un modelo por caracteres hace muchas más predicciones, cada una sobre un vocabulario chico (unas decenas de caracteres); uno por palabras hace pocas, sobre un vocabulario enorme. Sus perplejidades no están en la misma escala: una PPL de 3 por carácter y una de 90 por palabra no dicen cuál modelo es mejor. Para comparar: usa el mismo tokenizador, o compara la log-verosimilitud total del <em>mismo</em> texto (o bits por carácter). La slide añade dos cuidados: la perplejidad no siempre se traduce en calidad de generación, y dos modelos con perplejidades parecidas pueden comportarse muy distinto. Aun así, es la métrica central de los modelos autoregresivos (la clase 8 retoma <a href="08_transformers.html#perplejidad-tokens">por qué la tokenización cambia la perplejidad</a>).</p>
+</div>
+
+<h3 id="minibatches">Cómo se arman los mini-batches</h3>
+<p>Para entrenar, partimos una secuencia larga de tokens en subsecuencias de longitud fija. La etiqueta es <strong>la misma subsecuencia desplazada un paso</strong>. Con la frase «la ley de salud fue aprobada» y longitud 4:</p>
+<div class="mat-row" id="mbRow"></div>
+<p>Cada columna es un par «contexto hasta aquí → siguiente token». Una sola subsecuencia de longitud n entrega n ejemplos de entrenamiento a la vez: el modelo aprende x<sub>t</sub> → x<sub>t+1</sub> para muchos pasos en paralelo. La pérdida es la cross-entropy de cada columna, promediada; su exponencial es la perplejidad que reporta la Tarea 7.</p>
+
+<!-- ============ 7. RNN ============ -->
+<h2 id="rnn"><span class="num">Sección 7</span>La RNN simple</h2>
+
+<p>Los n-gramas olvidan todo lo que queda fuera de su ventana. Una red recurrente (recurrent neural network, RNN) toma la opción 2 de la sección 3: reemplaza el uso explícito de todo el pasado por un <strong>estado oculto</strong> (hidden state) <span class="sym" data-s="h">h</span><sub>t</sub> que intenta resumir lo relevante hasta el tiempo t. En lugar de modelar P(x<sub>t+1</sub> | x<sub>t</sub>, …, x₁), aproxima P(x<sub>t+1</sub> | h<sub>t</sub>). La actualización general es h<sub>t</sub> = f(x<sub>t</sub>, h<sub>t−1</sub>), y en una RNN simple f es una capa densa con activación.</p>
+
+<p>Primero con números, en una sola dimensión. Con w<sub>x</sub> = 0.5, w<sub>h</sub> = 0.8, sesgo 0, h₀ = 0 y x₁ = 1: el nuevo estado es h₁ = tanh(0.5·1 + 0.8·0) = tanh(0.5) = 0.462. En el paso 2, con x₂ = 0, el estado anterior sigue influyendo: h₂ = tanh(0.5·0 + 0.8·0.462) = tanh(0.370) = 0.354. Aunque x₂ = 0, h₂ no es 0: la red <em>recuerda</em> que en t = 1 hubo algo.</p>
+
+<div class="formula">
+  <div class="f-head">Actualización del estado oculto de una RNN simple</div>
+  <div class="f-ejemplo">escalar: w<sub>x</sub> = 0.5, w<sub>h</sub> = 0.8, b = 0, h₁ = 0.462, x₂ = 0  →  h₂ = tanh(0.5·0 + 0.8·0.462 + 0) = tanh(0.370) = 0.354</div>
+  <div class="eq">
+    <span class="sym" data-s="Ht">H<sub>t</sub></span> = <span class="sym" data-s="a">φ</span>( <span class="r-dato">X</span><sub>t</sub><span class="sym" data-s="Wxh">W<sub>xh</sub></span> + <span class="r-calc">H</span><sub>t−1</sub><span class="sym" data-s="Whh">W<sub>hh</sub></span> + <span class="sym" data-s="bh">b<sub>h</sub></span> )
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El nuevo estado es una activación aplicada a: lo que entra ahora, transformado por W x-h, más el estado anterior, transformado por W h-h, más un sesgo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">X<sub>t</sub></dt><dd>El input en el tiempo t (por ejemplo, el embedding del token t). En mayúscula porque la slide lo escribe para un mini-batch: una fila por secuencia.</dd>
+      <dt class="r-calc">H<sub>t−1</sub>, H<sub>t</sub></dt><dd>El estado oculto anterior y el nuevo. Es la memoria de la red: un vector de tamaño fijo h, el mismo en cada paso.</dd>
+      <dt class="r-param">W<sub>xh</sub></dt><dd>Matriz que transforma el input (de tamaño d × h si el input tiene d entradas).</dd>
+      <dt class="r-param">W<sub>hh</sub></dt><dd>Matriz que transforma el estado anterior (h × h). Es la que se multiplica una y otra vez al desenrollar; será la protagonista de los gradientes.</dd>
+      <dt class="r-param">b<sub>h</sub></dt><dd>El sesgo del estado.</dd>
+      <dt>φ</dt><dd><b>Aquí φ es la no linealidad</b> (casi siempre tanh), no los parámetros φ de las clases 1 a 5. La slide reutiliza la letra.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…W<sub>hh</sub> = 0: el estado no depende del pasado y la red se vuelve una capa densa aplicada a cada token por separado, sin memoria.</li>
+      <li>…W<sub>hh</sub> es «chica» (en escalar, |w<sub>h</sub>| &lt; 1): el recuerdo de un input se encoge en cada paso y se borra pronto.</li>
+      <li>…W<sub>hh</sub> es «grande»: el estado crece hasta que tanh lo satura cerca de ±1 y se queda pegado ahí.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Convención de la slide: fila por matriz</span>
+  <p>En las clases 2 a 4 una capa era β + Ωh: la matriz multiplica a un vector columna por la izquierda. La slide de RNN escribe X<sub>t</sub>W<sub>xh</sub>: un vector fila (o una matriz con una fila por ejemplo del batch) multiplicado por la matriz a la derecha. Es la misma operación con la matriz transpuesta; así lo escribe también PyTorch. No te confundas al contar dimensiones: W<sub>xh</sub> es d × h.</p>
+</div>
+
+<h3 id="salida-rnn">La salida y el softmax</h3>
+<p>Con el estado se calcula una salida, y para predecir el siguiente token se le aplica un softmax sobre el vocabulario (<a href="00_matematicas.html#softmax">softmax, artefacto 00</a>):</p>
+<div class="eq"><span class="sym" data-s="Ot">O<sub>t</sub></span> = <span class="r-calc">H</span><sub>t</sub><span class="sym" data-s="Whq">W<sub>hq</sub></span> + <span class="sym" data-s="bh">b<sub>q</sub></span>,    P(<span class="r-dato">x</span><sub>t+1</sub> | <span class="r-calc">h</span><sub>t</sub>) = <span class="sym" data-s="softmax">softmax</span>(<span class="r-calc">O</span><sub>t</sub>)<span class="lbl">salida</span></div>
+<p>En palabras: «la salida es una capa lineal del estado, con una entrada por cada token del vocabulario; el softmax la convierte en probabilidades que suman 1». W<sub>hq</sub> es h × |V|. Y la frase clave de la slide: <strong>los mismos parámetros se reutilizan en cada paso temporal</strong>. Por eso el número de parámetros no crece con <span class="sym" data-s="T">T</span>.</p>
+
+<h3 id="contar-rnn">Contar parámetros: no dependen de T</h3>
+<p>Con input de dimensión d = 3 y estado de tamaño h = 4: W<sub>xh</sub> tiene 3·4 = 12, W<sub>hh</sub> tiene 4·4 = 16 y b<sub>h</sub> tiene 4. La recurrencia tiene <b>32</b> parámetros, igual si la secuencia mide 10 pasos o 10 000. En general:</p>
+<div class="eq">parámetros de la recurrencia = <span class="r-dato">d</span>·<span class="r-hiper">h</span> + <span class="r-hiper">h</span>·<span class="r-hiper">h</span> + <span class="r-hiper">h</span><span class="lbl">no aparece T</span></div>
+<p>Compáralo con <a href="02_redes_neuronales.html#contar-parametros">contar parámetros en una red densa</a>: allí cada capa tenía sus propios pesos. Una RNN desenrollada 100 pasos se parece a una red de 100 capas, pero las 100 «capas» comparten exactamente los mismos pesos. Es la misma idea que la compartición de pesos de la CNN, ahora a lo largo del tiempo.</p>
+
+<div class="cmp">
+  <div class="col"><h5>Capa oculta (hidden layer)</h5><div class="cb"><p>Una pieza de la <strong>arquitectura</strong>: un conjunto de neuronas entre la entrada y la salida. Existe aunque no haya tiempo.</p></div></div>
+  <div class="col"><h5>Estado oculto (hidden state)</h5><div class="cb"><p>Una <strong>variable que cambia con el tiempo</strong>: h₁, h₂, …, h<sub>T</sub>. Es el valor que produce la capa recurrente en cada paso, la memoria interna del modelo.</p></div></div>
+</div>
+
+<figure class="fig"><img src="../images/hiddenstate.png" alt="Diagrama de la slide: RNN con estado oculto desenrollada en el tiempo" loading="lazy" style="max-width:560px"><figcaption>La figura de la slide: el mismo bloque se repite en cada paso y le pasa su estado al siguiente.</figcaption></figure>
+
+<h3 id="lab-desenrollada" class="lab" data-toc="Lab: RNN desenrollada">Laboratorio: una RNN desenrollada, paso a paso</h3>
+<p>Una RNN escalar h<sub>t</sub> = tanh(w<sub>x</sub>x<sub>t</sub> + w<sub>h</sub>h<sub>t−1</sub> + b) sobre 8 pasos, con h₀ = 0. Cada clic en «siguiente» calcula un paso con la cuenta completa. <strong>Empieza</strong> con la secuencia «pulso» (un 1 en t = 1 y luego ceros) y w<sub>h</sub> = 0.5, avanza los 8 pasos, y repite con w<sub>h</sub> = 1.5.</p>
+<div class="widget" id="labRnn">
+  <div class="widget-head"><div class="wt">La misma cuenta en cada paso</div><div class="ws">Puntos huecos azules: input x<sub>t</sub>. Línea morada: estado h<sub>t</sub>.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="rnnCanvas"></canvas>
+      <div><div id="rnnSel"></div><div id="rnnCtrl"></div></div>
+    </div>
+    <div class="mat-row" id="rnnMat"></div>
+    <div class="calcline" id="rnnCalc"></div>
+  </div>
+  <div class="widget-foot"></div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Pulso con w<sub>h</sub> = 0.5: h₁ = 0.762 y luego el recuerdo se reduce a la mitad en cada paso (0.363, 0.180, 0.090…). En t = 8 queda 0.006: la red ya casi olvidó que hubo un pulso.</li>
+    <li>Pulso con w<sub>h</sub> = 1.5: el estado <em>sube</em> aunque ya no entra nada (0.762, 0.815, 0.840…) y se estaciona cerca de 0.86, donde tanh(1.5h) = h. La memoria no se borra, pero tampoco puede guardar otra cosa: está saturada.</li>
+    <li>Pon w<sub>h</sub> = 0: el estado solo copia el input del momento (h<sub>t</sub> = tanh(w<sub>x</sub>x<sub>t</sub>)). Sin W<sub>hh</sub> no hay memoria.</li>
+    <li>Cambia de secuencia sin tocar los controles: los <em>tres números</em> w<sub>x</sub>, w<sub>h</sub>, b sirven para cualquier longitud y cualquier input. Eso es compartir parámetros en el tiempo.</li>
+  </ol>
+</div>
+
+<!-- ============ 8. BPTT ============ -->
+<h2 id="bptt"><span class="num">Sección 8</span>Backpropagation a través del tiempo</h2>
+
+<p>Para entrenar una RNN, la <strong>desenrollamos</strong> paso a paso: la red desenrollada es una red profunda normal, con una «capa» por paso de tiempo, solo que todas comparten parámetros. Luego aplicamos backpropagation sobre esa gráfica, exactamente como en la <a href="04_entrenamiento2.html#backprop-escalar">clase 4</a>. A esto se le llama <strong>backpropagation through time (BPTT)</strong>. El problema: las secuencias pueden ser largas, así que la gráfica también puede volverse muy larga.</p>
+
+<p>La slide plantea el caso general con h<sub>t</sub> = f(x<sub>t</sub>, h<sub>t−1</sub>, w<sub>h</sub>), una salida o<sub>t</sub> = g(h<sub>t</sub>, w<sub>o</sub>) y la pérdida promedio sobre los pasos:</p>
+<div class="eq"><span class="sym" data-s="L">L</span> = <span class="frac"><span class="num">1</span><span class="den"><span class="sym" data-s="T">T</span></span></span> <span class="big"><span class="lim r-dato">T</span><span class="o">Σ</span><span class="lim">t=1</span></span> <span class="sym" data-s="ell">ℓ</span>(<span class="r-dato">y</span><sub>t</sub>, <span class="r-calc">o</span><sub>t</sub>)<span class="lbl">pérdida promedio en el tiempo</span></div>
+<p>En palabras: «la pérdida de una secuencia es el promedio de las pérdidas de cada paso». <b>Ojo:</b> aquí o<sub>t</sub> es la <em>salida</em> del paso t; en la sección de LSTM, o<sub>t</sub> será la output gate. Para entrenar necesitamos ∂L/∂w<sub>h</sub>, y la dificultad es que w<sub>h</sub> afecta a <strong>muchos estados futuros</strong>, no solo al actual.</p>
+
+<div class="formula">
+  <div class="f-head">Recursión del gradiente del estado</div>
+  <div class="f-ejemplo">RNN lineal h<sub>t</sub> = w<sub>h</sub>h<sub>t−1</sub> + x<sub>t</sub>, w<sub>h</sub> = 0.5, h₀ = 0, x = (1, 1, 1): h₁ = 1, h₂ = 1.5.  ∂h₁/∂w<sub>h</sub> = h₀ = 0;  ∂h₂/∂w<sub>h</sub> = h₁ + w<sub>h</sub>·0 = 1;  ∂h₃/∂w<sub>h</sub> = h₂ + w<sub>h</sub>·1 = 1.5 + 0.5 = 2.  (Directo: h₃ = w<sub>h</sub>² + w<sub>h</sub> + 1 ⇒ derivada 2w<sub>h</sub> + 1 = 2.)</div>
+  <div class="eq">
+    <span class="frac"><span class="num">∂<span class="r-calc">h</span><sub>t</sub></span><span class="den">∂<span class="r-param">w</span><sub class="r-param">h</sub></span></span> = <span class="frac"><span class="num">∂f(x<sub>t</sub>, h<sub>t−1</sub>, w<sub>h</sub>)</span><span class="den">∂<span class="r-param">w</span><sub class="r-param">h</sub></span></span> + <span class="frac"><span class="num">∂f(x<sub>t</sub>, h<sub>t−1</sub>, w<sub>h</sub>)</span><span class="den">∂<span class="r-calc">h</span><sub>t−1</sub></span></span> · <span class="frac"><span class="num">∂<span class="r-calc">h</span><sub>t−1</sub></span><span class="den">∂<span class="r-param">w</span><sub class="r-param">h</sub></span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cuánto cambia el estado de hoy si muevo w<sub>h</sub> es: el efecto directo de w<sub>h</sub> en el paso de hoy, más el efecto heredado: cuánto cambió el estado de ayer, multiplicado por cuánto pasa de ayer a hoy.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-param">w<sub>h</sub></dt><dd>Los pesos de la recurrencia (en escalar, un número; en general, W<sub>hh</sub>). Los mismos en todos los pasos.</dd>
+      <dt>∂f/∂w<sub>h</sub></dt><dd>Efecto directo: cuánto cambia este paso si muevo w<sub>h</sub> con h<sub>t−1</sub> congelado.</dd>
+      <dt>∂f/∂h<sub>t−1</sub></dt><dd>El «factor de paso»: cuánto se transmite un cambio del estado de ayer al de hoy. En la RNN simple vale w<sub>h</sub>·tanh′(a<sub>t</sub>).</dd>
+      <dt>∂h<sub>t−1</sub>/∂w<sub>h</sub></dt><dd>Lo mismo que estamos calculando, un paso antes. Por eso es una <strong>recursión</strong>.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…desarrollas la recursión: el término heredado contiene el factor de paso de hoy, por el de ayer, por el de anteayer… El efecto de w<sub>h</sub> en el paso k llega al paso t multiplicado por t − k factores.</li>
+      <li>…los factores de paso son menores que 1: los efectos lejanos se pierden. Si son mayores que 1, los lejanos dominan y explotan.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="producto-tiempo">El producto a través del tiempo</h3>
+<p>Para ver el producto sin distracciones, pregunta cuánto afecta el estado del paso k al del paso T. En la RNN escalar, sin sesgo:</p>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">a<sub>t</sub> = w<sub>h</sub>h<sub>t−1</sub> + w<sub>x</sub>x<sub>t</sub>,   h<sub>t</sub> = tanh(a<sub>t</sub>)</div><div class="d-por">La RNN simple en una dimensión: a<sub>t</sub> es la pre-activación.</div></li>
+  <li><div class="d-ex">∂h<sub>t</sub>/∂h<sub>t−1</sub> = tanh′(a<sub>t</sub>) · w<sub>h</sub></div><div class="d-por"><b>Regla de la cadena</b> (<a href="00_matematicas.html#regla-cadena">artefacto 00</a>): la derivada de tanh(a<sub>t</sub>) respecto a h<sub>t−1</sub> es tanh′(a<sub>t</sub>) por la derivada de a<sub>t</sub> respecto a h<sub>t−1</sub>, que es w<sub>h</sub>.</div></li>
+  <li><div class="d-ex">∂h<sub>T</sub>/∂h<sub>k</sub> = (∂h<sub>T</sub>/∂h<sub>T−1</sub>) · (∂h<sub>T−1</sub>/∂h<sub>T−2</sub>) ⋯ (∂h<sub>k+1</sub>/∂h<sub>k</sub>)</div><div class="d-por"><b>Regla de la cadena en varios eslabones:</b> para ir de h<sub>k</sub> a h<sub>T</sub> hay que pasar por todos los estados intermedios, y cada eslabón multiplica.</div></li>
+  <li><div class="d-ex">∂h<sub>T</sub>/∂h<sub>k</sub> = Π<sub>t=k+1</sub><sup>T</sup> w<sub>h</sub> · tanh′(a<sub>t</sub>)</div><div class="d-por"><b>Sustituir</b> cada eslabón por el resultado del paso 2. Son T − k factores.</div></li>
+  <li><div class="d-ex">si cada factor ≈ r:   ∂h<sub>T</sub>/∂h<sub>k</sub> ≈ r<sup>T−k</sup></div><div class="d-por"><b>Producto de factores iguales = potencia.</b> Todo depende de si r está por debajo o por arriba de 1.</div></li>
+  <li><div class="d-ex">0.9<sup>100</sup> = 0.0000266 ≈ 0.00003   ·   1.1<sup>100</sup> = 13 780.6</div><div class="d-por"><b>Verificación con números</b> (los de la slide): una diferencia de apenas 0.2 en el factor separa un gradiente que <strong>desaparece</strong> (vanishing) de uno que <strong>explota</strong> (exploding), por un factor de 500 millones.</div></li>
+</ol>
+
+<p>Es el mismo fenómeno de la <a href="04_entrenamiento2.html#gradientes-que-se-apagan">clase 4</a>: allí el error se multiplicaba por Ωᵀ y a′ en cada <em>capa</em>; aquí se multiplica por <span class="sym" data-s="Whh">W<sub>hh</sub></span> y tanh′ en cada <em>paso</em>. Dos diferencias lo empeoran: la «profundidad» de una RNN es la longitud de la secuencia (cientos o miles de pasos), y como la matriz es la <strong>misma</strong> en todos los pasos, no se compensan factores grandes con chicos: se repite el mismo una y otra vez. Con vectores, lo que juega el papel de r es (aproximadamente) qué tanto estira W<sub>hh</sub> los vectores en su dirección de mayor estiramiento. La consecuencia práctica: con gradientes que se apagan, la red no aprende <strong>dependencias largas</strong> (que el sujeto del inicio de un párrafo concuerde con un verbo 50 palabras después), porque la señal del error nunca llega tan atrás.</p>
+
+<h3 id="truncado">BPTT completo, truncado y aleatorio</h3>
+<div class="scroll"><table class="tbl">
+  <tr><th>Opción</th><th>Qué hace</th><th>Gana</th><th>Pierde</th></tr>
+  <tr><td><b>BPTT completo</b></td><td>Retropropaga por toda la secuencia, 1…T.</td><td>El gradiente exacto.</td><td>Costoso en memoria y cómputo; productos larguísimos e inestables.</td></tr>
+  <tr><td><b>BPTT truncado</b></td><td>Retropropaga solo los últimos <span class="sym" data-s="tau">τ</span> pasos.</td><td>Menos memoria, menos cómputo, productos más cortos. Es el más usado en la práctica.</td><td>Es una <em>aproximación</em>: los términos de más de τ pasos se descartan, así que el modelo aprende menos directamente las dependencias largas.</td></tr>
+  <tr><td><b>Truncamiento aleatorio</b></td><td>Usa longitudes aleatorias.</td><td>Puede dar estimadores insesgados bajo ciertas condiciones.</td><td>Menos común en las implementaciones estándar.</td></tr>
+</table></div>
+<p>Un detalle importante del truncado: el <em>forward</em> sigue pasando el estado de una ventana a la siguiente, así que h<sub>t</sub> puede seguir conteniendo información vieja. Lo que se corta es el camino del <em>gradiente</em>: el error no puede «corregir» lo que pasó hace más de τ pasos.</p>
+
+<h3 id="lab-producto" class="lab" data-toc="Lab: producto a través del tiempo">Laboratorio: el producto a través del tiempo</h3>
+<p>La gráfica muestra log₁₀|∂h<sub>T</sub>/∂h<sub>k</sub>| contra la distancia T − k, con T = 100. Un valor de −5 significa que el estado de hace esa distancia influye 0.00001 veces; uno de +4, 10 000 veces. En el modo «factor constante» cada eslabón vale r. En el modo «RNN con tanh» los factores son los verdaderos, w<sub>h</sub>·tanh′(a<sub>t</sub>), de una RNN escalar con 100 inputs aleatorios (con semilla). La zona sombreada es lo que BPTT truncado con τ descarta. <strong>Empieza</strong> con r = 0.9, luego pon r = 1.1.</p>
+<div class="widget" id="labBptt">
+  <div class="widget-head"><div class="wt">¿Cuánto llega el gradiente a pasos lejanos?</div><div class="ws">Eje vertical: log₁₀|∂h<sub>T</sub>/∂h<sub>k</sub>|. Línea punteada: 0, es decir, factor 1. d = T − k.</div></div>
+  <div class="widget-body">
+    <div id="bpSel"></div>
+    <div class="lab-grid">
+      <canvas id="bpCanvas"></canvas>
+      <div><div id="bpCtrl"></div><div id="bpRead"></div><div class="status info" id="bpStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Factor constante r = 0.9: la recta baja hasta log₁₀ = −4.58 en distancia 100 (0.9¹⁰⁰ = 0.0000266). Con r = 1.1 sube hasta +4.14 (13 780.6). Con r = 1 es plana: el único caso «sano» es un filo de navaja.</li>
+    <li>Pasa al modo «RNN con tanh» con w<sub>x</sub> = 1 y w<sub>h</sub> = 1.1: aunque w<sub>h</sub> &gt; 1, el gradiente <em>se apaga</em>. tanh′ ≤ 1, y con inputs grandes el estado se satura y tanh′ es chico. En una dimensión, la saturación casi siempre gana.</li>
+    <li>Con w<sub>x</sub> = 0.1 (inputs chicos, el estado vive en la zona lineal de tanh) y w<sub>h</sub> = 1.1, el producto se mantiene mucho más alto: los factores se acercan a w<sub>h</sub>. Sube w<sub>h</sub> a 2 y vuelve a caer, porque el estado se satura. La explosión en RNNs reales aparece con matrices W<sub>hh</sub> que estiran mucho en alguna dirección; el modo «factor constante» la muestra en estado puro.</li>
+    <li>Mueve τ: la zona sombreada es la que BPTT truncado ni siquiera calcula. Con r = 0.9 y τ = 20 casi no se pierde nada que importara (0.9²⁰ = 0.12); con r = 1 se pierde información real.</li>
+  </ol>
+</div>
+
+<!-- ============ 9. CLIPPING ============ -->
+<h2 id="clipping"><span class="num">Sección 9</span>Gradient clipping</h2>
+
+<p>Los gradientes que explotan producen actualizaciones enormes: un solo mini-batch con un gradiente de norma 10 000 puede mandar los parámetros a una zona absurda y arruinar horas de entrenamiento (en la Tarea 7 lo verías como una pérdida que de pronto salta o se vuelve NaN). La solución de la slide es directa: si el gradiente es demasiado largo, <strong>recórtalo</strong> (gradient clipping) a una longitud máxima, sin cambiarle la dirección.</p>
+
+<div class="formula">
+  <div class="f-head">Recorte del gradiente por norma</div>
+  <div class="f-ejemplo">g = (6, 8),  θ = 4:  ‖g‖ = √(36 + 64) = 10  →  factor = min(1, 4/10) = 0.4  →  g ← (2.4, 3.2), con ‖g‖ = 4.   Si g = (1, 2): ‖g‖ = 2.24 &lt; 4, factor 1, no cambia.</div>
+  <div class="eq">
+    <span class="sym" data-s="gt">g</span> <span class="sym" data-s="asigna"></span> min( 1, <span class="frac"><span class="num"><span class="sym" data-s="thetaclip">θ</span></span><span class="den"><span class="sym" data-s="norma">‖g‖</span></span></span> ) · <span class="r-calc">g</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Si la norma del gradiente es menor que theta, déjalo como está. Si es mayor, multiplícalo por theta entre su norma, para que quede con longitud exactamente theta.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">g</dt><dd>El gradiente de todos los parámetros, puesto como un solo vector largo.</dd>
+      <dt class="r-calc">‖g‖</dt><dd>Su norma: la longitud del vector, √(Σ g<sub>j</sub>²) (<a href="00_matematicas.html#vectores">normas, artefacto 00</a>).</dd>
+      <dt class="r-hiper">θ</dt><dd>El umbral de clipping. Lo eliges tú (valores típicos: 1 o 5). <b>No es la θ de pesos de la capa oculta</b> de las clases 1 a 3; la slide reutiliza la letra.</dd>
+      <dt>min(1, θ/‖g‖)</dt><dd>El factor de escala: 1 si el gradiente ya es corto, menor que 1 si es largo. Nunca agranda.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…‖g‖ ≤ θ: el factor es 1 y el gradiente no cambia. El clipping solo actúa sobre los gradientes grandes.</li>
+      <li>…θ es muy chico: casi todos los gradientes se recortan y el entrenamiento se vuelve lento (todos los pasos tienen la misma longitud θ).</li>
+      <li>…θ es enorme: nunca se recorta nada y es como no usarlo.</li>
+      <li>…recortas: la dirección es la misma (multiplicar un vector por un número positivo no lo gira). Esto garantiza ‖g‖ ≤ θ.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Trampa común: «el clipping arregla los gradientes»</span>
+  <p>El clipping arregla <strong>solo la explosión</strong>: evita actualizaciones enormes, conserva la dirección y hace más estable el entrenamiento de RNNs. Pero <strong>no resuelve el desvanecimiento</strong>: si el gradiente es diminuto (‖g‖ &lt; θ), el factor es 1 y nada cambia. Tampoco garantiza encontrar el mínimo global. La slide lo resume: es una heurística muy útil. Para el vanishing hace falta cambiar la arquitectura (LSTM, GRU).</p>
+</div>
+
+<h3 id="lab-clipping" class="lab" data-toc="Lab: recortar sin girar">Laboratorio: recortar sin girar</h3>
+<p>Arriba, un gradiente en dos dimensiones: haz clic o arrastra en la gráfica para moverlo. El círculo tiene radio θ. La flecha gris es g; la naranja, el gradiente recortado. Abajo, la norma del gradiente durante 200 pasos de un entrenamiento <em>sintético</em> (con semilla): en los primeros 120 hay picos explosivos ocasionales; desde el paso 120 la norma se desvanece. <strong>Empieza</strong> con g = (6, 8) y θ = 4.</p>
+<div class="widget" id="labClip">
+  <div class="widget-head"><div class="wt">La dirección se conserva; solo cambia la longitud</div><div class="ws">Abajo: gris, norma original; naranja, norma tras el recorte (escala log₁₀).</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="clCanvas"></canvas>
+      <div><div id="clCtrl"></div><div id="clRead"></div></div>
+    </div>
+    <canvas id="clSerie" style="margin-top:12px"></canvas>
+    <div class="status info" id="clStatus"></div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>Con g = (6, 8) y θ = 4, la flecha naranja queda en (2.4, 3.2): misma dirección (53.1° en ambas), longitud 4. Lleva g dentro del círculo: el factor se vuelve 1 y las flechas coinciden.</li>
+    <li>En la serie de abajo, los picos de la primera parte (normas de cientos) se aplanan a θ. Eso es lo que evita que un mal mini-batch arruine el entrenamiento.</li>
+    <li>Desde el paso 120 la norma cae sin parar, hasta cerca de 10⁻⁵, y las dos curvas son la misma: el clipping no hace nada contra el desvanecimiento.</li>
+    <li>Baja θ a 0.5: se recortan 122 de los 200 pasos, casi todos los de la primera parte. El entrenamiento sería estable pero lento.</li>
+  </ol>
+</div>
+
+<!-- ============ 10. LSTM ============ -->
+<h2 id="lstm"><span class="num">Sección 10</span>Long Short-Term Memory (LSTM)</h2>
+
+<p>Las RNNs simples tienen dificultades con dependencias largas: el producto de la sección 8 se apaga. La LSTM (Hochreiter y Schmidhuber, 1997) agrega una <strong>célula de memoria</strong> y varias <strong>compuertas</strong> (gates) que controlan qué información mantener, qué borrar, qué escribir y qué parte de la memoria mostrar como output. La slide insiste: la idea no es «resolver mágicamente» todos los problemas de gradientes, sino facilitar que cierta información se mantenga estable durante muchos pasos.</p>
+
+<p>Cada paso mantiene dos vectores:</p>
+<ul>
+  <li><b>cell state</b> <span class="sym" data-s="ct">c<sub>t</sub></span>: la memoria interna de la célula, el «cuaderno» donde se guarda lo importante;</li>
+  <li><b>hidden state</b> <span class="r-calc">h</span><sub>t</sub>: lo que la célula expone hacia la siguiente capa o la salida.</li>
+</ul>
+<p>Una compuerta es un vector con valores entre 0 y 1 (sale de una <span class="sym" data-s="sigmoide">sigmoide</span>) que se multiplica <em>elemento a elemento</em> por otro vector. Un 0 bloquea esa entrada; un 1 la deja pasar completa; 0.3 deja pasar el 30%. Piensa en una oficina de archivo: cada noche alguien decide qué expedientes conservar (forget), qué expedientes nuevos archivar (input) y cuáles sacar al escritorio para el trabajo de hoy (output).</p>
+
+<div class="formula">
+  <div class="f-head">Las compuertas de una LSTM</div>
+  <div class="f-ejemplo">forget gate escalar: x<sub>t</sub> = 1, h<sub>t−1</sub> = 0.5, W<sub>xf</sub> = 2, W<sub>hf</sub> = 1, b<sub>f</sub> = 0  →  f<sub>t</sub> = σ(1·2 + 0.5·1 + 0) = σ(2.5) = 0.924: conserva el 92% de la memoria</div>
+  <div class="eq">
+    <span class="sym" data-s="ft">f<sub>t</sub></span> = <span class="sym" data-s="sigmoide">σ</span>( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xf</sub> + <span class="r-calc">h</span><sub>t−1</sub><span class="r-param">W</span><sub class="r-param">hf</sub> + <span class="r-param">b</span><sub class="r-param">f</sub> )<span class="lbl">forget gate</span><br>
+    <span class="sym" data-s="it">i<sub>t</sub></span> = σ( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xi</sub> + <span class="r-calc">h</span><sub>t−1</sub><span class="r-param">W</span><sub class="r-param">hi</sub> + <span class="r-param">b</span><sub class="r-param">i</sub> )<span class="lbl">input gate</span><br>
+    <span class="sym" data-s="ctilde">c̃<sub>t</sub></span> = <span class="sym" data-s="tanh">tanh</span>( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xc</sub> + <span class="r-calc">h</span><sub>t−1</sub><span class="r-param">W</span><sub class="r-param">hc</sub> + <span class="r-param">b</span><sub class="r-param">c</sub> )<span class="lbl">candidato de memoria</span><br>
+    <span class="sym" data-s="ot">o<sub>t</sub></span> = σ( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xo</sub> + <span class="r-calc">h</span><sub>t−1</sub><span class="r-param">W</span><sub class="r-param">ho</sub> + <span class="r-param">b</span><sub class="r-param">o</sub> )<span class="lbl">output gate</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Las cuatro piezas se calculan igual que el estado de una RNN simple, cada una con sus propios pesos: mirando el input de ahora y el estado de antes. Tres pasan por sigmoide y quedan entre 0 y 1 (son compuertas); el candidato pasa por tanh y queda entre −1 y 1 (es contenido).»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">f<sub>t</sub></dt><dd>Forget gate: qué fracción de la memoria anterior se <b>conserva</b> (1 = conservar todo; a pesar del nombre, «olvidar» es f ≈ 0).</dd>
+      <dt class="r-calc">i<sub>t</sub></dt><dd>Input gate: qué fracción del candidato se <b>escribe</b> en la memoria.</dd>
+      <dt class="r-calc">c̃<sub>t</sub></dt><dd>Candidato de memoria: el contenido nuevo propuesto, entre −1 y 1.</dd>
+      <dt class="r-calc">o<sub>t</sub></dt><dd>Output gate: qué parte de la memoria se <b>muestra</b> en h<sub>t</sub>. Es una o distinta de la salida o<sub>t</sub> de la sección 8.</dd>
+      <dt class="r-param">W<sub>x·</sub>, W<sub>h·</sub>, b<sub>·</sub></dt><dd>Cuatro juegos de pesos, uno por pieza. Por eso una LSTM tiene unas 4 veces los parámetros de una RNN simple del mismo tamaño.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…b<sub>f</sub> es grande y positivo: f<sub>t</sub> ≈ 1 casi siempre y la célula tiende a conservar. (Por eso muchas implementaciones inicializan ese sesgo en 1.)</li>
+      <li>…una compuerta se satura en 0 o en 1: actúa como interruptor apagado o prendido para esa entrada del vector.</li>
+    </ul>
+  </div>
+</div>
+
+<figure class="fig"><img src="../images/gates.png" alt="Diagrama de la slide: compuertas de la LSTM" loading="lazy" style="max-width:560px"><figcaption>La figura de la slide: las tres compuertas y el candidato salen de x<sub>t</sub> y h<sub>t−1</sub>.</figcaption></figure>
+
+<h3 id="memoria-lstm">Actualizar la memoria y exponerla</h3>
+<p>Con c<sub>t−1</sub> = 2, f<sub>t</sub> = 0.9, i<sub>t</sub> = 0.1 y c̃<sub>t</sub> = −1, la célula conserva 0.9·2 = 1.8 de lo que tenía y escribe 0.1·(−1) = −0.1 de lo nuevo: c<sub>t</sub> = 1.7.</p>
+
+<div class="formula">
+  <div class="f-head">Actualización de la célula de memoria</div>
+  <div class="f-ejemplo">c<sub>t−1</sub> = 2,  f<sub>t</sub> = 0.9,  i<sub>t</sub> = 0.1,  c̃<sub>t</sub> = −1  →  c<sub>t</sub> = 0.9·2 + 0.1·(−1) = 1.8 − 0.1 = 1.7</div>
+  <div class="eq">
+    <span class="r-calc">c</span><sub>t</sub> = <span class="r-calc">f</span><sub>t</sub> <span class="sym" data-s="hadamard"></span> <span class="r-calc">c</span><sub>t−1</sub> + <span class="r-calc">i</span><sub>t</sub> ⊙ <span class="r-calc">c̃</span><sub>t</sub>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La memoria nueva es lo que decido conservar de la vieja, más lo que decido escribir del candidato.» Fíjate: es una <strong>suma</strong>, no una multiplicación por una matriz.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt>⊙</dt><dd>Producto elemento a elemento: la entrada j de f<sub>t</sub> multiplica a la entrada j de c<sub>t−1</sub>. Cada «casilla» de la memoria tiene su propia compuerta.</dd>
+      <dt class="r-calc">f<sub>t</sub> ⊙ c<sub>t−1</sub></dt><dd>La parte de la memoria anterior que sobrevive.</dd>
+      <dt class="r-calc">i<sub>t</sub> ⊙ c̃<sub>t</sub></dt><dd>La información nueva que entra.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…f<sub>t</sub> ≈ 1 e i<sub>t</sub> ≈ 0: c<sub>t</sub> ≈ c<sub>t−1</sub>. La memoria permanece casi constante, paso tras paso.</li>
+      <li>…f<sub>t</sub> ≈ 0 e i<sub>t</sub> ≈ 1: se borra todo y se reemplaza por el candidato (como una RNN sin memoria).</li>
+      <li>…f<sub>t</sub> ≈ 0 e i<sub>t</sub> ≈ 0: la memoria se vacía (c<sub>t</sub> ≈ 0).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Hidden state de la LSTM</div>
+  <div class="f-ejemplo">c<sub>t</sub> = 1.7,  o<sub>t</sub> = 0.5  →  h<sub>t</sub> = 0.5 · tanh(1.7) = 0.5 · 0.935 = 0.468</div>
+  <div class="eq">
+    <span class="r-calc">h</span><sub>t</sub> = <span class="r-calc">o</span><sub>t</sub> ⊙ tanh(<span class="r-calc">c</span><sub>t</sub>)
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Lo que la célula muestra es su memoria, aplastada entre −1 y 1 por tanh, y filtrada por la output gate.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">o<sub>t</sub></dt><dd>Decide qué parte de la memoria se expone ahora.</dd>
+      <dt>tanh(c<sub>t</sub>)</dt><dd>La memoria en escala de −1 a 1. La memoria misma (c<sub>t</sub>) no está acotada.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…o<sub>t</sub> ≈ 0: la célula guarda la información pero no la usa en este paso. Así una LSTM puede <em>mantener</em> algo en c<sub>t</sub>, <em>decidir cuándo usarlo</em> en h<sub>t</sub> e <em>ignorar</em> lo irrelevante para el output actual.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="por-que-lstm">Por qué la memoria aditiva ayuda al gradiente</h3>
+<p>Repite la pregunta de la sección 8 para la célula: ¿cuánto afecta c<sub>k</sub> a c<sub>T</sub>? Por el camino directo de la suma, ∂c<sub>t</sub>/∂c<sub>t−1</sub> = f<sub>t</sub>. No aparece <span class="sym" data-s="Whh">W<sub>hh</sub></span> ni tanh′: solo la compuerta. Entonces</p>
+<div class="eq">∂<span class="r-calc">c</span><sub>T</sub>/∂<span class="r-calc">c</span><sub>k</sub> = f<sub>k+1</sub> · f<sub>k+2</sub> ⋯ f<sub>T</sub>   (por el camino directo)<span class="lbl">el factor de paso es la forget gate</span></div>
+<p>En palabras: «el gradiente viaja hacia atrás por la célula multiplicándose solo por las forget gates». Con f = 0.99 durante 100 pasos queda 0.99¹⁰⁰ = 0.366: más de un tercio de la señal llega. En la RNN simple, con factores de 0.9, llegaba 0.0000266. Y la red <strong>aprende</strong> cuándo poner f ≈ 1 (recordar) y cuándo f ≈ 0 (olvidar a propósito), en vez de quedar a merced de una sola matriz W<sub>hh</sub> repetida. Es el mismo truco que las <a href="06_cnn.html#arquitecturas">conexiones residuales</a> h<sub>k+1</sub> = h<sub>k</sub> + F(h<sub>k</sub>) de la clase de CNN: un camino por el que la señal pasa sumando, no multiplicando por una matriz.</p>
+<div class="note fix">
+  <span class="tag">Matiz</span>
+  <p>Es el camino <em>directo</em>. Las compuertas también dependen de h<sub>t−1</sub>, así que hay otros caminos que sí pasan por matrices y tanh′. La LSTM no elimina el desvanecimiento; abre una vía por la que puede no ocurrir si las compuertas lo permiten.</p>
+</div>
+
+<figure class="fig"><img src="../images/lstmMC.png" alt="Diagrama de la slide: célula de memoria de la LSTM" loading="lazy" style="max-width:560px"><figcaption>La figura de la slide: la línea horizontal de arriba es la célula c<sub>t</sub>, el «camino rápido» de la memoria.</figcaption></figure>
+
+<!-- ============ 11. GRU ============ -->
+<h2 id="gru"><span class="num">Sección 11</span>Gated Recurrent Units (GRU)</h2>
+
+<p>La GRU (Cho et al., 2014) también usa compuertas, pero es más simple: no mantiene una célula separada; actualiza directamente el hidden state. Tiene dos compuertas en vez de tres. Primero el caso: con <span class="sym" data-s="zt">z<sub>t</sub></span> = 0.25, h<sub>t−1</sub> = 1 y candidato <span class="sym" data-s="htilde">h̃<sub>t</sub></span> = 0.2, el nuevo estado es 0.25·1 + 0.75·0.2 = 0.4: conserva un cuarto del estado viejo y toma tres cuartos del candidato.</p>
+
+<div class="formula">
+  <div class="f-head">Compuertas y actualización de una GRU</div>
+  <div class="f-ejemplo">z<sub>t</sub> = 0.25,  h<sub>t−1</sub> = 1,  h̃<sub>t</sub> = 0.2  →  h<sub>t</sub> = 0.25·1 + (1 − 0.25)·0.2 = 0.25 + 0.15 = 0.4</div>
+  <div class="eq">
+    <span class="sym" data-s="rt">r<sub>t</sub></span> = σ( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xr</sub> + <span class="r-calc">h</span><sub>t−1</sub><span class="r-param">W</span><sub class="r-param">hr</sub> + <span class="r-param">b</span><sub class="r-param">r</sub> )<span class="lbl">reset gate</span><br>
+    <span class="r-calc">z</span><sub>t</sub> = σ( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xz</sub> + <span class="r-calc">h</span><sub>t−1</sub><span class="r-param">W</span><sub class="r-param">hz</sub> + <span class="r-param">b</span><sub class="r-param">z</sub> )<span class="lbl">update gate</span><br>
+    <span class="r-calc">h̃</span><sub>t</sub> = tanh( <span class="r-dato">x</span><sub>t</sub><span class="sym" data-s="Wxh">W<sub>xh</sub></span> + (<span class="r-calc">r</span><sub>t</sub> ⊙ <span class="r-calc">h</span><sub>t−1</sub>)<span class="sym" data-s="Whh">W<sub>hh</sub></span> + <span class="sym" data-s="bh">b<sub>h</sub></span> )<span class="lbl">candidato</span><br>
+    <span class="r-calc">h</span><sub>t</sub> = <span class="r-calc">z</span><sub>t</sub> ⊙ <span class="r-calc">h</span><sub>t−1</sub> + (1 − <span class="r-calc">z</span><sub>t</sub>) ⊙ <span class="r-calc">h̃</span><sub>t</sub><span class="lbl">estado actualizado</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La reset gate decide cuánto del estado anterior usa el candidato. La update gate decide la mezcla final: z de lo viejo y 1 − z de lo nuevo.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">r<sub>t</sub></dt><dd>Reset gate: filtra h<sub>t−1</sub> <em>antes</em> de proponer el candidato.</dd>
+      <dt class="r-calc">z<sub>t</sub></dt><dd>Update gate: qué fracción del estado viejo se conserva. Hace a la vez el trabajo de la forget y de la input gate de la LSTM, porque las dos fracciones suman 1. (Esta z es una compuerta, no la «entrada de la activación» z de clases anteriores.)</dd>
+      <dt class="r-calc">h̃<sub>t</sub></dt><dd>El estado candidato, entre −1 y 1.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…r<sub>t</sub> ≈ 0: el candidato ignora gran parte del estado anterior (empieza «de cero» con el input actual). Con r<sub>t</sub> ≈ 1, usa más información pasada.</li>
+      <li>…z<sub>t</sub> ≈ 1: h<sub>t</sub> ≈ h<sub>t−1</sub>; el modelo conserva el estado. Es el análogo de <span class="sym" data-s="ft">f<sub>t</sub></span> ≈ 1, <span class="sym" data-s="it">i<sub>t</sub></span> ≈ 0 en la LSTM, y abre el mismo camino aditivo para el gradiente (∂h<sub>t</sub>/∂h<sub>t−1</sub> ≈ z<sub>t</sub> por el camino directo).</li>
+      <li>…z<sub>t</sub> ≈ 0: el modelo reemplaza el estado por el candidato nuevo.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Cuidado con la convención de z</span>
+  <p>Este artefacto sigue la slide (y PyTorch): <b>z ≈ 1 conserva</b>. Algunos libros y blogs escriben h<sub>t</sub> = (1 − z<sub>t</sub>) ⊙ h<sub>t−1</sub> + z<sub>t</sub> ⊙ h̃<sub>t</sub>, donde z ≈ 1 <em>reemplaza</em>. Las dos son la misma arquitectura con la compuerta al revés. En el examen, mira la fórmula del formulario antes de responder qué valor de z conserva.</p>
+</div>
+
+<figure class="fig"><img src="../images/GRU.png" alt="Diagrama de la slide: GRU" loading="lazy" style="max-width:520px"><figcaption>La figura de la slide: la GRU no tiene una línea de célula separada.</figcaption></figure>
+
+<h3 id="comparar-celdas">RNN, LSTM y GRU frente a frente</h3>
+<p>Cada pieza con pesos propios (una compuerta o un candidato) necesita su propio juego d·h + h·h + h. Con input d = 3 y estado h = 4 (32 parámetros por juego, como antes):</p>
+<div class="scroll"><table class="tbl">
+  <tr><th>Célula</th><th>Piezas con pesos</th><th class="num-c">Parámetros de la recurrencia</th><th>Memoria</th></tr>
+  <tr><td>RNN simple</td><td>1 (el estado)</td><td class="num-c">1 × 32 = 32</td><td>Solo h<sub>t</sub>, con un producto por W<sub>hh</sub> en cada paso.</td></tr>
+  <tr><td>GRU</td><td>3 (r, z, candidato)</td><td class="num-c">3 × 32 = 96</td><td>h<sub>t</sub> con mezcla aditiva controlada por z.</td></tr>
+  <tr><td>LSTM</td><td>4 (f, i, o, candidato)</td><td class="num-c">4 × 32 = 128</td><td>c<sub>t</sub> separado (aditivo) y h<sub>t</sub> expuesto.</td></tr>
+</table></div>
+<p>La slide es cuidadosa: la GRU tiene menos compuertas, suele tener menos parámetros y puede ser más rápida, pero <strong>su desempeño relativo depende de la tarea y los datos</strong>. No hay una ley universal de «GRU siempre igual a LSTM pero más rápida». Por eso la Tarea 7 compara las tres con los mismos datos, semilla e hiperparámetros: es un experimento, no algo que se sepa de antemano.</p>
+<details><summary>Para profundizar: el conteo de PyTorch</summary><div class="dbody"><p>PyTorch guarda dos vectores de sesgo por pieza (uno para la parte del input y otro para la del estado), así que su conteo trae h parámetros de más por pieza. Si en la Tarea 7 cuentas con <code>sum(p.numel() for p in model.parameters())</code>, verás 4·(d·h + h·h + 2h) para una LSTM. La fórmula de la slide, con un solo sesgo, es la que usa el examen.</p></div></details>
+
+<h3 id="lab-compuertas" class="lab" data-toc="Lab: compuertas y memoria">Laboratorio: compuertas y memoria</h3>
+<p>Una tarea de memoria: en t = 1 se escribe el valor 1 en la memoria; después llegan 59 pasos de candidatos distractores (números al azar entre −1 y 1, con semilla). Aquí fijamos las compuertas a mano para ver su efecto puro; en una red de verdad se calculan en cada paso a partir de x<sub>t</sub> y h<sub>t−1</sub>. La línea morada es la memoria (c<sub>t</sub> en la LSTM, h<sub>t</sub> en la GRU y la RNN); la punteada naranja, cuánto queda del valor escrito en t = 1, que es también lo que llega del gradiente por el camino directo. <strong>Empieza</strong> con la LSTM, f = 0.95 e i = 0.1.</p>
+<div class="widget" id="labGate">
+  <div class="widget-head"><div class="wt">¿Sobrevive el valor escrito en t = 1?</div><div class="ws">Para la RNN simple, la punteada es el producto real de factores w<sub>h</sub>·tanh′.</div></div>
+  <div class="widget-body">
+    <div id="gaSel"></div>
+    <div class="lab-grid">
+      <canvas id="gaCanvas"></canvas>
+      <div><div id="gaCtrl"></div><div id="gaRead"></div><div class="status info" id="gaStatus"></div></div>
+    </div>
+  </div>
+</div>
+<div class="note good">
+  <span class="tag">Qué observar</span>
+  <ol>
+    <li>LSTM con f = 0.95: del valor escrito queda 0.95⁵⁹ = 0.048 en t = 60. Sube f a 0.99 y queda 0.553: más de la mitad del recuerdo cruza 59 pasos.</li>
+    <li>Pon i = 0 con f = 0.99: la memoria es exactamente 0.99<sup>t−1</sup>, una curva limpia. Ningún distractor entra. Con i = 1 y f = 0.5, la memoria es casi puro ruido reciente.</li>
+    <li>La output gate o no cambia la memoria, solo cuánto de ella se ve en h<sub>t</sub> (mira la lectura h₆₀).</li>
+    <li>GRU con z = 0.99: el mismo comportamiento con una sola compuerta (z⁵⁹ = 0.553). Pero ahora conservar y escribir no son independientes: lo que no se conserva (1 − z) se llena con el candidato.</li>
+    <li>RNN simple con w<sub>h</sub> = 0.9: el recuerdo se pierde en pocos pasos (la punteada cae a ~10⁻¹⁵ en t = 60); prueba cualquier w<sub>h</sub> y no lograrás que el valor de t = 1 se mantenga y a la vez el estado siga respondiendo a los inputs.</li>
+  </ol>
+</div>
+
+<!-- ============ 12. BIDIRECCIONAL ============ -->
+<h2 id="bidireccional"><span class="num">Sección 12</span>RNNs bidireccionales</h2>
+
+<p>Hasta ahora el estado en t solo usa el contexto anterior, x₁, …, x<sub>t−1</sub>. Tiene sentido si estás <em>generando</em> el siguiente token. Pero muchas veces ya tienes toda la secuencia y quieres usar contexto de ambos lados: en «el banco aprobó el crédito» vs «el banco del parque», la palabra «banco» se entiende por lo que viene <em>después</em>. Una <strong>RNN bidireccional</strong> combina dos RNNs: una lee de izquierda a derecha y otra de derecha a izquierda, cada una con sus propios pesos.</p>
+
+<div class="eq">
+  <span class="r-calc">h<sup>→</sup></span><sub>t</sub> = φ( <span class="r-dato">x</span><sub>t</sub><span class="sym" data-s="Wxh">W<sub>xh</sub></span><sup class="r-param">(f)</sup> + <span class="r-calc">h<sup>→</sup></span><sub>t−1</sub><span class="sym" data-s="Whh">W<sub>hh</sub></span><sup class="r-param">(f)</sup> + <span class="sym" data-s="bh">b<sub>h</sub></span><sup class="r-param">(f)</sup> )<br>
+  <span class="r-calc">h<sup>←</sup></span><sub>t</sub> = φ( <span class="r-dato">x</span><sub>t</sub><span class="r-param">W</span><sub class="r-param">xh</sub><sup class="r-param">(b)</sup> + <span class="r-calc">h<sup>←</sup></span><sub>t+1</sub><span class="r-param">W</span><sub class="r-param">hh</sub><sup class="r-param">(b)</sup> + <span class="r-param">b</span><sub class="r-param">h</sub><sup class="r-param">(b)</sup> )<br>
+  <span class="r-calc">h</span><sub>t</sub> = [ <span class="r-calc">h<sup>→</sup></span><sub>t</sub> ; <span class="r-calc">h<sup>←</sup></span><sub>t</sub> ]
+  <span class="lbl">(f) = forward, adelante · (b) = backward, atrás</span>
+</div>
+<p>En palabras: «el estado hacia adelante resume todo lo que vino antes de t; el estado hacia atrás (fíjate en el t + 1) resume todo lo que viene después; el estado final pega los dos vectores». Si cada dirección tiene 64 unidades, h<sub>t</sub> tiene 128. El superíndice (b) es de backward, no del sesgo b.</p>
+
+<div class="cmp">
+  <div class="col good"><h5>Sí: toda la secuencia está disponible</h5><div class="cb">
+    <ul>
+      <li>Etiquetar las palabras de una ley.</li>
+      <li>Clasificar un texto o un audio completo (leyes por tema, quejas por dependencia).</li>
+      <li>Completar palabras faltantes.</li>
+      <li>Reconocimiento de voz <em>offline</em>.</li>
+    </ul>
+  </div></div>
+  <div class="col bad"><h5>No: necesitas predecir lo que aún no ocurre</h5><div class="cb">
+    <ul>
+      <li>Predecir el siguiente token en tiempo real: P(x<sub>t+1</sub> | x₁, …, x<sub>t</sub>) no debe usar x<sub>t+2</sub>, x<sub>t+3</sub>, …</li>
+      <li>Generar texto (el futuro no existe todavía).</li>
+      <li>Pronosticar la demanda de la semana que viene.</li>
+    </ul>
+  </div></div>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>La Parte C castiga usar el futuro para predecir el futuro. Si un equipo propone una LSTM <em>bidireccional</em> para un pronóstico, el modelo de entrenamiento está viendo justo lo que quiere predecir: el error se verá espectacular en validación y el modelo no se puede usar en producción. Corrige a unidireccional (o ventana fija) y split por tiempo.</p>
+</div>
+
+<figure class="fig"><img src="../images/bidereccional.png" alt="Diagrama de la slide: RNN bidireccional" loading="lazy" style="max-width:520px"><figcaption>La figura de la slide: dos cadenas de estados, una en cada dirección, que se combinan en cada paso.</figcaption></figure>
+
+<!-- ============ 13. HOY ============ -->
+<h2 id="hoy"><span class="num">Sección 13</span>RNNs hoy y en política pública</h2>
+
+<p>Para muchas tareas modernas de lenguaje, los <strong>Transformers</strong> desplazaron a las RNNs por dos razones: permiten paralelizar mejor el entrenamiento (una RNN tiene que calcular h₁ antes de h₂, antes de h₃…; no puede procesar todos los pasos a la vez) y modelan dependencias largas mediante <a href="08_transformers.html#atencion">atención</a> (cada token mira directo a cualquier token anterior, sin pasar por 100 productos). Lo verás en el siguiente artefacto.</p>
+<p>Pero las ideas de esta clase siguen importando: estado oculto, procesamiento secuencial, BPTT, vanishing/exploding gradients, truncamiento, memoria y dependencia temporal. Y las RNNs siguen siendo útiles donde importan la <strong>inferencia online</strong>, la <strong>baja latencia</strong>, la <strong>memoria constante</strong> (un estado de tamaño fijo, sin importar cuánto texto ya pasó), las <strong>secuencias muy largas</strong> y los <strong>recursos limitados</strong>. Hay arquitecturas recientes que recuperan ideas recurrentes o de estado con diseños más escalables (RWKV, los state space models como S4, y Mamba). No las estudiamos aquí; la idea que dejan es que <strong>secuencias largas requieren mecanismos eficientes de memoria</strong>, y los Transformers no son el único camino.</p>
+
+<h3 id="politica">Secuencias en política pública</h3>
+<p>Todo lo de hoy aparece en el análisis de texto político y legal a escala: tokenización, vocabulario, secuencias, modelos de lenguaje, clasificación de documentos y diagnóstico de sobreajuste con pocos datos. Ejemplos de la slide: clasificación multi-etiqueta de leyes, predicción de votos desde texto legislativo, revisión automática de documentos legales y análisis de discursos o debates parlamentarios. Y no todo es texto: demanda de servicios públicos, trayectorias de pacientes, expedientes administrativos, llamadas de emergencia, movilidad urbana, series de crimen o empleo, monitoreo ambiental. En todos importa el orden temporal, y en todos aplica lo de la sección 3: split por tiempo y cuidado con el drift.</p>
+
+<h3 id="tarea7">Antes de correr la Tarea 7</h3>
+<p>La Tarea 7 compara RNN simple, LSTM y GRU (una capa, h = 256) con SGD con momentum y con Adam sobre todo el dataset, y repite con solo 2 000 ejemplos usando Adam, y reporta pérdida y perplejidad de train y validación. Siguiendo el protocolo del curso, escribe tu predicción <em>antes</em> de correr. Preguntas para guiarte, con lo que viste aquí:</p>
+<ul>
+  <li>¿Cuál de las tres células tiene un camino aditivo para el gradiente? ¿En qué esperas que eso se note: en la velocidad, en la perplejidad final o en la estabilidad?</li>
+  <li>¿Qué buscarías en la curva de pérdida para sospechar gradientes que explotan? ¿Qué te diría que la pérdida baje y luego salte?</li>
+  <li>¿Qué célula esperas que sea más lenta por época, considerando la tabla de parámetros?</li>
+  <li>Con 2 000 ejemplos, ¿qué esperas de la brecha entre la perplejidad de train y la de validación? Revisa el <a href="05_regularizacion.html#diagnostico">diagnóstico de la clase 5</a>.</li>
+  <li>¿Contra qué número compararías la perplejidad para saber si el modelo aprendió algo? (Pista: el modelo uniforme.)</li>
+</ul>
+
+<!-- ============ PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 14</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. El examen trae un formulario con las ecuaciones de la RNN, la LSTM, la GRU, el clipping y la perplejidad: lo que se evalúa es qué hace cada pieza y qué pasa si la cambias. Los números de las respuestas están verificados con un script.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · n-gramas y smoothing</span>
+  <div class="e-enun">En un corpus de actas, «la» aparece 50 veces y el bigrama «la ley» 10 veces. El vocabulario tiene <span class="sym" data-s="V">|V|</span> = 1 000 tokens. (a) Estima P̂(ley | la) por conteo. (b) Estímala con add-ε smoothing y <span class="sym" data-s="epsSmooth">ε</span> = 1. (c) ¿Qué probabilidad recibe con ε = 1 un bigrama «la w» que nunca apareció? (d) ¿Qué le hizo el smoothing al bigrama frecuente, y por qué?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Con smoothing, el denominador es n(c) + ε|V|.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>(a) P̂ = n(la, ley)/n(la) = 10/50 = <b>0.2</b>.</li>
+      <li>(b) P̂ = (10 + 1)/(50 + 1·1 000) = 11/1 050 = <b>0.0105</b>.</li>
+      <li>(c) P̂ = (0 + 1)/1 050 = <b>0.00095</b>: ya no es 0.</li>
+      <li>(d) Le quitó casi el 95% de su probabilidad (de 0.2 a 0.0105). Con |V| grande, el regalo ε·|V| = 1 000 domina al conteo real (50) y todo se acerca al uniforme 1/1 000. Por eso con vocabularios grandes se usa ε mucho menor que 1 (y se elige con validación).</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · perplejidad</span>
+  <div class="e-enun">Un modelo de lenguaje evalúa un texto de 4 tokens y le asigna al token correcto las probabilidades 0.5, 0.25, 0.5 y 0.125. (a) Calcula la cross-entropy promedio y la perplejidad. (b) ¿Qué perplejidad tendría un modelo uniforme con |V| = 50 000? (c) Interpreta ambos números.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Todas son potencias de 2: el producto es 2<sup>−7</sup>. La perplejidad es el inverso de la media geométrica.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>−log de cada una: 0.693, 1.386, 0.693, 2.079. Suma 4.852; promedio <b>CE = 1.213</b>.</li>
+      <li><span class="sym" data-s="PPL">PPL</span> = e<sup>1.213</sup> = <b>3.364</b>. Comprobación: (0.5·0.25·0.5·0.125)<sup>−1/4</sup> = (2<sup>−7</sup>)<sup>−1/4</sup> = 2<sup>1.75</sup> = 3.364.</li>
+      <li>(b) Uniforme: PPL = |V| = <b>50 000</b> (CE = log 50 000 = 10.82).</li>
+      <li>(c) El modelo duda en promedio como si eligiera entre unas 3.4 opciones igual de probables; el uniforme, entre 50 000. La perplejidad del uniforme es la línea base que cualquier modelo debe superar.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §2 · perplejidad entre tokenizaciones</span>
+  <div class="e-enun">Para un buscador de leyes, el equipo A reporta perplejidad 85 con tokenización por palabras y el equipo B reporta 22 con tokenización por subpalabras, sobre el mismo corpus de prueba. El director concluye que B es casi cuatro veces mejor. ¿Tiene razón? ¿Qué pedirías para poder comparar?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p>No se puede concluir. La perplejidad es <b>por token</b> y cada tokenización define tokens distintos: B parte el mismo texto en más tokens (más predicciones), cada una sobre un vocabulario distinto, y muchas de esas predicciones son fáciles (el resto de una palabra ya empezada). Los dos números no están en la misma escala.</p>
+    <p>Para comparar: (1) reentrenar o evaluar ambos con el <b>mismo tokenizador</b>, o (2) comparar la <b>log-verosimilitud total</b> del mismo texto de prueba (Σ −log P sobre todos los tokens de cada modelo, que mide qué tan probable encuentra cada uno el texto completo), o normalizarla por la misma unidad, como bits por carácter o por palabra. Y aun así, la perplejidad no garantiza calidad para la tarea final: conviene evaluar también en la tarea del buscador.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · parámetros compartidos</span>
+  <div class="e-enun">Una RNN simple recibe embeddings de dimensión 50, tiene un estado oculto de 128 y una salida sobre un vocabulario de 5 000 tokens (<span class="sym" data-s="Ot">O<sub>t</sub></span> = <span class="sym" data-s="Ht">H<sub>t</sub></span><span class="sym" data-s="Whq">W<sub>hq</sub></span> + <span class="sym" data-s="bh">b<sub>q</sub></span>). (a) ¿Cuántos parámetros tiene la recurrencia? (b) ¿Y la capa de salida? (c) ¿Cambia algo si las secuencias miden 20 o 500 tokens? (d) ¿Cuántos parámetros tendría la recurrencia de una LSTM y de una GRU del mismo tamaño?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>(a) <span class="sym" data-s="Wxh">W<sub>xh</sub></span>: 50·128 = 6 400; <span class="sym" data-s="Whh">W<sub>hh</sub></span>: 128·128 = 16 384; <span class="sym" data-s="bh">b<sub>h</sub></span>: 128. Total <b>22 912</b>.</li>
+      <li>(b) W<sub>hq</sub>: 128·5 000 = 640 000; b<sub>q</sub>: 5 000. Total <b>645 000</b>. Todo el modelo (sin embeddings): 667 912. La salida pesa mucho más que la recurrencia porque el vocabulario es grande.</li>
+      <li>(c) <b>No cambia nada.</b> Los mismos W<sub>xh</sub>, W<sub>hh</sub>, b<sub>h</sub>, W<sub>hq</sub>, b<sub>q</sub> se reutilizan en cada paso. Lo que crece con T es el cómputo y la memoria del BPTT, no los parámetros.</li>
+      <li>(d) LSTM: 4 piezas × 22 912 = <b>91 648</b>. GRU: 3 × 22 912 = <b>68 736</b>.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Trazar</span><span class="e-tem">Temario §2 · la RNN simple desenrollada</span>
+  <div class="e-enun">Desenrolla a mano la RNN escalar h<sub>t</sub> = tanh(0.5x<sub>t</sub> + 0.8h<sub>t−1</sub>), con h₀ = 0, para la secuencia x = (1, 0, 2). Da h₁, h₂ y h₃ con tres decimales. ¿Por qué h₂ no es 0 aunque x₂ = 0?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>tanh(0.5) = 0.462, tanh(0.370) = 0.354, tanh(1.283) = 0.857.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>t = 1: a₁ = 0.5·1 + 0.8·0 = 0.5 → h₁ = tanh(0.5) = <b>0.462</b>.</li>
+      <li>t = 2: a₂ = 0.5·0 + 0.8·0.462 = 0.370 → h₂ = tanh(0.370) = <b>0.354</b>.</li>
+      <li>t = 3: a₃ = 0.5·2 + 0.8·0.354 = 1.283 → h₃ = tanh(1.283) = <b>0.857</b>.</li>
+      <li>h₂ ≠ 0 porque el estado anterior entra multiplicado por w<sub>h</sub> = 0.8: es la memoria del pulso de t = 1. Sin W<sub>hh</sub> (w<sub>h</sub> = 0), h₂ sería tanh(0) = 0.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §2 · BPTT y vanishing/exploding</span>
+  <div class="e-enun">En una RNN, cada eslabón ∂h<sub>t</sub>/∂h<sub>t−1</sub> vale aproximadamente r. (a) ¿Cuánto vale la influencia del paso k sobre el paso k + 50 si r = 0.95? ¿Y si r = 1.05? (b) Con r = 0.95 entrenas con BPTT truncado de <span class="sym" data-s="tau">τ</span> = 20. ¿Cuánto vale el término más lejano que sí se calcula? ¿Qué le pasa a una dependencia de 50 pasos? (c) «BPTT truncado calcula el mismo gradiente que BPTT completo, solo que más barato.» ¿Verdadero o falso?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>(a) 0.95<sup>50</sup> = <b>0.077</b> (se desvanece: llega el 7.7%); 1.05<sup>50</sup> = <b>11.47</b> (explota: se amplifica 11 veces). Una diferencia de 0.1 en r separa los dos regímenes.</li>
+      <li>(b) El más lejano es 0.95<sup>20</sup> = <b>0.358</b>. Los términos de más de 20 pasos se descartan: la dependencia de 50 pasos <b>no recibe gradiente directo</b>, aunque el estado en el forward sí pueda arrastrar algo de esa información.</li>
+      <li>(c) <b>Falso.</b> El truncado es una <em>aproximación</em>: tira los términos de más de τ pasos. Es más barato y más estable, pero sacrifica el aprendizaje directo de dependencias largas.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · gradient clipping</span>
+  <div class="e-enun">(a) El gradiente de un mini-batch es g = (9, −12, 0) y el umbral es <span class="sym" data-s="thetaclip">θ</span> = 3. Calcula ‖g‖, el factor de escala y el gradiente recortado. ¿Cambió su dirección? (b) ¿Qué le pasa a g = (0.3, 0.4) con el mismo umbral? (c) Verdadero o falso, y justifica: «Gradient clipping resuelve tanto los gradientes que explotan como los que se desvanecen».</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>(a) ‖g‖ = √(81 + 144 + 0) = √225 = <b>15</b>. Factor = min(1, 3/15) = <b>0.2</b>. g ← (1.8, −2.4, 0), con norma 3. La dirección <b>no cambia</b>: multiplicar por 0.2 &gt; 0 solo acorta el vector.</li>
+      <li>(b) ‖g‖ = 0.5 &lt; 3: factor 1, <b>no cambia</b>.</li>
+      <li>(c) <b>Falso.</b> El clipping solo actúa cuando ‖g‖ &gt; θ, así que controla la explosión. Un gradiente que se desvanece tiene norma diminuta, el factor es 1 y sigue diminuto. Para el vanishing hace falta cambiar la arquitectura (LSTM/GRU, caminos aditivos), no recortar.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · LSTM: por qué preserva información</span>
+  <div class="e-enun">(a) Una célula LSTM escalar tiene c<sub>t−1</sub> = 2, y en este paso <span class="sym" data-s="ft">f<sub>t</sub></span> = 0.9, <span class="sym" data-s="it">i<sub>t</sub></span> = 0.1, <span class="sym" data-s="ctilde">c̃<sub>t</sub></span> = −1, <span class="sym" data-s="ot">o<sub>t</sub></span> = 0.5. Calcula <span class="sym" data-s="ct">c<sub>t</sub></span> y h<sub>t</sub>. (b) Si durante 100 pasos f = 0.99 e i = 0, ¿cuánto queda de c = 2? (c) ¿Qué valores de las compuertas hacen que una LSTM conserve información muchos pasos, y por qué eso ayuda al gradiente?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>tanh(1.7) = 0.935. Para (c), calcula ∂c<sub>t</sub>/∂c<sub>t−1</sub> por el camino directo.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>(a) c<sub>t</sub> = 0.9·2 + 0.1·(−1) = 1.8 − 0.1 = <b>1.7</b>. h<sub>t</sub> = 0.5·tanh(1.7) = 0.5·0.935 = <b>0.468</b>.</li>
+      <li>(b) c = 2·0.99<sup>100</sup> = 2·0.366 = <b>0.732</b>.</li>
+      <li>(c) <b>f<sub>t</sub> ≈ 1 e i<sub>t</sub> ≈ 0</b>: c<sub>t</sub> ≈ c<sub>t−1</sub>. La actualización es una <b>suma</b>, así que por el camino directo ∂c<sub>t</sub>/∂c<sub>t−1</sub> = f<sub>t</sub>: el gradiente viaja hacia atrás multiplicándose solo por las forget gates, sin pasar por W<sub>hh</sub> ni por tanh′. Con f ≈ 1 el producto no se apaga (0.99<sup>100</sup> = 0.366 frente a 0.9<sup>100</sup> = 0.0000266 de la RNN simple).</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §2 · GRU: reset y update</span>
+  <div class="e-enun">(a) En una GRU escalar, <span class="sym" data-s="zt">z<sub>t</sub></span> = 0.8, h<sub>t−1</sub> = 1 y el candidato es <span class="sym" data-s="htilde">h̃<sub>t</sub></span> = −0.5. Calcula h<sub>t</sub>. (b) ¿Qué valor de z<sub>t</sub> hace que el estado se reemplace por el candidato? (c) ¿Qué combinación de compuertas de la LSTM es el análogo de z<sub>t</sub> ≈ 1? (d) ¿Para qué sirve <span class="sym" data-s="rt">r<sub>t</sub></span>, si no aparece en la fórmula de h<sub>t</sub>?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li>(a) h<sub>t</sub> = 0.8·1 + (1 − 0.8)·(−0.5) = 0.8 − 0.1 = <b>0.7</b>.</li>
+      <li>(b) <b>z<sub>t</sub> ≈ 0</b>: h<sub>t</sub> ≈ h̃<sub>t</sub> (con la convención de la slide).</li>
+      <li>(c) <b>f<sub>t</sub> ≈ 1 con i<sub>t</sub> ≈ 0</b>: conservar la memoria sin escribir nada nuevo. En la GRU, una sola compuerta hace las dos cosas porque z y 1 − z suman 1.</li>
+      <li>(d) r<sub>t</sub> actúa <em>dentro del candidato</em>: filtra h<sub>t−1</sub> antes de calcular h̃<sub>t</sub>. Con r ≈ 0 el candidato se calcula casi solo con el input actual (como «empezar de nuevo»); con r ≈ 1 usa todo el estado anterior.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §2 y §5 · bidireccionalidad y validación temporal</span>
+  <div class="e-enun">Un agente de IA le propone a una secretaría dos sistemas. (1) Una LSTM <b>bidireccional</b> que, con las llamadas al 911 por hora de los últimos tres años, pronostica las llamadas de las próximas 24 horas; para validar, mezcla al azar todas las ventanas de 7 días y separa 80% train / 20% validación. (2) Una GRU bidireccional que clasifica cada iniciativa de ley <em>completa</em> en uno de 20 temas. ¿Cuál es válido? Señala los problemas del otro y corrígelos.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>(2) es válido:</b> la iniciativa completa está disponible al clasificar, así que usar contexto de ambos lados es legítimo y suele ayudar.</li>
+      <li><b>(1) tiene dos errores estructurales.</b> <em>Arquitectura:</em> la parte que lee hacia atrás usa el futuro de la serie para representar cada hora; al pronosticar, ese futuro no existe. Usa una LSTM/GRU <b>unidireccional</b> (o una ventana fija). <em>Validación:</em> mezclar ventanas al azar mete ventanas casi idénticas a ambos lados y deja que el modelo «vea» el periodo que valida: el error sale optimista. Parte <b>por tiempo</b> (entrena hasta una fecha, valida en los meses siguientes) y, si hay varias alcaldías o centros, reporta también por unidad.</li>
+      <li><b>Además:</b> exige una línea base simple (la misma hora de la semana anterior, un promedio móvil) y revisa el drift (cambios de protocolo, temporadas, eventos). Si la LSTM no supera la línea base en el split temporal, no justifica su complejidad.</li>
+    </ol>
+  </div></details>
+</div>
+
+<!-- ============ GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 15</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">secuencia</div><div class="def">Lista ordenada x₁, …, x<sub>T</sub> cuyos elementos dependen entre sí; la longitud <span class="sym" data-s="T">T</span> puede variar entre ejemplos.</div></div>
+  <div class="item"><div class="term">token</div><div class="def">La unidad que el modelo procesa en cada paso: palabra, carácter, subpalabra, byte o símbolo especial.</div></div>
+  <div class="item"><div class="term">tokenización</div><div class="def">Cómo se parte el texto en tokens. Cambia la longitud de las secuencias, el vocabulario y la perplejidad.</div></div>
+  <div class="item"><div class="term">vocabulario (<span class="sym" data-s="V">|V|</span>)</div><div class="def">La lista de tokens distintos, cada uno con un índice. |V| es su tamaño.</div></div>
+  <div class="item"><div class="term">&lt;unk&gt;</div><div class="def">Token especial para palabras que no están en el vocabulario.</div></div>
+  <div class="item"><div class="term">modelo autoregresivo</div><div class="def">Predice el siguiente valor de una secuencia a partir de sus valores anteriores.</div></div>
+  <div class="item"><div class="term">ventana fija (<span class="sym" data-s="tau">τ</span>)</div><div class="def">Usar solo los últimos τ pasos como input. Dimensión fija; ignora todo lo anterior.</div></div>
+  <div class="item"><div class="term">variable latente</div><div class="def">Un resumen no observado del pasado, h<sub>t</sub> = g(h<sub>t−1</sub>, x<sub>t</sub>), que se actualiza en cada paso.</div></div>
+  <div class="item"><div class="term">estado oculto (hidden state)</div><div class="def">La variable latente de una RNN: su memoria interna, un vector de tamaño fijo que cambia en el tiempo. No es lo mismo que una capa oculta.</div></div>
+  <div class="item"><div class="term">estacionariedad estricta</div><div class="def">La distribución conjunta de la secuencia no cambia al desplazarla en el tiempo.</div></div>
+  <div class="item"><div class="term">estacionariedad débil</div><div class="def">Media y varianza constantes, y covarianza que solo depende del desfase entre dos momentos.</div></div>
+  <div class="item"><div class="term">drift</div><div class="def">Cambio en el input o en el ambiente que genera los datos a lo largo del tiempo. Rompe lo aprendido.</div></div>
+  <div class="item"><div class="term">modelo de lenguaje</div><div class="def">Asigna probabilidad a secuencias de tokens, P(x₁, …, x<sub>T</sub>); en la práctica, predice el siguiente token dado el pasado.</div></div>
+  <div class="item"><div class="term">regla de la cadena (de probabilidad)</div><div class="def">P(x₁, …, x<sub>T</sub>) = P(x₁)·Π P(x<sub>t</sub> | x<sub>&lt;t</sub>). Una identidad, no una aproximación.</div></div>
+  <div class="item"><div class="term">modelo de Markov de orden k</div><div class="def">Supone que el siguiente token solo depende de los k anteriores.</div></div>
+  <div class="item"><div class="term">n-grama</div><div class="def">Secuencia de n tokens consecutivos. Un modelo de n-gramas estima P(x<sub>t</sub> | n − 1 anteriores) contando.</div></div>
+  <div class="item"><div class="term">ley de Zipf</div><div class="def">La frecuencia de la palabra con ranking i cae aproximadamente como 1/i<sup>α</sup>: pocas palabras muy frecuentes, muchísimas raras.</div></div>
+  <div class="item"><div class="term">smoothing</div><div class="def">Dar algo de probabilidad a eventos no observados para evitar ceros. Add-<span class="sym" data-s="epsSmooth">ε</span> suma ε a cada conteo.</div></div>
+  <div class="item"><div class="term">cross-entropy (de un modelo de lenguaje)</div><div class="def">Promedio de −log P(token correcto | pasado) sobre un texto. Más baja es mejor.</div></div>
+  <div class="item"><div class="term">perplejidad</div><div class="def"><span class="sym" data-s="PPL">PPL</span> = exp(cross-entropy). Número efectivo de opciones entre las que el modelo duda; 1 si acierta siempre con certeza, |V| si es uniforme. No comparable entre tokenizaciones.</div></div>
+  <div class="item"><div class="term">RNN (red recurrente)</div><div class="def">Red que aplica la misma capa en cada paso, con un estado oculto que pasa de un paso al siguiente.</div></div>
+  <div class="item"><div class="term">desenrollar (unroll)</div><div class="def">Dibujar la RNN como una red profunda con una «capa» por paso de tiempo, todas con los mismos pesos.</div></div>
+  <div class="item"><div class="term">parámetros compartidos</div><div class="def">Los mismos <span class="sym" data-s="Wxh">W<sub>xh</sub></span>, <span class="sym" data-s="Whh">W<sub>hh</sub></span>, <span class="sym" data-s="bh">b<sub>h</sub></span> en todos los pasos: el número de parámetros no crece con T.</div></div>
+  <div class="item"><div class="term">BPTT (backpropagation through time)</div><div class="def">Backpropagation sobre la RNN desenrollada. El gradiente contiene productos de factores a través del tiempo.</div></div>
+  <div class="item"><div class="term">BPTT truncado</div><div class="def">Retropropagar solo <span class="sym" data-s="tau">τ</span> pasos. Más barato y estable; aproximación que sacrifica dependencias largas.</div></div>
+  <div class="item"><div class="term">vanishing / exploding gradients</div><div class="def">El producto de muchos factores menores que 1 se apaga (0.9¹⁰⁰ ≈ 0.00003); el de factores mayores que 1 explota (1.1¹⁰⁰ ≈ 13 781).</div></div>
+  <div class="item"><div class="term">gradient clipping</div><div class="def">g ← min(1, <span class="sym" data-s="thetaclip">θ</span>/‖g‖)·g: reescala el gradiente a norma máxima θ sin cambiar su dirección. Controla la explosión, no el desvanecimiento.</div></div>
+  <div class="item"><div class="term">LSTM</div><div class="def">Célula recurrente con memoria <span class="sym" data-s="ct">c<sub>t</sub></span> y tres compuertas (forget <span class="sym" data-s="ft">f<sub>t</sub></span>, input <span class="sym" data-s="it">i<sub>t</sub></span>, output <span class="sym" data-s="ot">o<sub>t</sub></span>). Su actualización aditiva deja pasar memoria y gradiente muchos pasos.</div></div>
+  <div class="item"><div class="term">cell state (<span class="sym" data-s="ct">c<sub>t</sub></span>)</div><div class="def">La memoria interna de la LSTM, actualizada como c<sub>t</sub> = f<sub>t</sub> ⊙ c<sub>t−1</sub> + i<sub>t</sub> ⊙ c̃<sub>t</sub>.</div></div>
+  <div class="item"><div class="term">forget / input / output gate</div><div class="def">Compuertas de la LSTM (valores entre 0 y 1): qué conservar de la memoria, qué escribir del candidato, qué exponer en h<sub>t</sub>.</div></div>
+  <div class="item"><div class="term">candidato de memoria (<span class="sym" data-s="ctilde">c̃<sub>t</sub></span>)</div><div class="def">El contenido nuevo que propone la LSTM en cada paso, entre −1 y 1 (sale de tanh).</div></div>
+  <div class="item"><div class="term">GRU</div><div class="def">Célula recurrente con dos compuertas (reset y update) y sin célula separada; suele tener menos parámetros que la LSTM.</div></div>
+  <div class="item"><div class="term">reset gate (<span class="sym" data-s="rt">r<sub>t</sub></span>)</div><div class="def">Decide cuánto del estado anterior usa el candidato de la GRU.</div></div>
+  <div class="item"><div class="term">update gate (<span class="sym" data-s="zt">z<sub>t</sub></span>)</div><div class="def">Mezcla final de la GRU: z de lo viejo y 1 − z del candidato. Con la convención de la slide, z ≈ 1 conserva.</div></div>
+  <div class="item"><div class="term">RNN bidireccional</div><div class="def">Dos RNNs, una hacia adelante y otra hacia atrás, con estados concatenados. Solo si toda la secuencia está disponible.</div></div>
+  <div class="item"><div class="term">Transformer</div><div class="def">Arquitectura basada en atención que desplazó a las RNNs en lenguaje: paraleliza el entrenamiento y conecta directamente tokens lejanos.</div></div>
+  <div class="item"><div class="term">state space model</div><div class="def">Familia reciente (S4, Mamba) que recupera la idea de un estado recurrente con diseños más escalables.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>; los símbolos de esta clase, en <a href="00_matematicas.html#not-rnn">la sección de redes recurrentes y lenguaje</a>.</p>
+
+<nav class="serie" data-actual="07"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/RNN.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+  function log10(v){ return Math.log(Math.abs(v))/Math.LN10; }
+
+  /* ---------- lab: quitar la tendencia ---------- */
+  (function(){
+    var rng = DL.rng(7), serie = [];
+    for(var t=0;t<120;t++) serie.push(0.05*t + 2*Math.sin(2*Math.PI*t/12) + rng.normal(0, 0.5));
+    var modo = "orig";
+    var RANGO = {orig:[-3, 10], dif:[-4, 4], dif12:[-2, 3]};
+    function puntos(){
+      var p = [];
+      for(var t=0;t<120;t++){
+        if(modo === "orig") p.push([t, serie[t]]);
+        else if(modo === "dif" && t >= 1) p.push([t, serie[t]-serie[t-1]]);
+        else if(modo === "dif12" && t >= 12) p.push([t, serie[t]-serie[t-12]]);
+      }
+      return p;
+    }
+    function stats(p){
+      var m = p.reduce(function(a, q){ return a+q[1]; }, 0)/p.length;
+      var v = p.reduce(function(a, q){ return a+(q[1]-m)*(q[1]-m); }, 0)/p.length;
+      return {m:m, v:v};
+    }
+    var g = DL.grafica($("estCanvas"), {x:[0, 120], y:RANGO.orig, alto:280, etiquetaX:"semana t", etiquetaY:"valor"}, function(g){
+      var p = puntos(), a = p.filter(function(q){ return q[0] < 60; }), b = p.filter(function(q){ return q[0] >= 60; });
+      g.rect(60, g.o.y[0], 60, g.o.y[1]-g.o.y[0], {color:"r-dato", relleno:true, alfa:0.06, borde:false});
+      g.polilinea(p, {color:"text-3", ancho:1.5});
+      var sa = stats(a), sb = stats(b);
+      g.linea(a[0][0], sa.m, 60, sa.m, {color:"accent", ancho:2.5});
+      g.linea(60, sb.m, 120, sb.m, {color:"r-dato", ancho:2.5});
+      g.vertical(60, {color:"text-2", guiones:true, ancho:1});
+      g.texto(30, g.o.y[1]-0.4, "train", {color:"accent", negrita:true, alinear:"center"});
+      g.texto(62, g.o.y[1]-0.4, "validación", {color:"r-dato", negrita:true});
+    });
+    function actualizar(){
+      g.o.y = RANGO[modo];
+      var p = puntos(), sa = stats(p.filter(function(q){ return q[0] < 60; })), sb = stats(p.filter(function(q){ return q[0] >= 60; }));
+      DL.readout($("estRead"), [["media train", DL.fmt(sa.m, 2)], ["media validación", DL.fmt(sb.m, 2)], ["diferencia", DL.fmt(sb.m - sa.m, 2)],
+        ["varianza train", DL.fmt(sa.v, 2)], ["varianza validación", DL.fmt(sb.v, 2)]]);
+      var dif = Math.abs(sb.m - sa.m);
+      $("estStatus").className = "status " + (dif > 1 ? "bad" : "ok");
+      $("estStatus").textContent = dif > 1 ? "Las medias difieren mucho: lo aprendido en train no describe la validación." : "Medias parecidas: train y validación tienen dinámicas compatibles.";
+      g.redibujar();
+    }
+    DL.selector($("estSel"), {opciones:[{v:"orig", t:"original"}, {v:"dif", t:"diferencia"}, {v:"dif12", t:"dif. estacional (12)"}], valor:"orig",
+      alCambiar:function(v){ modo = v; actualizar(); }});
+    actualizar();
+  })();
+
+  /* ---------- lab: bigramas ---------- */
+  (function(){
+    var CORPUS = ["la ley de agua fue aprobada", "la ley de salud fue rechazada", "la reforma de salud fue aprobada",
+                  "el congreso aprobó la ley", "el senado rechazó la reforma", "la ley fue publicada"];
+    var PRUEBAS = ["la ley de salud fue aprobada", "la reforma fue publicada", "el congreso rechazó la ley"];
+    var uni = {}, bi = {}, V = {};
+    CORPUS.forEach(function(s){
+      var t = ["&lt;s&gt;"].concat(s.split(" "), ["&lt;/s&gt;"]);
+      for(var k=0;k<t.length-1;k++){
+        uni[t[k]] = (uni[t[k]] || 0) + 1;
+        bi[t[k]+"|"+t[k+1]] = (bi[t[k]+"|"+t[k+1]] || 0) + 1;
+        V[t[k+1]] = true;
+      }
+    });
+    var nV = Object.keys(V).length;   /* 16 */
+    $("biCorpus").innerHTML = "<b>Corpus:</b><br>" + CORPUS.join("<br>");
+    var frase = 0, eps = 0, uniforme = false;
+    function render(){
+      var t = ["&lt;s&gt;"].concat(PRUEBAS[frase].split(" "), ["&lt;/s&gt;"]);
+      var filas = "", suma = 0, hayCero = false;
+      for(var k=0;k<t.length-1;k++){
+        var c = t[k], w = t[k+1], ncw = bi[c+"|"+w] || 0, nc = uni[c] || 0;
+        var p = uniforme ? 1/nV : (ncw + eps)/(nc + eps*nV);
+        if(p === 0) hayCero = true; else suma += -Math.log(p);
+        filas += '<tr' + (ncw === 0 && !uniforme ? ' class="cero"' : '') + '><td class="nw">' + c + ' → ' + w + '</td><td class="num-c">' +
+          (uniforme ? "—" : ncw) + '</td><td class="num-c">' + (uniforme ? "—" : nc) + '</td><td class="num-c">' + DL.fmt(p, 4) + '</td><td class="num-c">' +
+          (p === 0 ? "∞" : DL.fmt(-Math.log(p), 3)) + '</td></tr>';
+      }
+      var n = t.length - 1;
+      $("biTabla").innerHTML = '<table class="tbl"><tr><th>bigrama</th><th class="num-c" style="text-transform:none">n(c, w)</th><th class="num-c" style="text-transform:none">n(c)</th><th class="num-c">P̂</th><th class="num-c" style="text-transform:none">−log P̂</th></tr>' + filas + '</table>';
+      var ce = hayCero ? Infinity : suma/n;
+      DL.readout($("biRead"), [["modelo", uniforme ? "uniforme" : "bigramas"], ["predicciones n", n], ["Σ −log P̂", hayCero ? "∞" : DL.fmt(suma, 3)],
+        ["cross-entropy", hayCero ? "∞" : DL.fmt(ce, 3)], ["perplejidad", hayCero ? "∞" : DL.fmt(Math.exp(ce), 3)]]);
+      var st = $("biStatus");
+      if(uniforme){ st.className = "status info"; st.textContent = "Uniforme: cada token recibe 1/16, así que la perplejidad es exactamente |V| = 16."; }
+      else if(hayCero){ st.className = "status bad"; st.textContent = "Un bigrama nunca visto tiene P̂ = 0: la frase tiene probabilidad 0 y perplejidad infinita. Sube ε."; }
+      else { st.className = "status ok"; st.textContent = eps === 0 ? "Todos los bigramas existen en el corpus." : "Con ε > 0 ningún bigrama tiene probabilidad 0, pero los vistos pierden probabilidad."; }
+      DL.protegerMayusculas($("labBi"));
+    }
+    DL.selector($("biSel"), {opciones:PRUEBAS.map(function(s, i){ return {v:i, t:"«" + s + "»"}; }), valor:0,
+      alCambiar:function(v){ frase = v; render(); }});
+    DL.control($("biCtrl"), {etiqueta:"smoothing ε", min:0, max:1, paso:0.05, valor:0, alCambiar:function(v){ eps = v; uniforme = false; render(); }});
+    $("biUnif").onclick = function(){ uniforme = true; render(); };
+    $("biConteo").onclick = function(){ uniforme = false; render(); };
+    render();
+  })();
+
+  /* ---------- mini-batches desplazados ---------- */
+  (function(){
+    var x = ["la", "ley", "de", "salud"], y = ["ley", "de", "salud", "fue"];
+    $("mbRow").innerHTML = DL.matriz([x], {titulo:"input (x<sub>t</sub> … x<sub>t+3</sub>)", clase:function(){ return "hl2"; }}) +
+      '<span class="op">→</span>' + DL.matriz([y], {titulo:"etiqueta (x<sub>t+1</sub> … x<sub>t+4</sub>)", clase:function(){ return "ok"; }});
+  })();
+
+  /* ---------- lab: RNN desenrollada ---------- */
+  (function(){
+    var SEQ = {pulso:[1,0,0,0,0,0,0,0], constante:[1,1,1,1,1,1,1,1], alterna:[1,-1,1,-1,1,-1,1,-1]};
+    var seq = "pulso", wx = 1, wh = 0.5, b = 0, H = [], A = [], actual = 0, pasos;
+    function calcular(){
+      var x = SEQ[seq], h = 0; H = [0]; A = [null];
+      for(var t=1;t<=8;t++){ var a = wx*x[t-1] + wh*h + b; h = Math.tanh(a); A.push(a); H.push(h); }
+    }
+    var g = DL.grafica($("rnnCanvas"), {x:[0, 8.4], y:[-1.2, 1.5], alto:260, etiquetaX:"t", etiquetaY:"hₜ y xₜ"}, function(g){
+      var x = SEQ[seq];
+      g.puntos(x.map(function(v, k){ return [k+1, Math.max(-1.15, Math.min(1.15, v))]; }), {color:"r-dato", radio:4, hueco:true});
+      var p = []; for(var t=0;t<=actual;t++) p.push([t, H[t]]);
+      g.polilinea(p, {color:"r-calc", ancho:2.5});
+      g.puntos(p, {color:"r-calc", radio:3.5});
+      if(actual > 0) g.puntos([[actual, H[actual]]], {color:"accent", radio:6});
+    });
+    function render(i){
+      actual = i;
+      var x = SEQ[seq];
+      var xs = [x.map(function(v){ return v; })], hs = [H.slice(1).map(function(v, k){ return k < i ? v : "·"; })];
+      $("rnnMat").innerHTML = DL.matriz(xs, {titulo:"x<sub>t</sub>, t = 1…8", dec:0, clase:function(r, c){ return c === i-1 ? "hl2" : ""; }}) +
+        DL.matriz(hs, {titulo:"h<sub>t</sub>", dec:3, clase:function(r, c){ return c === i-1 ? "hl" : (c >= i ? "dim" : ""); }});
+      $("rnnCalc").innerHTML = i === 0 ? "h₀ = 0. Pulsa «siguiente» para calcular h₁."
+        : "h<sub>" + i + "</sub> = tanh(" + DL.fmt(wx, 2) + "·" + DL.fmt(x[i-1], 0) + " + " + DL.fmt(wh, 2) + "·" + DL.fmt(H[i-1], 3) + " + " + DL.fmt(b, 2) +
+          ") = tanh(" + DL.fmt(A[i], 3) + ") = <b>" + DL.fmt(H[i], 3) + "</b>";
+      g.redibujar();
+    }
+    function rehacer(){ calcular(); pasos.ir(pasos.actual()); }
+    calcular();
+    pasos = DL.pasos($("labRnn"), {total:9, render:render, reproducir:true, ms:700, etiqueta:"t ="});
+    DL.selector($("rnnSel"), {opciones:[{v:"pulso", t:"pulso"}, {v:"constante", t:"constante"}, {v:"alterna", t:"alternada"}], valor:"pulso",
+      alCambiar:function(v){ seq = v; rehacer(); }});
+    var c = $("rnnCtrl");
+    DL.control(c, {etiqueta:"peso del input w<sub>x</sub>", min:0, max:2, paso:0.1, valor:wx, alCambiar:function(v){ wx = v; rehacer(); }});
+    DL.control(c, {etiqueta:"peso recurrente w<sub>h</sub>", min:-2, max:2, paso:0.1, valor:wh, alCambiar:function(v){ wh = v; rehacer(); }});
+    DL.control(c, {etiqueta:"sesgo b", min:-1, max:1, paso:0.1, valor:b, alCambiar:function(v){ b = v; rehacer(); }});
+  })();
+
+  /* ---------- lab: producto a través del tiempo ---------- */
+  (function(){
+    var T = 100, modo = "const", r = 0.9, wh = 1.1, wx = 1, tau = 20;
+    var rng = DL.rng(11), xs = []; for(var t=0;t<T;t++) xs.push(rng.normal(0, 1));
+    function logs(){
+      /* devuelve log10|∂h_T/∂h_k| para s = T − k = 0…T */
+      var out = [[0, 0]];
+      if(modo === "const"){ for(var s=1;s<=T;s++) out.push([s, s*log10(r)]); return out; }
+      var h = 0, fac = [];
+      for(var t=0;t<T;t++){ h = Math.tanh(wh*h + wx*xs[t]); fac.push(wh*(1-h*h)); }
+      var acc = 0;
+      for(var s2=1;s2<=T;s2++){ acc += log10(Math.max(Math.abs(fac[T-s2]), 1e-300)); out.push([s2, acc]); }
+      return out;
+    }
+    var g = DL.grafica($("bpCanvas"), {x:[0, 100], y:[-12, 6], alto:290, etiquetaX:"distancia T − k", etiquetaY:"log₁₀ del producto"}, function(g){
+      g.rect(tau, -12, 100 - tau, 18, {color:"text-3", relleno:true, alfa:0.12, borde:false});
+      g.horizontal(0, {color:"text-3", guiones:true, ancho:1});
+      g.vertical(tau, {color:"r-hiper", ancho:1.5});
+      g.texto(tau + 1.5, -8.5, "τ = " + tau + " · a la derecha se descarta", {color:"r-hiper", tam:11});
+      var p = logs().map(function(q){ return [q[0], Math.max(-12.5, Math.min(6.5, q[1]))]; });
+      g.polilinea(p, {color:"accent", ancho:2.5});
+    });
+    var ctrl = $("bpCtrl"), cR, cWh, cWx;
+    function actualizar(){
+      cR.el.style.display = modo === "const" ? "" : "none";
+      cWh.el.style.display = cWx.el.style.display = modo === "const" ? "none" : "";
+      var L = logs(), l100 = L[T][1], lTau = L[tau][1];
+      DL.readout($("bpRead"), [["log₁₀ (d = 100)", DL.fmt(l100, 2)], ["valor (d = 100)", DL.fmt(Math.pow(10, l100), 3)],
+        ["valor (d = τ)", DL.fmt(Math.pow(10, lTau), 3)]]);
+      var st = $("bpStatus");
+      if(l100 < -2){ st.className = "status bad"; st.textContent = "Se desvanece: el paso más lejano casi no recibe gradiente."; }
+      else if(l100 > 2){ st.className = "status bad"; st.textContent = "Explota: los pasos lejanos dominan el gradiente."; }
+      else { st.className = "status ok"; st.textContent = "Ni se apaga ni explota en 100 pasos."; }
+      g.redibujar();
+    }
+    DL.selector($("bpSel"), {opciones:[{v:"const", t:"factor constante r"}, {v:"tanh", t:"RNN con tanh"}], valor:"const",
+      alCambiar:function(v){ modo = v; actualizar(); }});
+    cR = DL.control(ctrl, {etiqueta:"factor por paso r", min:0.5, max:1.5, paso:0.01, valor:r, alCambiar:function(v){ r = v; actualizar(); }});
+    cWh = DL.control(ctrl, {etiqueta:"peso recurrente w<sub>h</sub>", min:0.2, max:3, paso:0.05, valor:wh, alCambiar:function(v){ wh = v; actualizar(); }});
+    cWx = DL.control(ctrl, {etiqueta:"escala del input w<sub>x</sub>", min:0.05, max:2, paso:0.05, valor:wx, alCambiar:function(v){ wx = v; actualizar(); }});
+    DL.control(ctrl, {etiqueta:"truncamiento τ", min:5, max:100, paso:1, valor:tau, formato:function(v){ return v.toFixed(0); }, alCambiar:function(v){ tau = v; actualizar(); }});
+    actualizar();
+  })();
+
+  /* ---------- lab: gradient clipping ---------- */
+  (function(){
+    var gx = 6, gy = 8, theta = 4;
+    function clip(x, y){ var n = Math.hypot(x, y), f = Math.min(1, theta/n); return {n:n, f:f, x:x*f, y:y*f}; }
+    var g = DL.grafica($("clCanvas"), {x:[-12, 12], y:[-12, 12], alto:320, etiquetaX:"g₁", etiquetaY:"g₂"}, function(g){
+      /* misma escala en los dos ejes, para que el círculo sea círculo y los ángulos se vean reales */
+      var asp = (g.W - 60)/(g.H - 52);
+      if(Math.abs(g.o.x[1] - 12*asp) > 1e-6){ g.o.x = [-12*asp, 12*asp]; g.redibujar(); return; }
+      var circ = []; for(var k=0;k<=120;k++){ var a = 2*Math.PI*k/120; circ.push([theta*Math.cos(a), theta*Math.sin(a)]); }
+      g.polilinea(circ, {color:"r-hiper", ancho:1.5, guiones:true});
+      var c = clip(gx, gy);
+      if(c.n > 0.05) g.flecha(0, 0, gx, gy, {color:"text-3", ancho:2.5});
+      if(c.n > 0.05) g.flecha(0, 0, c.x, c.y, {color:"accent", ancho:3});
+    });
+    g.alPuntero(function(e){ if(e.tipo === "down" || (e.tipo === "move" && e.abajo)){ gx = Math.max(-12, Math.min(12, e.x)); gy = Math.max(-12, Math.min(12, e.y)); actualizar(); } });
+    /* serie sintética de normas: picos ocasionales en 0–119, desvanecimiento en 120–199 */
+    var rng = DL.rng(5), normas = [];
+    for(var t=0;t<200;t++){
+      var base = t < 120 ? Math.exp(rng.normal(0, 0.35)) : Math.pow(10, -(t-120)/16) * Math.exp(rng.normal(0, 0.2));
+      if(t < 120 && rng.u() < 0.06) base *= 30 + 300*rng.u();
+      normas.push(base);
+    }
+    var gs = DL.grafica($("clSerie"), {x:[0, 200], y:[-6, 3], alto:220, etiquetaX:"paso de entrenamiento", etiquetaY:"log₁₀ ‖g‖"}, function(g){
+      g.polilinea(normas.map(function(v, t){ return [t, log10(v)]; }), {color:"text-3", ancho:1.2});
+      g.polilinea(normas.map(function(v, t){ return [t, log10(Math.min(v, theta))]; }), {color:"accent", ancho:2});
+      g.horizontal(log10(theta), {color:"r-hiper", guiones:true, ancho:1});
+      g.vertical(120, {color:"text-3", guiones:true, ancho:1});
+      g.texto(122, 2.4, "desde aquí se desvanece", {color:"text-2", tam:11});
+    });
+    function actualizar(){
+      var c = clip(gx, gy), ang = function(x, y){ return Math.atan2(y, x)*180/Math.PI; };
+      DL.readout($("clRead"), [["g", "(" + DL.fmt(gx, 2) + ", " + DL.fmt(gy, 2) + ")"], ["‖g‖", DL.fmt(c.n, 2)], ["factor", DL.fmt(c.f, 3)],
+        ["g recortado", "(" + DL.fmt(c.x, 2) + ", " + DL.fmt(c.y, 2) + ")"], ["ángulo antes", DL.fmt(ang(gx, gy), 1) + "°"], ["ángulo después", DL.fmt(ang(c.x, c.y), 1) + "°"]]);
+      var rec = normas.filter(function(v){ return v > theta; }).length, maxN = Math.max.apply(null, normas);
+      var tardio = normas.slice(120).filter(function(v){ return v > theta; }).length;
+      $("clStatus").innerHTML = "En la serie: " + rec + " de 200 pasos se recortan (norma máxima " + DL.fmt(maxN, 1) + " → " + DL.fmt(Math.min(maxN, theta), 2) +
+        "). En el tramo que se desvanece (pasos 120–199) se recortan " + tardio + ": ahí el clipping no hace nada.";
+      g.redibujar(); gs.redibujar();
+    }
+    DL.control($("clCtrl"), {etiqueta:"umbral θ", min:0.5, max:10, paso:0.1, valor:theta, alCambiar:function(v){ theta = v; actualizar(); }});
+    actualizar();
+  })();
+
+  /* ---------- lab: compuertas y memoria ---------- */
+  (function(){
+    var T = 60, celda = "lstm", f = 0.95, ig = 0.1, og = 1, z = 0.95, wh = 0.9;
+    var rng = DL.rng(3), d = [0]; for(var t=1;t<T;t++) d.push(2*rng.u() - 1);
+    function simular(){
+      /* m: memoria por paso (t = 1…T); s: lo que queda del valor escrito en t = 1; h: estado expuesto */
+      var m = [], s = [], h = [];
+      if(celda === "lstm"){
+        var c = 1; m.push(c); s.push(1); h.push(og*Math.tanh(c));
+        for(var t=1;t<T;t++){ c = f*c + ig*d[t]; m.push(c); s.push(Math.pow(f, t)); h.push(og*Math.tanh(c)); }
+      } else if(celda === "gru"){
+        var hg = 1; m.push(hg); s.push(1); h.push(hg);
+        for(var t2=1;t2<T;t2++){ hg = z*hg + (1-z)*d[t2]; m.push(hg); s.push(Math.pow(z, t2)); h.push(hg); }
+      } else {
+        var hr = Math.tanh(1), prod = 1; m.push(hr); s.push(1); h.push(hr);
+        for(var t3=1;t3<T;t3++){ hr = Math.tanh(wh*hr + d[t3]); prod *= wh*(1 - hr*hr); m.push(hr); s.push(prod); h.push(hr); }
+      }
+      return {m:m, s:s, h:h};
+    }
+    var g = DL.grafica($("gaCanvas"), {x:[1, 60], y:[-1.2, 1.2], alto:280, etiquetaX:"t", etiquetaY:"memoria"}, function(g){
+      var r = simular();
+      g.polilinea(r.m.map(function(v, k){ return [k+1, Math.max(-1.25, Math.min(1.25, v))]; }), {color:"r-calc", ancho:2.2});
+      g.polilinea(r.s.map(function(v, k){ return [k+1, Math.max(-1.25, Math.min(1.25, v))]; }), {color:"accent", ancho:2, guiones:true});
+    });
+    var ctrl = $("gaCtrl"), C = {};
+    function mostrar(){
+      C.f.el.style.display = C.i.el.style.display = C.o.el.style.display = celda === "lstm" ? "" : "none";
+      C.z.el.style.display = celda === "gru" ? "" : "none";
+      C.w.el.style.display = celda === "rnn" ? "" : "none";
+    }
+    function actualizar(){
+      var r = simular(), s60 = r.s[T-1];
+      var nombre = celda === "lstm" ? "c₆₀" : "h₆₀";
+      DL.readout($("gaRead"), [["queda (t = 60)", DL.fmt(s60, 3)], [nombre, DL.fmt(r.m[T-1], 3)], ["h₆₀ expuesto", DL.fmt(r.h[T-1], 3)]]);
+      var st = $("gaStatus");
+      st.className = "status " + (Math.abs(s60) > 0.3 ? "ok" : "bad");
+      st.textContent = celda === "lstm" ? "Por el camino directo, ∂c₆₀/∂c₁ = f⁵⁹ = " + DL.fmt(s60, 3) + "."
+        : celda === "gru" ? "Por el camino directo, ∂h₆₀/∂h₁ = z⁵⁹ = " + DL.fmt(s60, 3) + "."
+        : "RNN simple: el producto real de 59 factores w_h·tanh′ vale " + DL.fmt(s60, 3) + ".";
+      g.redibujar();
+    }
+    DL.selector($("gaSel"), {opciones:[{v:"lstm", t:"LSTM"}, {v:"gru", t:"GRU"}, {v:"rnn", t:"RNN simple"}], valor:"lstm",
+      alCambiar:function(v){ celda = v; mostrar(); actualizar(); }});
+    C.f = DL.control(ctrl, {etiqueta:"forget gate f", min:0, max:1, paso:0.01, valor:f, alCambiar:function(v){ f = v; actualizar(); }});
+    C.i = DL.control(ctrl, {etiqueta:"input gate i", min:0, max:1, paso:0.01, valor:ig, alCambiar:function(v){ ig = v; actualizar(); }});
+    C.o = DL.control(ctrl, {etiqueta:"output gate o", min:0, max:1, paso:0.01, valor:og, alCambiar:function(v){ og = v; actualizar(); }});
+    C.z = DL.control(ctrl, {etiqueta:"update gate z", min:0, max:1, paso:0.01, valor:z, alCambiar:function(v){ z = v; actualizar(); }});
+    C.w = DL.control(ctrl, {etiqueta:"peso recurrente w<sub>h</sub>", min:0, max:2, paso:0.05, valor:wh, alCambiar:function(v){ wh = v; actualizar(); }});
+    mostrar(); actualizar();
+  })();
+})();
+</script>
+</body>
+</html>

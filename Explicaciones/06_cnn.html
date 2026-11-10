@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redes convolucionales</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  /* Estilos propios: solo lo que no existe en estilos.css */
+  .pila3 .gt{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:650; color:var(--text-2); margin:8px 0 2px}
+  .pila3 canvas{width:100%; display:block}
+  .sub-h{font-family:ui-sans-serif,system-ui,sans-serif; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-3); margin:12px 0 4px}
+  .mat-row .op{font-size:20px; color:var(--text-3)}
+  .calc-btns{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">06 · Redes convolucionales</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 06</div>
+  <h1>Redes convolucionales: mirar de cerca y reutilizar lo que se aprende</h1>
+  <p class="lead">Una CNN es una capa densa a la que le pusimos dos reglas: mirar solo una vecindad pequeña y usar los mismos pesos en todas partes. Aquí sacas esas reglas de la fórmula, practicas la aritmética que el examen pide a mano (tamaños, parámetros, costo, receptive field) y las conectas con detección, segmentación y el caso de pobreza medida desde el satélite.</p>
+  <div class="meta">Fuente: <code>slides/CNN.Rmd</code> · Temario del Examen 2, sección 1 (y la sección 5 en el caso de políticas públicas) · Tarea 6 · Lectura de unos 55 minutos, sin contar los laboratorios</div>
+</header>
+
+<!-- ============ 1. MAPA ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Mapa de la clase</h2>
+
+<p>En el artefacto 05 viste que la arquitectura también es una forma de regularizar: si le metes a la red un supuesto correcto sobre los datos, necesita menos ejemplos para aprender (en el catálogo de regularización aparecía «convoluciones en vez de capas totalmente conectadas»; <a href="05_regularizacion.html#catalogo">ver catálogo</a>). Esta clase es el primer ejemplo grande de esa idea. El supuesto es sobre imágenes: <strong>lo que importa está cerca</strong> y <strong>un mismo patrón puede aparecer en cualquier lugar</strong>.</p>
+
+<div class="flow">
+  <div class="node"><div class="t">Antes</div><div class="d">Redes densas, entrenamiento y regularización. Sabes contar parámetros de una capa y sabes que más parámetros sin más datos suele sobreajustar.</div></div>
+  <div class="node aqui"><div class="t">Esta clase</div><div class="d">¿Cómo aprovechar la estructura espacial de una imagen? Localidad y compartición de pesos: convolución, canales, padding, stride, pooling, receptive field.</div></div>
+  <div class="node"><div class="t">Después</div><div class="d"><a href="07_rnn.html">Redes recurrentes</a>: la misma idea de compartir pesos, pero a lo largo del tiempo en lugar del espacio.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p><strong>Una convolución es una capa densa a la que le prohibimos mirar lejos y la obligamos a usar los mismos pesos en todas partes.</strong> La primera regla es la <em>localidad</em>; la segunda, la <em>compartición de parámetros</em>. Con las dos, una capa que tendría cientos de miles de pesos queda con diez, y el detector que aprende en una esquina sirve en todas. La slide lo resume en tres palabras: localidad, compartición, composición (apilar capas para construir cosas más complejas).</p>
+</div>
+
+<p>Una imagen de política pública para toda la clase: una dependencia quiere contar techos de lámina en imágenes satelitales para estimar vivienda precaria. Un techo de lámina se ve igual en el norte o en el sur de la foto, y para reconocerlo basta mirar unos cuantos pixeles alrededor. Esas dos frases son, literalmente, los dos supuestos de una CNN.</p>
+
+<!-- ============ 2. POR QUÉ ============ -->
+<h2 id="por-que"><span class="num">Sección 2</span>Por qué no una red densa sobre pixeles</h2>
+
+<p>La slide abre con tres tareas de visión. Conviene tenerlas claras desde ya, porque cambian lo que la red debe producir y, como verás en la sección 3, lo que queremos que pase cuando la imagen se mueve.</p>
+
+<div class="scroll"><table class="tbl">
+  <tr><th>Tarea</th><th>Qué entra</th><th>Qué sale</th><th>Ejemplo de política pública</th></tr>
+  <tr><td><b>Clasificación</b></td><td>Una imagen</td><td>Una etiqueta para toda la imagen</td><td>¿Esta foto de calle tiene baches o no?</td></tr>
+  <tr><td><b>Detección de objetos</b></td><td>Una imagen</td><td>Varias cajas, cada una con su clase y su confianza</td><td>Contar vehículos en un cruce</td></tr>
+  <tr><td><b>Segmentación</b></td><td>Una imagen</td><td>Una clase para cada pixel</td><td>Marcar qué pixeles son área urbana</td></tr>
+</table></div>
+
+<h3 id="conteo-denso">El problema del tamaño</h3>
+
+<p>Empieza con un caso chico. Un dígito de MNIST mide 28×28 = 784 pixeles. Si una capa densa lo convierte en otra representación del mismo tamaño, cada una de las 784 salidas necesita un peso por cada uno de los 784 pixeles, más su sesgo: 784·784 + 784 = <b>615 440</b> parámetros, para una sola capa y una imagen diminuta. (El conteo de una capa densa lo hiciste en <a href="02_redes_neuronales.html#contar-parametros">el artefacto 02</a>.)</p>
+
+<div class="formula">
+  <div class="f-head">Pesos de una capa densa del mismo tamaño que la imagen</div>
+  <div class="f-ejemplo">MNIST: 28 × 28 × 1 = 784  →  784² = 614 656 pesos   ·   RGB de la slide: 224 × 224 × 3 = 150 528  →  150 528² ≈ 22.7 × 10⁹ pesos</div>
+  <div class="eq">
+    #pesos = ( <span class="sym" data-s="nh">n<sub>h</sub></span> · <span class="r-dato">n<sub>w</sub></span> · <span class="r-dato">c</span> )<span class="sup">2</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cuento cuántos números tiene la imagen (alto por ancho por canales) y lo elevo al cuadrado, porque cada salida se conecta con cada entrada.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">n<sub>h</sub>, n<sub>w</sub></dt><dd>Alto y ancho de la imagen, en pixeles (h de <i>height</i>, w de <i>width</i>).</dd>
+      <dt class="r-dato">c</dt><dd>Número de canales: 1 en escala de grises, 3 en RGB (rojo, verde, azul).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…duplicas el lado de la imagen (224 → 448): la imagen tiene 4 veces más números y la capa densa 16 veces más pesos.</li>
+      <li>…pasas de gris a color: 3 veces más números, 9 veces más pesos.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Veintidós mil millones de pesos para una sola capa no caben en la memoria de una GPU normal, y aunque cupieran, no habría datos suficientes para estimarlos. Pero la slide insiste en que <strong>el problema no es solo el número de parámetros</strong>. Una red densa ignora dos cosas que sabemos de las imágenes:</p>
+<ol>
+  <li><strong>Los pixeles cercanos están relacionados.</strong> Un pixel se parece a sus vecinos; un pixel de la esquina opuesta casi no dice nada sobre él. La red densa trata los dos igual.</li>
+  <li><strong>Los patrones aparecen en cualquier lugar.</strong> Un borde vertical puede estar a la izquierda, al centro o a la derecha. Una red densa tendría que aprender un detector distinto para cada posición, con datos distintos para cada uno.</li>
+</ol>
+
+<div class="note good">
+  <span class="tag">La lectura intuitiva: ¿dónde está Wally?</span>
+  <p>Para encontrar a Wally no memorizas cómo se ve en cada posición posible de la página. Aprendes <em>una</em> idea de Wally (gorro, rayas rojas, lentes) y recorres la página preguntando en cada región: «¿aquí está Wally?». Eso es exactamente una CNN: un detector local (localidad) que se aplica con los mismos pesos en todas las regiones (compartición).</p>
+</div>
+
+<h3 id="dos-ideas">Las dos ideas y lo que se gana</h3>
+
+<div class="cmp">
+  <div class="col good"><h5>Localidad</h5><div class="cb">Cada neurona mira una región pequeña de la entrada, por ejemplo una ventana de 3×3 pixeles. Ya no hay pesos hacia pixeles lejanos.</div></div>
+  <div class="col good"><h5>Compartición de parámetros</h5><div class="cb">El mismo filtro (los mismos 9 pesos) se aplica en todas las posiciones. Lo que se aprende en un lugar sirve en todos.</div></div>
+</div>
+
+<p>Con esto se reducen drásticamente los parámetros, se aprenden detectores locales reutilizables y, al apilar capas, se construyen representaciones cada vez más amplias. La intuición que da la slide es una cadena:</p>
+<div class="eq">pixeles → bordes y texturas → partes → objetos</div>
+<p>La slide misma advierte que esta jerarquía es <strong>una intuición útil, no una descripción perfecta</strong> de lo que aprende cada canal. No esperes encontrar «la neurona del ojo» en cada red.</p>
+
+<!-- ============ 3. INVARIANZA ============ -->
+<h2 id="invarianza"><span class="num">Sección 3</span>Invarianza y equivarianza</h2>
+
+<div class="q"><span class="qlabel">Duda típica</span>Si muevo la imagen unos pixeles, ¿quiero que la salida de la red cambie o que se quede igual?</div>
+
+<p>Depende de la tarea, y la diferencia tiene nombre. Piensa en una señal de una sola dimensión, una fila de pixeles: x = (0, 0, 1, 3, 2, 0, 0). Llama t[x] a la misma señal recorrida una posición a la derecha: t[x] = (0, 0, 0, 1, 3, 2, 0).</p>
+<ul>
+  <li>Si f calcula «el valor más alto de la fila», f(x) = 3 y f(t[x]) = 3. La salida <strong>no cambió</strong>: f es <strong>invariante</strong>.</li>
+  <li>Si f multiplica cada pixel por 2, f(x) = (0, 0, 2, 6, 4, 0, 0) y f(t[x]) = (0, 0, 0, 2, 6, 4, 0), que es justo f(x) recorrida una posición. La salida <strong>se movió igual que la entrada</strong>: f es <strong>equivariante</strong>.</li>
+</ul>
+
+<div class="formula">
+  <div class="f-head">Invarianza y equivarianza a una transformación</div>
+  <div class="f-ejemplo">x = (0, 0, 1, 3, 2, 0, 0),  t = «recorrer 1 a la derecha»   ·   máximo: f(t[x]) = 3 = f(x)  (invariante)   ·   doble: f(t[x]) = (0, 0, 0, 2, 6, 4, 0) = t[f(x)]  (equivariante)</div>
+  <div class="eq">
+    invarianza:  <span class="sym" data-s="f">f</span>( <span class="sym" data-s="trans">t</span>[ <span class="sym" data-s="x"></span> ] ) = <span class="r-calc">f</span>( <span class="r-dato">x</span> )
+    <br>
+    equivarianza:  <span class="r-calc">f</span>( <span class="r-hiper">t</span>[ <span class="r-dato">x</span> ] ) = <span class="r-hiper">t</span>[ <span class="r-calc">f</span>( <span class="r-dato">x</span> ) ]
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Invariante: transformar la entrada no cambia la salida. Equivariante: transformar la entrada es lo mismo que transformar la salida; da igual si mueves antes o después.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">x</dt><dd>La entrada: una imagen (o, en el ejemplo, una fila de pixeles).</dd>
+      <dt class="r-hiper">t[·]</dt><dd>Una transformación de la entrada: trasladar, rotar, cambiar iluminación… Los corchetes dicen «aplícale t a lo de adentro». No es un parámetro que se aprenda; es la pregunta que hacemos («¿y si muevo la imagen?»).</dd>
+      <dt class="r-calc">f</dt><dd>La función que estudiamos: una capa, un bloque o la red entera. Aquí la tratamos como una cantidad calculada a partir de x.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…f es un clasificador de «perro / no perro»: quieres invarianza. Mover el perro no lo convierte en gato.</li>
+      <li>…f produce una máscara de segmentación: quieres equivarianza. Si el perro se mueve a la derecha, su máscara también.</li>
+      <li>…la transformación cambia el significado (un 6 rotado 180° es un 9): ahí la invarianza es un error.</li>
+    </ul>
+  </div>
+</div>
+
+<figure class="img">
+  <img src="../images/equivarianza.png" alt="Arriba, una sala y su segmentación; abajo, la misma sala recortada y desplazada, con la segmentación desplazada igual" width="520">
+  <figcaption>Equivarianza en segmentación: al mover la imagen (abajo), la máscara se mueve igual. La clase global («sala») no cambia, pero cada pixel segmentado se traslada. (Imagen de la slide.)</figcaption>
+</figure>
+
+<h3 id="quien-aporta" data-toc="Quién aporta qué">Quién aporta cada propiedad</h3>
+
+<p>La frase de la slide que conviene memorizar: <strong>las CNNs son naturalmente equivariantes a traslaciones, de forma aproximada; la invarianza suele aparecer después, mediante pooling, downsampling o agregación global.</strong></p>
+<ul>
+  <li><strong>La convolución es equivariante.</strong> Usa los mismos pesos en todas las posiciones, así que si el patrón se mueve 3 pixeles, la respuesta del detector se mueve 3 pixeles. Es «aproximada» porque en los bordes de la imagen la ventana se sale y el padding rompe la igualdad exacta.</li>
+  <li><strong>La invarianza se construye.</strong> Un máximo o un promedio sobre una región «olvida» en qué lugar exacto de la región estaba el patrón. Si la región es toda la imagen (agregación global), el resultado ya no depende de dónde estaba.</li>
+</ul>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>«Las CNNs son invariantes a traslaciones» es una media verdad que el examen castiga. La <em>convolución</em> es equivariante. El <em>pooling local</em> da robustez a movimientos pequeños, no invarianza total (lo verás con números en la sección 8). La invarianza completa solo aparece cuando agregas sobre toda la imagen.</p>
+</div>
+
+<h3 id="lab-desplaza" class="lab" data-toc="Lab: desplaza la señal">Laboratorio: desplaza la señal</h3>
+<p>Una fila de 20 pixeles con un patrón (1, 3, 2). Un filtro de tres pesos (1, 2, 1) recorre la fila (con un cero de padding a cada lado). Luego un max-pooling de ventana 2 y stride 2, y al final el máximo global. Mueve el desplazamiento y mira qué le pasa a cada salida. El contorno punteado es la posición original.</p>
+<div class="widget" id="labDesp">
+  <div class="widget-head"><div class="wt">Equivarianza de la convolución, invarianza del máximo global</div><div class="ws">Todo se calcula en vivo con la señal desplazada.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div class="pila3">
+        <div class="gt">Entrada x (20 pixeles)</div><canvas id="despX"></canvas>
+        <div class="gt">Salida de la convolución H</div><canvas id="despH"></canvas>
+        <div class="gt">Max-pooling 2, stride 2 (cada barra cubre dos posiciones)</div><canvas id="despP"></canvas>
+      </div>
+      <div><div id="despCtrl"></div><div id="despRead"></div><div class="status ok" id="despStatus">Listo.</div></div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><b>Desplaza a 2:</b> H se mueve exactamente 2 lugares y la salida del pooling se mueve 1 lugar. Las dos son equivariantes (el pooling, a su propia escala).</li>
+    <li><b>Desplaza a 1 o a 3:</b> H se sigue moviendo igual, pero el pooling ya no es una copia desplazada: cambian sus valores, porque el patrón cae partido entre dos ventanas. Esa es la «robustez parcial» del pooling local.</li>
+    <li><b>En todo momento:</b> el máximo global vale 9 y no se mueve. Eso es invarianza, y solo apareció al agregar sobre toda la fila.</li>
+  </ul>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>Te pueden pedir «un ejemplo donde la invarianza es mala idea». Respuestas buenas: dígitos 6 y 9 (rotación), una señal de tránsito de «vuelta a la izquierda» volteada en espejo, una radiografía de tórax volteada (el corazón cambia de lado), o cualquier tarea donde la <em>posición</em> es la respuesta (detección, segmentación). Es la misma regla que viste en <a href="05_regularizacion.html#augmentation">data augmentation</a>: una transformación solo debe ignorarse si preserva la etiqueta.</p>
+</div>
+
+<!-- ============ 4. CONVOLUCIÓN ============ -->
+<h2 id="convolucion"><span class="num">Sección 4</span>De la capa densa a la convolución</h2>
+
+<p>El temario pide <strong>reproducir sin ver las slides</strong> esta derivación. No es álgebra difícil: son tres decisiones que se toman una por una, y en cada una cae el número de parámetros. Para seguirla con números, usa una imagen de 28×28 en escala de grises y una capa intermedia del mismo tamaño.</p>
+
+<div class="q"><span class="qlabel">Duda típica</span>¿Qué significan los cuatro subíndices de W<sub>i,j,k,l</sub>?</div>
+<p>Los dos primeros (i, j) dicen <em>a qué posición de la salida</em> va el peso; los dos últimos (k, l), <em>de qué pixel de la entrada</em> viene. W<sub>3,5,10,2</sub> es «cuánto pesa el pixel de la fila 10, columna 2, en la salida de la fila 3, columna 5». La doble suma Σ<sub>k</sub>Σ<sub>l</sub> recorre todos los pixeles (repaso de sumas en <a href="00_matematicas.html#sumas">el artefacto 00</a>).</p>
+
+<h3 id="derivacion-conv" data-toc="Derivación en tres decisiones">Derivación: tres decisiones, una a la vez</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">H<sub>i,j</sub> = <span class="sym" data-s="Udens">U<sub>i,j</sub></span> + Σ<sub>k</sub> Σ<sub>l</sub> <span class="sym" data-s="Wdens">W<sub>i,j,k,l</sub></span> X<sub>k,l</sub></div><div class="d-por"><b>Punto de partida: capa completamente conectada.</b> Cada posición (i, j) de la capa intermedia H tiene su propio sesgo U<sub>i,j</sub> y su propio peso hacia cada pixel (k, l). Con 28×28: 784 sesgos + 784·784 pesos = <b>615 440</b> parámetros.</div></li>
+  <li><div class="d-ex">k = i + a,  l = j + b</div><div class="d-por"><b>Cambio de variable:</b> en lugar de decir «el pixel (k, l)», digo «el pixel que está a <b>a</b> filas y <b>b</b> columnas de distancia de (i, j)». a = 0, b = 0 es el pixel justo debajo de la salida; a = −1 es una fila arriba.</div></li>
+  <li><div class="d-ex">H<sub>i,j</sub> = U<sub>i,j</sub> + Σ<sub>a</sub> Σ<sub>b</sub> V<sub>i,j,a,b</sub> X<sub>i+a, j+b</sub></div><div class="d-por"><b>Reindexar:</b> es la misma capa escrita alrededor de cada pixel. V<sub>i,j,a,b</sub> es el viejo W<sub>i,j,i+a,j+b</sub>. Ojo: <b>reindexar no ahorra nada</b>, siguen siendo 615 440 parámetros. Solo cambia el punto de vista: «la salida (i, j) mira a su alrededor».</div></li>
+  <li><div class="d-ex">H<sub>i,j</sub> = <b>u</b> + Σ<sub>a</sub> Σ<sub>b</sub> <b>V<sub>a,b</sub></b> X<sub>i+a, j+b</sub></div><div class="d-por"><b>Decisión 1, compartir parámetros:</b> uso los mismos pesos en todas las posiciones. V pierde los subíndices i, j y el sesgo se vuelve un solo número u. Ahora hay un peso por cada desplazamiento posible (a, b): de −27 a 27 en cada eje, 55·55 = 3 025 pesos + 1 sesgo = <b>3 026</b>. Esto es lo que da la equivarianza.</div></li>
+  <li><div class="d-ex">H<sub>i,j</sub> = u + Σ<sub>a=−Δ</sub><sup>Δ</sup> Σ<sub>b=−Δ</sub><sup>Δ</sup> V<sub>a,b</sub> X<sub>i+a, j+b</sub></div><div class="d-por"><b>Decisión 2, localidad:</b> solo miro una vecindad de radio Δ. Con Δ = 1, a y b van de −1 a 1: una ventana de 3×3, 9 pesos + 1 sesgo = <b>10</b> parámetros.</div></li>
+  <li><div class="d-ex">615 440 → 615 440 → 3 026 → 10</div><div class="d-por"><b>Interpretación:</b> la convolución no es un invento aparte; es la capa densa con dos restricciones. Si los supuestos son ciertos (lo cercano importa, los patrones se repiten), no perdemos nada útil y ganamos 60 000 veces menos parámetros que estimar.</div></li>
+</ol>
+
+<h3 id="formula-conv" data-toc="La fórmula de la convolución">La fórmula, traducida</h3>
+
+<p>Antes de la fórmula, una posición con números. Ventana de 3×3 alrededor del pixel (2, 2) y un filtro que detecta bordes verticales (columna izquierda positiva, derecha negativa):</p>
+
+<div class="mat-row">
+  <div class="mat"><div class="cap">ventana de X</div><div class="grid" style="grid-template-columns:repeat(3,auto)"><div class="cell">3</div><div class="cell">1</div><div class="cell">0</div><div class="cell">1</div><div class="cell">2</div><div class="cell">3</div><div class="cell">0</div><div class="cell">1</div><div class="cell">2</div></div></div>
+  <span class="op">⊙</span>
+  <div class="mat"><div class="cap">filtro V</div><div class="grid" style="grid-template-columns:repeat(3,auto)"><div class="cell hl2">1</div><div class="cell hl2">0</div><div class="cell hl2">−1</div><div class="cell hl2">1</div><div class="cell hl2">0</div><div class="cell hl2">−1</div><div class="cell hl2">1</div><div class="cell hl2">0</div><div class="cell hl2">−1</div></div></div>
+  <span class="op">→</span>
+  <div class="mat"><div class="cap">suma + u</div><div class="grid" style="grid-template-columns:repeat(1,auto)"><div class="cell ok">−1</div></div></div>
+</div>
+
+<div class="formula">
+  <div class="f-head">Convolución de un canal (como la implementan los frameworks)</div>
+  <div class="f-ejemplo">columna izquierda: 3·1 + 1·1 + 0·1 = 4   ·   columna central: pesos 0 → 0   ·   derecha: 0·(−1) + 3·(−1) + 2·(−1) = −5   →   4 + 0 − 5 = −1,  con u = 0:  H = −1</div>
+  <div class="eq">
+    <span class="sym" data-s="Hmap">H<span class="sub">i,j</span></span> = <span class="sym" data-s="uconv">u</span> + <span class="big"><span class="lim"><span class="sym" data-s="Delta">Δ</span></span><span class="o">Σ</span><span class="lim">a=−<span class="r-hiper">Δ</span></span></span> <span class="big"><span class="lim r-hiper">Δ</span><span class="o">Σ</span><span class="lim">b=−<span class="r-hiper">Δ</span></span></span> <span class="sym" data-s="Vker">V<span class="sub">a,b</span></span> · <span class="sym" data-s="Ximg">X<span class="sub">i+a, j+b</span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El valor de la salida en (i, j) es el sesgo más la suma, sobre la ventanita alrededor de (i, j), de cada pixel por el peso que le toca según su posición dentro de la ventana.» Es un <a href="00_matematicas.html#producto-punto">producto punto</a> entre la ventana y el filtro.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">H<sub>i,j</sub></dt><dd>Un número del mapa de salida (feature map) en la fila i, columna j. Mide «cuánto se parece la ventana al filtro».</dd>
+      <dt class="r-param">V<sub>a,b</sub></dt><dd>El filtro o kernel: los pesos aprendidos. Solo depende de la posición dentro de la ventana (a, b), no de dónde está la ventana.</dd>
+      <dt class="r-param">u</dt><dd>El sesgo del filtro: un solo número para todo el mapa.</dd>
+      <dt class="r-dato">X<sub>i+a, j+b</sub></dt><dd>El pixel que está a (a, b) de la posición (i, j).</dd>
+      <dt class="r-hiper">Δ</dt><dd>El radio de la ventana. El filtro mide (2Δ + 1)×(2Δ + 1): Δ = 1 da 3×3, Δ = 2 da 5×5, Δ = 3 da 7×7, los tamaños usuales.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…la ventana es plana (todos los pixeles iguales): con este filtro, la izquierda y la derecha se cancelan y H = u. El detector de bordes no responde donde no hay borde.</li>
+      <li>…Δ sube de 1 a 2: el filtro pasa de 9 a 25 pesos; ve más contexto pero cuesta casi 3 veces más.</li>
+      <li>…el patrón se mueve un pixel: la misma cuenta ocurre un pixel después. Eso es la equivarianza, escrita en la fórmula.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="correlacion" data-toc="Convolución vs correlación">¿Por qué se llama convolución si no lo es?</h3>
+
+<p>En matemáticas, la convolución de dos funciones es (f ∗ g)(i) = Σ<sub>a</sub> f(a)·g(i − a). Fíjate en el signo menos: al avanzar a, g se recorre <em>al revés</em>. En dos dimensiones, eso equivale a <strong>voltear el kernel</strong> (de arriba abajo y de izquierda a derecha) antes de deslizarlo. Lo que implementan los frameworks, la fórmula de arriba con X<sub>i+a, j+b</sub>, no voltea nada: técnicamente es <strong>correlación cruzada</strong>.</p>
+
+<p>Un caso con números: el filtro de bordes de arriba, volteado, es (−1, 0, 1) en cada fila. Con la misma ventana daría +1 en lugar de −1. ¿Importa? No, porque <strong>los pesos se aprenden</strong>: si la tarea necesitara el filtro volteado, el entrenamiento llegaría a él. Cualquier cosa que una versión pueda aprender, la otra la aprende con el kernel al revés. Por tradición seguimos diciendo «convolución».</p>
+
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>«¿Por qué la diferencia entre convolución y correlación cruzada no importa en deep learning?» Respuesta en una línea: voltear el kernel es una reparametrización; como V se aprende, el conjunto de funciones que la capa puede representar es el mismo.</p>
+</div>
+
+<h3 id="lab-conv2d" class="lab" data-toc="Lab: convolución 2D paso a paso">Laboratorio: convolución 2D paso a paso</h3>
+<p>Una entrada de 5×5 con números chicos y un kernel de 3×3. Elige el kernel y pulsa «siguiente» para recorrer cada posición de salida: la ventana se resalta, abajo ves los productos y la suma. Los selectores de padding y stride se explican en la sección 6; puedes volver aquí después.</p>
+<div class="widget" id="labConv">
+  <div class="widget-head"><div class="wt">Correlación cruzada 2D, una ventana a la vez</div><div class="ws">Sin sesgo (u = 0). Las celdas tenues son el padding de ceros.</div></div>
+  <div class="widget-body">
+    <div class="sub-h">Kernel</div><div id="convKer"></div>
+    <div class="sub-h">Operación</div><div id="convOp"></div>
+    <div class="lab-grid">
+      <div><div class="sub-h">Padding</div><div id="convPad"></div></div>
+      <div><div class="sub-h">Stride</div><div id="convStr"></div></div>
+    </div>
+    <div class="mat-row" id="convRow"></div>
+    <div class="calcline" id="convCalc"></div>
+    <div class="status info" id="convStatus"></div>
+  </div>
+  <div class="widget-foot"></div>
+</div>
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><b>Borde vertical, p = 0, s = 1:</b> la salida mide 3×3 (5 − 3 + 1 = 3). Los valores grandes en valor absoluto marcan dónde cambia la intensidad de izquierda a derecha.</li>
+    <li><b>Identidad:</b> la salida es el centro de cada ventana, una copia recortada de la entrada. Así se comprueba que la ventana está bien colocada.</li>
+    <li><b>Cambia a «convolución» con el kernel asimétrico:</b> el kernel se voltea y los números cambian. Con borde vertical cambian de signo. Con identidad no pasa nada, porque es simétrico.</li>
+    <li><b>p = 1:</b> la salida vuelve a medir 5×5. <b>s = 2:</b> la ventana salta de dos en dos y la salida baja a 2×2 (o a 3×3 con p = 1).</li>
+  </ul>
+</div>
+
+<!-- ============ 5. CANALES ============ -->
+<h2 id="canales"><span class="num">Sección 5</span>Canales</h2>
+
+<p>Una imagen a color no es una tabla de números sino tres tablas apiladas: alto × ancho × canales. Una foto de 1024×1024 en RGB es un tensor de 1024×1024×3. Escribimos X<sub>i,j,c</sub> para el canal c en la posición (i, j): X<sub>10,20,1</sub> es «cuánto rojo hay en el pixel de la fila 10, columna 20» (si contamos los canales desde 1 como rojo, verde, azul).</p>
+
+<p>Con varios canales de entrada, cada filtro tiene <strong>profundidad</strong>: una rebanada de pesos por canal de entrada. Para producir un canal de salida, el filtro multiplica cada rebanada por su canal, suma todo y agrega un sesgo. Y si quieres varios canales de salida, necesitas un filtro completo por cada uno.</p>
+
+<figure class="img">
+  <img src="../images/multiplescanales.png" alt="Entrada de dos canales, cada uno con su rebanada de kernel; las dos correlaciones se suman en una sola salida" width="480">
+  <figcaption>Dos canales de entrada, un canal de salida: cada canal se correlaciona con su rebanada del kernel y los resultados se suman. (Imagen de la slide.)</figcaption>
+</figure>
+
+<div class="formula">
+  <div class="f-head">Convolución con canales</div>
+  <div class="f-ejemplo">c<sub>i</sub> = 2, ventana 2×2, salida d = 1:   canal 1: (1, 2; 0, 1) ⊙ (1, 0; 0, 1) = 1 + 1 = 2   ·   canal 2: (3, 0; 1, 1) ⊙ (0, 1; 1, 0) = 0 + 1 = 1   ·   ν₁ = 0.5   →   H = 2 + 1 + 0.5 = 3.5</div>
+  <div class="eq">
+    <span class="sym" data-s="Hmap">H<span class="sub">i,j,d</span></span> = <span class="sym" data-s="nu">ν<span class="sub">d</span></span> + <span class="sym" data-s="sum">Σ</span><span class="sub">a</span> Σ<span class="sub">b</span> Σ<span class="sub">c</span> <span class="sym" data-s="Vker">V<span class="sub">d,c,a,b</span></span> · <span class="sym" data-s="Ximg">X<span class="sub">i+a, j+b, c</span></span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El canal d de la salida, en (i, j), es su sesgo más la suma sobre toda la ventana <em>y sobre todos los canales de entrada</em> de pixel por peso. Cada canal de salida tiene su propio juego de pesos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">H<sub>i,j,d</sub></dt><dd>El canal d de la salida en la posición (i, j).</dd>
+      <dt class="r-param">ν<sub>d</sub></dt><dd>«Nu sub de»: el sesgo del canal de salida d. Uno por canal de salida.</dd>
+      <dt class="r-param">V<sub>d,c,a,b</sub></dt><dd>El peso que conecta el canal de entrada c, en la posición (a, b) de la ventana, con el canal de salida d.</dd>
+      <dt>c, d, a, b</dt><dd>Índices: c recorre los canales de entrada, d los de salida, a y b las posiciones dentro del kernel. Ojo: c minúscula es un índice; c<sub>i</sub> y c<sub>o</sub> (abajo) son cuántos canales hay.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…c<sub>i</sub> = 1: desaparece la suma sobre c y vuelves a la fórmula de la sección 4.</li>
+      <li>…un canal de entrada vale cero en toda la ventana: no aporta nada a esa salida, pero los otros siguen sumando.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="parametros" data-toc="Contar parámetros">Contar parámetros</h3>
+
+<p>El tensor de pesos tiene forma (c<sub>o</sub>, c<sub>i</sub>, k<sub>h</sub>, k<sub>w</sub>): un filtro por canal de salida, cada filtro con una rebanada por canal de entrada, cada rebanada de k<sub>h</sub>×k<sub>w</sub>. Ejemplo: una imagen RGB (3 canales) que entra a una capa con 16 filtros de 3×3. Cada filtro tiene 3·3·3 = 27 pesos; 16 filtros dan 432 pesos; más 16 sesgos, <b>448</b> parámetros.</p>
+
+<div class="formula">
+  <div class="f-head">Número de parámetros de una capa convolucional</div>
+  <div class="f-ejemplo">c<sub>i</sub> = 3, c<sub>o</sub> = 16, kernel 3×3:  16 · 3 · 3 · 3 + 16 = 432 + 16 = 448</div>
+  <div class="eq">
+    #parámetros = <span class="sym" data-s="co">c<sub>o</sub></span> · <span class="sym" data-s="ci">c<sub>i</sub></span> · <span class="sym" data-s="kh">k<sub>h</sub></span> · <span class="r-hiper">k<sub>w</sub></span> + <span class="r-hiper">c<sub>o</sub></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Canales de salida por canales de entrada por el área del kernel, más un sesgo por canal de salida.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">c<sub>i</sub></dt><dd>Canales de entrada. No lo eliges en esta capa: lo fija la imagen (3 en RGB) o la capa anterior.</dd>
+      <dt class="r-hiper">c<sub>o</sub></dt><dd>Canales de salida: cuántos filtros tiene la capa. Lo eliges tú.</dd>
+      <dt class="r-hiper">k<sub>h</sub>, k<sub>w</sub></dt><dd>Alto y ancho del kernel (3 y 3 en un kernel 3×3).</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…duplicas c<sub>i</sub> y c<sub>o</sub> (6 → 32): 32·6·9 + 32 = 1 760, casi 4 veces 448. Los pesos se multiplican por 4; los sesgos solo por 2.</li>
+      <li>…cambias la imagen de 28×28 a 224×224: <b>los parámetros no cambian</b>. La fórmula no tiene ni alto ni ancho de la imagen. (El costo de cómputo sí cambia: sección 6.)</li>
+      <li>…pasas de 3×3 a 5×5: los pesos se multiplican por 25/9 ≈ 2.8.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="uno-por-uno" data-toc="Convoluciones 1×1">Convoluciones 1×1</h3>
+
+<p>Parece absurdo un kernel de 1×1: no ve vecinos. Pero con canales sí hace algo. En cada pixel, toma el vector de c<sub>i</sub> canales y lo multiplica por una matriz de c<sub>o</sub>×c<sub>i</sub>. Ejemplo: un pixel con 3 canales x = (1, 2, 3) y una 1×1 con 2 filtros, pesos (1, 0, −1) y (0.5, 0.5, 0.5), sin sesgo:</p>
+<div class="eq">canal 1: 1·1 + 0·2 + (−1)·3 = −2    ·    canal 2: 0.5·1 + 0.5·2 + 0.5·3 = 3    →   (−2, 3)</div>
+<p>Es exactamente una capa lineal ℝ<sup>3</sup> → ℝ<sup>2</sup> (<a href="00_matematicas.html#matriz-vector">matriz por vector</a>), aplicada en cada pixel con los mismos pesos. La slide lo dice así: <strong>una 1×1 no mezcla información entre pixeles vecinos, pero sí entre canales en la misma ubicación</strong>. Necesita c<sub>i</sub>·c<sub>o</sub> pesos (más c<sub>o</sub> sesgos opcionales): de 64 canales a 16, 64·16 + 16 = 1 040 parámetros.</p>
+
+<p>Para qué se usa:</p>
+<ul>
+  <li><strong>Cambiar el número de canales</strong> sin tocar el alto ni el ancho.</li>
+  <li><strong>Combinar información entre canales</strong>, por ejemplo mezclar un «detector de verde» con un «detector de textura».</li>
+  <li><strong>Abaratar antes de una convolución grande:</strong> bajar de 192 a 32 canales con una 1×1 antes de un 5×5 ahorra mucho cómputo (lo calculas en la práctica).</li>
+  <li>Con una no linealidad después, <strong>aumenta la expresividad</strong> de la red a bajo costo.</li>
+</ul>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>Es tentador decir «el canal 7 detecta bordes y el 12 detecta pasto». La slide advierte que <strong>no debemos interpretar cada canal como una feature humana limpia y separada</strong>: los canales se optimizan juntos para bajar la pérdida, y lo que codifican suele estar repartido entre varios.</p>
+</div>
+
+<!-- ============ 6. TAMAÑO ============ -->
+<h2 id="tamano"><span class="num">Sección 6</span>Tamaño de salida, padding, stride y costo</h2>
+
+<p>Esta es la sección que más puntos da en el examen: «son cinco minutos del examen y separan a quien entiende de quien memorizó», dice el temario. La fórmula viene en el formulario; lo que se evalúa es que sepas de dónde sale.</p>
+
+<h3 id="sin-padding">Sin padding: la ventana tiene que caber</h3>
+<p>Una fila de 5 pixeles y una ventana de 3. La ventana puede empezar en el pixel 1, 2 o 3; si empezara en el 4, se saldría. Son 5 − 3 + 1 = <b>3</b> posiciones. En dos dimensiones pasa lo mismo en cada eje: una entrada de n<sub>h</sub>×n<sub>w</sub> con un kernel de k<sub>h</sub>×k<sub>w</sub> da (n<sub>h</sub> − k<sub>h</sub> + 1)×(n<sub>w</sub> − k<sub>w</sub> + 1). Un 28×28 con un 3×3 queda en 26×26: cada capa sin padding se come un borde.</p>
+
+<h3 id="padding">Padding: rellenar los bordes</h3>
+<p>Además de encoger, sin padding los pixeles de las esquinas <strong>participan en menos ventanas</strong> que los del centro: en una entrada de 5×5 con kernel 3×3, la esquina aparece en 1 de las 9 ventanas y el centro en las 9. La información del borde casi no llega a la salida. La solución es agregar p filas y columnas de ceros alrededor. Con p de cada lado, la entrada efectiva mide n + 2p, así que la salida (con stride 1) es n + 2p − k + 1.</p>
+<p>Para que la salida mida lo mismo que la entrada (<em>same padding</em>) con un kernel impar, se necesita n + 2p − k + 1 = n, es decir, <b>p = (k − 1)/2</b>: p = 1 para 3×3, p = 2 para 5×5, p = 3 para 7×7.</p>
+
+<figure class="img">
+  <img src="../images/padding2.png" alt="Entrada de 3 por 3 rodeada de ceros, correlacionada con un kernel de 2 por 2" width="440">
+  <figcaption>Padding de ceros alrededor de la entrada: permite controlar el tamaño de la salida y conservar los bordes. (Imagen de la slide.)</figcaption>
+</figure>
+
+<h3 id="stride">Stride: saltar posiciones</h3>
+<p>El stride s es cuántas filas o columnas avanza la ventana en cada paso. Con s = 2 se salta una posición sí y una no, así que la salida mide más o menos la mitad. Reduce resolución pero ahorra cómputo. Cuando el último salto no cabe completo, esa posición se descarta: de ahí el «piso» (floor, ⌊·⌋, redondear hacia abajo) de la fórmula.</p>
+
+<div class="formula">
+  <div class="f-head">Tamaño de salida con padding y stride (por dimensión)</div>
+  <div class="f-ejemplo">n = 28, k = 3:   p = 0, s = 1 → ⌊25/1⌋ + 1 = 26   ·   p = 1, s = 1 → ⌊27/1⌋ + 1 = 28   ·   p = 1, s = 2 → ⌊27/2⌋ + 1 = 13 + 1 = 14   ·   n = 8, k = 3, p = 0, s = 2 → ⌊5/2⌋ + 1 = 2 + 1 = 3</div>
+  <div class="eq">
+    <span class="r-calc">salida</span> = ⌊ <span class="frac"><span class="num"><span class="r-dato">n</span> + 2<span class="sym" data-s="pad">p</span> − <span class="r-hiper">k</span></span><span class="den"><span class="sym" data-s="stride">s</span></span></span> ⌋ + 1
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«A la entrada ya rellenada le quito el tamaño del kernel: eso es cuánto espacio tiene la ventana para moverse. Lo divido entre el tamaño del salto, redondeo hacia abajo y sumo 1 por la posición inicial.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">n</dt><dd>Tamaño de la entrada en esa dimensión (n<sub>h</sub> para el alto, n<sub>w</sub> para el ancho).</dd>
+      <dt class="r-hiper">p</dt><dd>Padding por lado (p<sub>h</sub> arriba y abajo, p<sub>w</sub> a izquierda y derecha). Ojo: en el artefacto 05, p era la probabilidad de dropout; aquí es otra cosa.</dd>
+      <dt class="r-hiper">k</dt><dd>Tamaño del kernel en esa dimensión.</dd>
+      <dt class="r-hiper">s</dt><dd>Stride: cuántas posiciones avanza la ventana.</dd>
+      <dt>⌊·⌋</dt><dd>Piso: redondear hacia abajo. ⌊13.5⌋ = 13.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…s = 1 y p = 0: recuperas n − k + 1.</li>
+      <li>…s = 1 y p = (k − 1)/2: la salida mide n (same padding).</li>
+      <li>…s = 2: la salida mide más o menos la mitad. Con n = 8, k = 3, s = 2 la ventana empieza en las columnas 1, 3 y 5; la siguiente empezaría en la 7 y necesitaría hasta la 9, que no existe. La columna 8 no entra en ninguna ventana: la información de esa orilla se pierde.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="note fix">
+  <span class="tag">Trampa común</span>
+  <p>El +1 va <em>fuera</em> del piso y el 2p va <em>dentro</em> de la fracción. Un error típico es escribir ⌊(n − k)/s + 1⌋ + 2p. Comprueba siempre con un caso que sepas de memoria: 3×3 con p = 1 y s = 1 tiene que conservar el tamaño.</p>
+</div>
+
+<h3 id="costo">El costo de cómputo</h3>
+<p>La slide señala que el costo también depende del tamaño espacial de la salida: hay alto<sub>out</sub>×ancho<sub>out</sub>×c<sub>o</sub> números que calcular, y cada uno es un producto punto de c<sub>i</sub>·k<sub>h</sub>·k<sub>w</sub> multiplicaciones. Con las dos convoluciones del notebook de la clase (MNIST):</p>
+<ul>
+  <li>Primera: 28·28·32 salidas, cada una con 1·3·3 = 9 multiplicaciones: <b>225 792</b>. Tiene solo 320 parámetros.</li>
+  <li>Segunda (después de un pooling que deja 14×14): 14·14·64 salidas, cada una con 32·9 = 288 multiplicaciones: <b>3 612 672</b>, con 18 496 parámetros.</li>
+</ul>
+<p>Moraleja de la slide: <strong>capas con muchos canales y alta resolución pueden ser costosas aunque el kernel sea pequeño</strong>. Y una consecuencia que el examen pregunta: si duplicas el alto y el ancho de la entrada, los parámetros no cambian, pero el número de salidas, y por tanto el cómputo, se multiplica por 4.</p>
+
+<h3 id="lab-calculadora" class="lab" data-toc="Lab: calculadora de arquitecturas">Laboratorio: calculadora de arquitecturas</h3>
+<p>Arma una red capa por capa y la calculadora aplica las fórmulas de esta sección y de la siguiente: forma de salida, parámetros, receptive field (r = cuántos pixeles de la entrada ve una unidad; j = cuánto se separan en la entrada dos unidades vecinas) y multiplicaciones. Empieza con la CNN del notebook de la clase. Haz clic en una capa de la tabla para editarla.</p>
+<div class="widget" id="labCalc">
+  <div class="widget-head"><div class="wt">Aritmética de una CNN</div><div class="ws">Entrada cuadrada; pooling sin padding; «densa» aplana todo lo anterior.</div></div>
+  <div class="widget-body">
+    <div class="sub-h">Arquitectura de partida</div><div id="calcPreset"></div>
+    <div class="lab-grid">
+      <div id="calcEntrada"></div>
+      <div id="calcEdit"></div>
+    </div>
+    <div class="calc-btns">
+      <button class="btn" id="calcAddConv">+ conv</button>
+      <button class="btn" id="calcAddPool">+ pooling</button>
+      <button class="btn" id="calcAddDensa">+ densa</button>
+      <button class="btn" id="calcDel">Quitar la capa elegida</button>
+    </div>
+    <div class="scroll" id="calcTabla"></div>
+    <div id="calcRead"></div>
+    <div class="status ok" id="calcStatus">Listo.</div>
+  </div>
+</div>
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><b>CNN del notebook:</b> 421 642 parámetros en total, y el 95.5% está en las dos capas densas (casi todo en la primera, 3 136 → 128). Las convoluciones, que hacen casi todo el cómputo, tienen muy pocos parámetros. Es la misma lección que AlexNet (sección 9).</li>
+    <li><b>Sube la entrada de 28 a 56:</b> los parámetros de las convoluciones no cambian y sus multiplicaciones se multiplican por 4; la primera densa, en cambio, se cuadruplica en parámetros porque aplana un mapa 4 veces más grande.</li>
+    <li><b>Ejemplo del temario:</b> 64×64×3 con 16 filtros de 5×5, p = 2, s = 2 da 32×32×16 y 1 216 parámetros; tras la segunda capa 3×3, el receptive field es 9.</li>
+    <li><b>Pon el stride de una conv en 3 con kernel 1:</b> mira cómo el piso descarta posiciones y cómo crece j.</li>
+  </ul>
+</div>
+
+<!-- ============ 7. RECEPTIVE FIELD ============ -->
+<h2 id="receptive-field"><span class="num">Sección 7</span>Feature maps y receptive field</h2>
+
+<p>Al output de una capa convolucional se le llama <strong>mapa de características (feature map)</strong>: una representación espacial aprendida a partir de la capa anterior. Cada número del mapa es una «neurona» que mira una parte de la entrada. ¿Qué parte? Eso es el <strong>campo receptivo (receptive field)</strong>: el conjunto de posiciones de la entrada original que pueden afectar su valor.</p>
+
+<p>Con una sola convolución de 3×3, cada neurona ve 3×3 pixeles. Ahora apila una segunda convolución de 3×3 encima. Una neurona de la segunda capa mira 3 neuronas de la primera (en cada eje); la de la izquierda ve los pixeles 1 a 3, la del centro 2 a 4 y la de la derecha 3 a 5. Juntas cubren 5 pixeles. Con una tercera capa, 7. Cada capa de 3×3 con stride 1 suma 2 al receptive field.</p>
+
+<figure class="img">
+  <img src="../images/receptive2.png" alt="Dos capas convolucionales unidimensionales apiladas: una neurona de la segunda capa depende de cinco posiciones del input" width="420">
+  <figcaption>Al apilar capas, el receptive field crece: la neurona de arriba depende de más posiciones del input que cualquiera de la primera capa. (Imagen de la slide.)</figcaption>
+</figure>
+
+<p>El stride y el pooling aceleran el crecimiento. Después de un stride 2, dos neuronas vecinas están separadas por 2 pixeles de la entrada, así que una ventana de 3 neuronas en la capa siguiente abarca más terreno. El formulario del examen lleva esa cuenta con dos números por capa: <b>r</b>, el tamaño del receptive field, y <b>j</b> (de <i>jump</i>, salto), la distancia en pixeles de la entrada entre dos neuronas vecinas de esa capa. Esta recurrencia no aparece en la slide, pero el examen la da en el formulario y el temario pide usarla.</p>
+
+<div class="formula">
+  <div class="f-head">Receptive field al apilar capas</div>
+  <div class="f-ejemplo">conv 3×3 (s = 1) → pooling 2×2 (s = 2) → conv 3×3 (s = 1):   r₁ = 1 + 2·1 = 3, j₁ = 1   ·   r₂ = 3 + 1·1 = 4, j₂ = 2   ·   r₃ = 4 + 2·2 = 8, j₃ = 2   →   cada unidad final ve 8×8 pixeles</div>
+  <div class="eq">
+    <span class="sym" data-s="rl">r<span class="sub">l</span></span> = <span class="r-calc">r</span><span class="sub">l−1</span> + ( <span class="r-hiper">k</span><span class="sub">l</span> − 1 ) · <span class="r-calc">j</span><span class="sub">l−1</span>
+<br><span class="sym" data-s="jl">j<span class="sub">l</span></span> = <span class="r-calc">j</span><span class="sub">l−1</span> · <span class="sym" data-s="stride">s<span class="sub">l</span></span>
+    <br><span style="font-size:15px">(con r<sub>0</sub> = j<sub>0</sub> = 1)</span>
+    <div class="leyenda-roles"></div>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«Cada capa agranda el campo receptivo en (tamaño del kernel menos uno) pasos, y cada paso mide lo que se separan las neuronas de la capa anterior en la imagen original. El stride multiplica esa separación.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">r<sub>l</sub></dt><dd>Lado del receptive field de una neurona de la capa l, en pixeles de la entrada. r<sub>0</sub> = 1: un pixel se ve a sí mismo.</dd>
+      <dt class="r-calc">j<sub>l</sub></dt><dd>Separación, en pixeles de la entrada, entre dos neuronas vecinas de la capa l. j<sub>0</sub> = 1.</dd>
+      <dt class="r-hiper">k<sub>l</sub>, s<sub>l</sub></dt><dd>Kernel y stride de la capa l. Un pooling cuenta como capa: 2×2 con stride 2 es k = 2, s = 2. El padding no cambia r.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…apilas L convoluciones 3×3 con stride 1: r = 1 + 2L. Para cubrir 28 pixeles hacen falta 14 capas (r = 29).</li>
+      <li>…pones stride 2 al principio: todas las capas siguientes suman el doble. Por eso el stride y el pooling hacen crecer el receptive field más rápido.</li>
+      <li>…usas una 1×1 (k = 1): r no cambia. Mezcla canales, no amplía la vista.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="rf-notebook" data-toc="RF de la red del notebook">El receptive field de la CNN del notebook</h3>
+<ol class="deriv" data-revelar>
+  <li><div class="d-ex">r<sub>0</sub> = 1,  j<sub>0</sub> = 1</div><div class="d-por"><b>Inicio:</b> en la entrada, cada «neurona» es un pixel.</div></li>
+  <li><div class="d-ex">conv 3×3, s = 1:  r₁ = 1 + (3 − 1)·1 = 3,  j₁ = 1·1 = 1</div><div class="d-por"><b>Aplicar la recurrencia:</b> el kernel agrega 2 pasos de 1 pixel.</div></li>
+  <li><div class="d-ex">pooling 2×2, s = 2:  r₂ = 3 + (2 − 1)·1 = 4,  j₂ = 1·2 = 2</div><div class="d-por"><b>El pooling es una capa más</b> con k = 2 y s = 2. Agrega solo 1 al receptive field, pero duplica el salto.</div></li>
+  <li><div class="d-ex">conv 3×3, s = 1:  r₃ = 4 + (3 − 1)·2 = 8,  j₃ = 2</div><div class="d-por"><b>Aquí se nota el salto:</b> el mismo kernel 3×3 de antes ahora agrega 4 pixeles, no 2, porque sus neuronas de entrada están separadas por 2.</div></li>
+  <li><div class="d-ex">pooling 2×2, s = 2:  r₄ = 8 + (2 − 1)·2 = 10,  j₄ = 4</div><div class="d-por"><b>Resultado:</b> cada número del mapa de 7×7×64 ve una ventana de 10×10 pixeles del dígito de 28×28. Ninguna unidad ve el dígito entero; la capa densa que sigue es la que junta todo.</div></li>
+</ol>
+
+<h3 id="lab-rf" class="lab" data-toc="Lab: receptive field en 1D">Laboratorio: receptive field en 1D</h3>
+<p>Una entrada de 24 posiciones (abajo) y varias capas convolucionales con same padding (arriba). Elige una neurona de la última capa: el laboratorio marca, capa por capa, todas las neuronas de las que depende, y cuenta cuántas posiciones de la entrada quedan marcadas.</p>
+<div class="widget" id="labRF">
+  <div class="widget-head"><div class="wt">¿Qué pixeles ve una neurona profunda?</div><div class="ws">Cada fila es una capa. Las neuronas se dibujan sobre el centro de su receptive field.</div></div>
+  <div class="widget-body">
+    <canvas id="rfCanvas"></canvas>
+    <div class="lab-grid">
+      <div><div id="rfCtrl"></div><div class="sub-h">Kernel (todas las capas)</div><div id="rfK"></div><div class="sub-h">Stride de la capa 1</div><div id="rfS"></div></div>
+      <div><div id="rfRead"></div><div class="status ok" id="rfStatus">Listo.</div></div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><b>k = 3, stride 1, de 1 a 4 capas:</b> el receptive field pasa por 3, 5, 7 y 9. Crece de 2 en 2, como dice la fórmula.</li>
+    <li><b>Cambia el stride de la capa 1 a 2:</b> con 4 capas sube a 15. La primera capa tiene la mitad de neuronas y todas las de arriba ven el doble de terreno por paso.</li>
+    <li><b>Mueve la neurona a una orilla:</b> el conteo visual queda por debajo de la fórmula, porque parte de la ventana cae sobre el padding (ceros que no son pixeles). La fórmula da el tamaño de la ventana, no cuántos pixeles reales tiene dentro.</li>
+    <li><b>k = 5, stride 2, 4 capas:</b> r = 29, más que las 24 posiciones: una neurona central ya ve toda la entrada.</li>
+  </ul>
+</div>
+
+<div class="note exam">
+  <span class="tag">En el examen…</span>
+  <p>El examen de práctica pregunta (V/F): «si el receptive field de la última capa convolucional cubre solo una esquina, la red igual puede clasificar la imagen completa». Es <b>falso</b> si no hay nada después que junte la información: una unidad solo usa lo que ve. Por eso se apilan capas, se usa stride o pooling, o se agrega globalmente (o con una capa densa) antes de clasificar.</p>
+</div>
+
+<!-- ============ 8. POOLING ============ -->
+<h2 id="pooling"><span class="num">Sección 8</span>Pooling y upsampling</h2>
+
+<h3 id="pooling-que" data-toc="Pooling: qué hace">Pooling: resumir una ventana</h3>
+<p>Una capa de pooling mueve una ventana sobre el mapa y calcula <em>una</em> cantidad por ventana. Un ejemplo con una ventana de 2×2 que contiene (1, 3; 4, 2):</p>
+<ul>
+  <li><strong>Max pooling</strong> se queda con el máximo: 4. Responde «¿apareció este patrón en alguna parte de la región?», sin importar en qué pixel exacto.</li>
+  <li><strong>Average pooling</strong> promedia: (1 + 3 + 4 + 2)/4 = 2.5. Reduce resolución suavizando.</li>
+</ul>
+<p>Lo que el examen pregunta del pooling, en cuatro frases de la slide:</p>
+<ul>
+  <li><strong>No tiene parámetros aprendidos.</strong> Máximo y promedio son operaciones fijas. Sí tiene hiperparámetros: tamaño de ventana, stride y padding.</li>
+  <li><strong>Se aplica a cada canal por separado:</strong> si entran c canales, salen c canales.</li>
+  <li><strong>Ayuda a</strong> reducir resolución, bajar el costo e introducir cierta robustez a cambios pequeños de posición. Y, como viste, agranda el receptive field de lo que sigue.</li>
+  <li><strong>No crea invariancia total.</strong> Solo reduce la sensibilidad local. Lo comprobaste en el laboratorio de la sección 3 y lo vuelves a ver abajo.</li>
+</ul>
+
+<h3 id="upsampling">Upsampling: recuperar resolución</h3>
+<p>En segmentación la salida es una imagen (una clase por pixel). Si la red redujo la resolución con pooling o stride, hay que recuperarla. La slide da cuatro maneras:</p>
+<div class="scroll"><table class="tbl">
+  <tr><th>Método</th><th>Qué hace</th><th>¿Aprende?</th><th>Cuidado con</th></tr>
+  <tr><td><b>Repetir</b></td><td>Copia cada valor en un bloque (2×2 si duplicas)</td><td>No</td><td>Barato, pero sale «en escalones»</td></tr>
+  <tr><td><b>Max-unpooling</b></td><td>Pone cada valor de regreso en la posición donde estuvo el máximo del pooling; el resto en cero</td><td>No</td><td>Requiere haber guardado las posiciones del max-pooling</td></tr>
+  <tr><td><b>Interpolación bilineal</b></td><td>Rellena con promedios ponderados de los valores vecinos</td><td>No</td><td>Más suave que repetir</td></tr>
+  <tr><td><b>Transposed convolution</b></td><td>Cada valor de entrada «pinta» un kernel aprendido, escalado por ese valor, en varias posiciones de la salida; donde se traslapan, se suma</td><td>Sí</td><td>No siempre duplica: el tamaño depende de kernel, stride, padding y output padding</td></tr>
+</table></div>
+
+<details>
+  <summary>Para profundizar: tamaño de salida de una transposed convolution</summary>
+  <div class="dbody">
+    <p>La slide no da la fórmula, pero sale de «deshacer» la de la sección 6. En la convención de PyTorch, una transposed convolution con entrada n, kernel k, stride s, padding p y output padding op produce (n − 1)·s − 2p + k + op. Ejemplo: n = 2, k = 2, s = 2, p = 0 da (2 − 1)·2 + 2 = 4: duplica. Con k = 3 daría 5, no 4. No es material de examen; está aquí para que la frase «no siempre duplica» tenga números.</p>
+  </div>
+</details>
+
+<h3 id="lab-pool" class="lab" data-toc="Lab: bajar y subir resolución">Laboratorio: bajar y subir resolución</h3>
+<p>Un mapa de 4×4 pasa por un pooling de 2×2 con stride 2 (queda de 2×2) y luego vuelve a 4×4 con el método de upsampling que elijas. Las cuatro ventanas del pooling se distinguen con sombreado; con max pooling, el máximo de cada ventana se marca en color. Prueba «desplazar 1 pixel» para ver qué tan robusto es el pooling.</p>
+<div class="widget" id="labPool">
+  <div class="widget-head"><div class="wt">Pooling 2×2 y cuatro formas de upsampling</div><div class="ws">Cálculo exacto; el kernel de la transposed convolution está fijo, como si ya se hubiera aprendido.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <div><div class="sub-h">Pooling</div><div id="poolTipo"></div></div>
+      <div><div class="sub-h">Entrada</div><div id="poolShift"></div></div>
+    </div>
+    <div class="sub-h">Upsampling</div><div id="poolUp"></div>
+    <div class="mat-row" id="poolRow"></div>
+    <div id="poolRead"></div>
+    <div class="status info" id="poolStatus"></div>
+  </div>
+</div>
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><b>Max, entrada original:</b> el pooling da (4, 2; 2, 5). Ahora <b>desplaza 1 pixel</b> a la derecha: da (4, 3; 2, 5). Cambió 1 de 4 valores. Hay robustez parcial, no invarianza.</li>
+    <li><b>Average con desplazamiento:</b> cambian los 4 valores. El promedio es más sensible al movimiento que el máximo.</li>
+    <li><b>Compara los upsampling:</b> repetir da bloques; max-unpooling deja casi todo en cero; bilineal es suave; la transposed convolution pinta el kernel en cada bloque. Ninguno recupera el mapa original: el pooling tiró información. Por eso las redes de segmentación usan skip connections (sección 10).</li>
+  </ul>
+</div>
+
+<!-- ============ 9. ARQUITECTURAS ============ -->
+<h2 id="arquitecturas"><span class="num">Sección 9</span>ImageNet, AlexNet y ResNet</h2>
+
+<h3 id="imagenet">ImageNet: la vara de medir</h3>
+<p>ImageNet/ILSVRC fue clave para medir el progreso en clasificación. En la tarea clásica: imágenes redimensionadas y recortadas alrededor de 224×224, unos 1.2 millones de imágenes de entrenamiento, 50 000 de validación y 1 000 clases. La métrica estándar es el <strong>error top-5</strong>: la predicción cuenta como acierto si la clase correcta está entre las 5 más probables del modelo.</p>
+
+<h3 id="alexnet">AlexNet (2012): no fue solo una arquitectura</h3>
+<p>AlexNet no fue la primera CNN (LeCun ya las usaba en 1998 para leer dígitos), pero mostró que una CNN grande entrenada con GPUs podía superar con mucho a los métodos basados en características diseñadas a mano. Sus ingredientes, según la slide:</p>
+<div class="cmp">
+  <div class="col"><h5>Arquitectura y cómputo</h5><div class="cb">5 capas convolucionales, capas completamente conectadas al final, ReLU (<a href="04_entrenamiento2.html#gradientes-que-se-apagan">gradientes que no se apagan</a>), entrenamiento en GPU.</div></div>
+  <div class="col"><h5>Optimización y regularización</h5><div class="cb">SGD con momentum, batch relativamente grande para la época, <a href="05_regularizacion.html#dropout">dropout</a> en las capas densas, regularización L2, <a href="05_regularizacion.html#augmentation">data augmentation</a> (recortes, espejo horizontal, cambios de color e intensidad).</div></div>
+</div>
+<p>En ILSVRC 2012 alcanzó un error top-5 cercano a 15–16%, muy por debajo de los métodos previos. La lección de la slide: <strong>fue arquitectura, datos, cómputo, optimización y regularización trabajando juntos</strong>. Es la misma combinación que la Tarea 6 te pide explorar a pequeña escala: optimizador (SGD con momentum contra Adam), dropout × weight decay con pocos datos, y augmentation conservador contra ruido en las entradas.</p>
+
+<p>Un detalle que el examen puede preguntar: en AlexNet, <strong>la mayor parte de los parámetros venía de las capas completamente conectadas</strong>, no de las convoluciones. Puedes comprobar el mismo patrón con números en la CNN del notebook de la clase (usa la calculadora de la sección 6): las dos convoluciones suman 18 816 parámetros y las dos densas 402 826, el 95.5% del total. Por eso las arquitecturas posteriores redujeron o eliminaron las capas densas grandes.</p>
+
+<h3 id="resnet">ResNet (2015): aprender una corrección</h3>
+<div class="q"><span class="qlabel">Duda típica</span>Si una red de 20 capas funciona, ¿por qué una de 56 capas, que puede hacer todo lo que hace la de 20 y más, tiene más error en entrenamiento?</div>
+<p>Ese era el problema. Al apilar muchas capas, el entrenamiento empeoraba, y <strong>no por sobreajuste</strong> (el error de entrenamiento también subía), sino porque la optimización se volvía más difícil. En teoría, las 36 capas extra podrían aprender la identidad y copiar lo que hace la red de 20; en la práctica, a una pila de capas no lineales le cuesta mucho aprender «no hagas nada».</p>
+<p>La idea de ResNet: que cada bloque aprenda una <em>corrección</em> sobre la identidad. Un número para verlo: si la representación vale h = 2 y el bloque aprende F(h) = 0.3, la salida es 2 + 0.3 = 2.3. Si no hace falta cambiar nada, basta con F ≈ 0 y la salida es 2: «no hacer nada» se vuelve lo fácil.</p>
+
+<div class="formula">
+  <div class="f-head">Bloque residual</div>
+  <div class="f-ejemplo">h = 2, F(h) = 0.3 → 2.3   ·   derivadas en 10 bloques con F′ = 0.1:  plana 0.1¹⁰ = 10⁻¹⁰   ·   residual (1 + 0.1)¹⁰ = 1.1¹⁰ ≈ 2.59</div>
+  <div class="eq">
+    <span class="sym" data-s="h"></span><span class="sub">k+1</span> = <span class="r-calc">h</span><span class="sub">k</span> + <span class="sym" data-s="Fres">F(h<span class="sub">k</span>)</span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«La salida del bloque es su entrada más una corrección que calcula el bloque.» La entrada pasa directo por un atajo (skip connection) y se suma al final.</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-calc">h<sub>k</sub></dt><dd>La representación que entra al bloque k (un mapa de características). Aquí k es el número de bloque, no el tamaño del kernel.</dd>
+      <dt class="r-calc">F(h<sub>k</sub>)</dt><dd>Lo que calculan las capas del bloque (por ejemplo, dos convoluciones con ReLU). Contiene los parámetros aprendidos.</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…F(h<sub>k</sub>) ≈ 0: el bloque deja pasar la representación intacta. Agregar bloques ya no puede empeorar tanto.</li>
+      <li>…miras el gradiente: en una red plana, ∂h<sub>k+1</sub>/∂h<sub>k</sub> = F′, y 10 factores de 0.1 dan 10⁻¹⁰ (se apaga). Con el atajo, la derivada es 1 + F′: siempre hay un camino que no se multiplica por números chicos.</li>
+      <li>…quitas los atajos de una ResNet-152: vuelves al problema de la red plana profunda.</li>
+    </ul>
+  </div>
+</div>
+
+<p>Las conexiones residuales permitieron entrenar redes mucho más profundas, como ResNet-152, y <strong>el mismo principio reaparece en los Transformers</strong>: cada subcapa se escribe como h + Subcapa(h). Lo verás en el <a href="08_transformers.html#residual">artefacto 08</a>, y su versión en el tiempo es la memoria aditiva de la LSTM (<a href="07_rnn.html#por-que-lstm">artefacto 07</a>).</p>
+
+<h3 id="cnn-hoy" data-toc="CNNs modernas y hoy">Después de ResNet, y hoy</h3>
+<p>Las CNNs siguieron evolucionando: bloques residuales, normalización, convoluciones separables en profundidad, bloques bottleneck (la 1×1 de la sección 5), escalamiento cuidadoso de profundidad, anchura y resolución, y entrenamiento con mucha augmentation y mejores schedules. Ejemplos: ResNet, MobileNet, EfficientNet, ConvNeXt.</p>
+<p>Hoy muchas tareas de visión usan Transformers o modelos fundacionales visuales, pero las CNNs siguen siendo importantes: son eficientes, tienen buenos sesgos inductivos para imágenes (<a href="04_entrenamiento2.html#sesgo-inductivo">sesgo inductivo</a>), funcionan bien con menos datos, aparecen dentro de modelos híbridos y siguen siendo fuertes en dispositivos con pocos recursos.</p>
+<div class="note key">
+  <span class="tag">La lección de la slide</span>
+  <p>No es «las CNNs fueron reemplazadas». Es: <strong>localidad + compartición de pesos siguen siendo ideas centrales.</strong></p>
+</div>
+
+<!-- ============ 10. DETECCIÓN ============ -->
+<h2 id="deteccion"><span class="num">Sección 10</span>Detección, segmentación y métricas</h2>
+
+<h3 id="metricas">Cada tarea, su métrica</h3>
+<div class="scroll"><table class="tbl">
+  <tr><th>Tarea</th><th>Métricas de la slide</th></tr>
+  <tr><td><b>Clasificación</b></td><td>top-1 accuracy, top-5 accuracy</td></tr>
+  <tr><td><b>Detección</b></td><td>Intersection over Union (IoU), Average Precision (AP), mean Average Precision (mAP)</td></tr>
+  <tr><td><b>Segmentación</b></td><td>pixel accuracy, IoU por clase, mean IoU</td></tr>
+</table></div>
+
+<p>La pieza que se calcula a mano es el IoU. Dos cajas de 4×4: la verdadera va de 2 a 6 en cada eje y la predicha de 3 a 7. Se traslapan en un cuadrado de 3×3 = 9. Cada caja tiene área 16, así que juntas cubren 16 + 16 − 9 = 23 (el traslape se restó para no contarlo dos veces). IoU = 9/23 ≈ 0.391.</p>
+
+<div class="formula">
+  <div class="f-head">Intersection over Union</div>
+  <div class="f-ejemplo">A = [2, 6]×[2, 6], B = [3, 7]×[3, 7]:   |A ∩ B| = 3·3 = 9   ·   |A ∪ B| = 16 + 16 − 9 = 23   →   IoU = 9/23 ≈ 0.391</div>
+  <div class="eq">
+    <span class="sym" data-s="IoU">IoU</span> = <span class="frac"><span class="num">| <span class="r-dato">A</span> ∩ <span class="r-calc">B</span> |</span><span class="den">| <span class="r-dato">A</span> ∪ <span class="r-calc">B</span> |</span></span>
+  </div>
+  <div class="f-lectura"><span class="tag">Se lee</span><p>«El área donde las dos regiones coinciden, dividida entre el área que cubren entre las dos.»</p></div>
+  <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span>
+    <dl>
+      <dt class="r-dato">A</dt><dd>La región verdadera (caja o máscara anotada).</dd>
+      <dt class="r-calc">B</dt><dd>La región que predice el modelo.</dd>
+      <dt>∩, ∪, |·|</dt><dd>Intersección (lo que está en las dos), unión (lo que está en al menos una) y «área de».</dd>
+    </dl>
+  </div>
+  <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span>
+    <ul>
+      <li>…las regiones coinciden perfectamente: IoU = 1.</li>
+      <li>…no se traslapan: IoU = 0, aunque estén a un pixel de distancia.</li>
+      <li>…la caja predicha es enorme y contiene a la verdadera: la intersección es toda A, pero la unión crece, y el IoU baja. El IoU castiga pasarse tanto como quedarse corto.</li>
+    </ul>
+  </div>
+</div>
+
+<h3 id="lab-iou" class="lab" data-toc="Lab: IoU">Laboratorio: IoU con dos cajas</h3>
+<p>La caja verdadera está fija. Mueve y cambia el tamaño de la caja predicha; el área sombreada fuerte es la intersección.</p>
+<div class="widget" id="labIoU">
+  <div class="widget-head"><div class="wt">Intersection over Union</div><div class="ws">Coordenadas en una cuadrícula de 10×10.</div></div>
+  <div class="widget-body">
+    <div class="lab-grid">
+      <canvas id="iouCanvas"></canvas>
+      <div><div id="iouCtrl"></div><div id="iouRead"></div><div class="status ok" id="iouStatus">Listo.</div></div>
+    </div>
+  </div>
+</div>
+<div class="note">
+  <span class="tag">Qué observar</span>
+  <ul>
+    <li><b>Estado inicial:</b> desplazar 1 unidad en cada eje una caja de 4×4 ya baja el IoU a 0.391. El IoU es exigente.</li>
+    <li><b>Haz la predicha de 8×8 y que contenga a la verdadera:</b> la intersección es 16 (toda la caja verdadera) pero el IoU es 16/64 = 0.25.</li>
+    <li><b>Separa las cajas:</b> en cuanto dejan de tocarse, el IoU es 0 sin importar qué tan cerca estén.</li>
+  </ul>
+</div>
+
+<h3 id="yolo">Detección con YOLO</h3>
+<p>En detección la salida no es una clase sino una lista de <strong>cajas delimitadoras</strong>, cada una con su clase y su confianza. YOLO (<i>You Only Look Once</i>) lo plantea como una predicción directa de una sola red:</p>
+<ol>
+  <li>Divide la imagen en una cuadrícula de S×S (7×7 en la versión original).</li>
+  <li>Cada celda se responsabiliza de los objetos cuyo <em>centro</em> cae dentro de ella.</li>
+  <li>Cada celda predice cajas (dos por celda en el original), la confianza de cada caja y las probabilidades de clase.</li>
+  <li>Se eliminan predicciones de baja confianza y las redundantes con <strong>Non-Maximum Suppression</strong> (NMS): entre cajas que se traslapan mucho (IoU alto) y dicen lo mismo, se queda la de mayor confianza.</li>
+</ol>
+<figure class="img">
+  <img src="../images/yolo.png" alt="Imagen dividida en una cuadrícula; cada celda propone cajas y un mapa de clases; al final quedan las detecciones" width="420">
+  <figcaption>YOLO: cuadrícula S×S, cajas con confianza por celda y mapa de clases, que se combinan en las detecciones finales. (Imagen de la slide.)</figcaption>
+</figure>
+<p>La red original se entrenó primero para clasificación y después se adaptó a detección: <a href="05_regularizacion.html#transfer-learning">transfer learning</a>, de features visuales aprendidas en clasificación a detección de objetos.</p>
+<details>
+  <summary>Para profundizar: cuántos números produce cada celda</summary>
+  <div class="dbody"><p>En el artículo original (Redmon et al., 2016), cada caja son 5 números: centro (x, y), ancho, alto y confianza. Con 2 cajas por celda y las 20 clases de PASCAL VOC, cada celda produce 2·5 + 20 = 30 números, y la salida completa es un tensor de 7×7×30. La slide no entra en este detalle.</p></div>
+</details>
+
+<h3 id="segmentacion">Segmentación: encoder-decoder con skip connections</h3>
+<p>En segmentación queremos una clase por pixel, así que la red debe conservar o recuperar la información espacial. Muchas redes tienen forma de <strong>encoder-decoder</strong>:</p>
+<div class="flow">
+  <div class="node"><div class="t">Encoder</div><div class="d">Convoluciones y downsampling: baja la resolución y sube la abstracción. Imagen → features globales.</div></div>
+  <div class="node"><div class="t">Decoder</div><div class="d">Upsampling (sección 8): recupera la resolución. Features → máscara por pixel.</div></div>
+  <div class="node aqui"><div class="t">Skip connections</div><div class="d">Llevan los mapas tempranos del encoder directo al decoder.</div></div>
+</div>
+<p>¿Por qué las skip connections? Las capas tempranas conservan el <strong>detalle espacial</strong> (dónde está exactamente el borde del techo); las profundas contienen <strong>contexto semántico</strong> (que eso es un techo). La segmentación necesita las dos. U-Net es el ejemplo clásico. (Son «skip connections» como las de ResNet en el sentido de atajos, pero aquí unen capas lejanas del encoder y del decoder para recuperar detalle.)</p>
+
+<!-- ============ 11. POLÍTICAS ============ -->
+<h2 id="politicas"><span class="num">Sección 11</span>CNNs y políticas públicas: pobreza desde el cielo</h2>
+
+<p>Medir pobreza requiere encuestas de hogares, y las encuestas pueden ser caras, lentas, poco frecuentes y geográficamente incompletas. La idea: usar imágenes satelitales como <strong>fuente auxiliar</strong> para estimar bienestar económico. La slide insiste: esto no reemplaza automáticamente a las encuestas; es una herramienta complementaria que necesita validación cuidadosa.</p>
+
+<h3 id="jean">Jean et al. (2016): transfer learning en dos pasos</h3>
+<div class="flow">
+  <div class="node"><div class="t">1 · ImageNet</div><div class="d">Una CNN preentrenada en clasificación de fotos: ya sabe bordes, texturas y formas.</div></div>
+  <div class="node"><div class="t">2 · Luminosidad nocturna</div><div class="d">Se adapta para predecir la luz de noche a partir de imágenes de día. Hay datos a gran escala y gratis.</div></div>
+  <div class="node aqui"><div class="t">3 · Riqueza o consumo</div><div class="d">Con las features aprendidas, un modelo sencillo predice el bienestar usando las pocas encuestas disponibles.</div></div>
+</div>
+<p>¿Por qué la luminosidad nocturna como tarea intermedia? Porque está correlacionada con la actividad económica y existe a gran escala: es una forma de conseguir millones de «etiquetas» baratas. Pero es un <strong>proxy</strong>, y, en palabras de la slide, los proxies también mienten con bastante confianza: una zona agrícola próspera puede ser oscura de noche.</p>
+
+<p>La red no observa «pobreza» directamente. Aprende patrones visuales asociados con condiciones económicas: caminos, techos, densidad urbana, agricultura, infraestructura. La predicción depende de que esas correlaciones sean <strong>estables entre regiones y en el tiempo</strong>, y ese supuesto debe evaluarse, no darse por hecho. Trabajos posteriores escalaron la idea con imágenes públicas para muchas aldeas, representaciones satelitales reutilizables y modelos fundacionales geoespaciales con auto-supervisión: preentrenamiento geoespacial + pocas etiquetas + validación temporal y espacial.</p>
+
+<h3 id="sale-mal">¿Qué puede salir mal?</h3>
+<p>En política pública, el desempeño predictivo no basta. Las preguntas de la slide:</p>
+<ul>
+  <li>¿El modelo generaliza entre países o regiones?</li>
+  <li>¿Funciona igual en zonas rurales y urbanas?</li>
+  <li>¿El proxy de luminosidad introduce sesgos?</li>
+  <li>¿Qué pasa cuando cambian las condiciones económicas o climáticas?</li>
+  <li>¿Quién queda invisible en los datos satelitales?</li>
+  <li>¿Cómo se auditan los errores antes de asignar recursos?</li>
+</ul>
+
+<div class="note fix">
+  <span class="tag">El error de validación más común</span>
+  <p>Si cada localidad tiene varias imágenes y las repartes al azar entre entrenamiento y validación, imágenes casi idénticas de la misma localidad quedan en los dos lados. El modelo «reconoce el lugar» y el error de validación sale optimista. El temario del Examen 2 (sección 5) lo dice explícitamente: <strong>split por unidad y por tiempo, no por imagen</strong>. Valida con localidades (o regiones enteras) que el modelo nunca vio, en años posteriores, y reporta métricas <strong>por subgrupo</strong> (rural y urbano, por región).</p>
+</div>
+
+<!-- ============ 12. PRÁCTICA ============ -->
+<h2 id="practica"><span class="num">Sección 12</span>Práctica tipo examen</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Resuelve en papel y con reloj antes de abrir la respuesta. Ten a la mano solo las fórmulas del formulario del examen: tamaño de salida, parámetros y receptive field. Los números están verificados con un script.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · aritmética de convoluciones y receptive field</span>
+  <div class="e-enun">Una red recibe imágenes de 96×96×3. Capa 1: 32 filtros de 5×5, padding 2, stride 2, con bias. Capa 2: 64 filtros de 3×3, padding 1, stride 1, con bias. (a) Tamaño de salida de cada capa. (b) Parámetros de cada capa. (c) Receptive field de una unidad de la capa 2.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>El c<sub>i</sub> de la capa 2 es el c<sub>o</sub> de la capa 1. Para el receptive field, no olvides que la capa 1 tiene stride 2: eso cambia j.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>Capa 1:</b> ⌊(96 + 2·2 − 5)/2⌋ + 1 = ⌊95/2⌋ + 1 = 47 + 1 = 48 → <b>48×48×32</b>.</li>
+      <li><b>Capa 2:</b> same padding con stride 1: ⌊(48 + 2 − 3)/1⌋ + 1 = 48 → <b>48×48×64</b>.</li>
+      <li><b>Parámetros capa 1:</b> 32·3·5·5 + 32 = 2 400 + 32 = <b>2 432</b>.</li>
+      <li><b>Parámetros capa 2:</b> 64·32·3·3 + 64 = 18 432 + 64 = <b>18 496</b>.</li>
+      <li><b>Receptive field:</b> r₁ = 1 + (5 − 1)·1 = 5, j₁ = 2. r₂ = 5 + (3 − 1)·2 = <b>9</b>. Cada unidad de la capa 2 ve 9×9 pixeles.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · convolución vs correlación cruzada</span>
+  <div class="e-enun">Entrada X = (1, 2, 0, 1; 0, 1, 3, 1; 2, 1, 0, 2; 1, 0, 1, 3) (filas separadas por punto y coma) y kernel V = (1, 0, −1; 2, 0, −2; 1, 0, −1). (a) Calcula la correlación cruzada sin padding, stride 1, sin sesgo. (b) ¿Qué saldría con la convolución matemática (kernel volteado)? (c) ¿Importa esa diferencia en una CNN?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>La salida mide (4 − 3 + 1)×(4 − 3 + 1) = 2×2. Como la columna central del kernel es cero, solo cuentan la primera y la tercera columna de cada ventana.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>Posición (1, 1):</b> ventana (1, 2, 0; 0, 1, 3; 2, 1, 0). Columna izquierda: 1·1 + 0·2 + 2·1 = 3. Columna derecha: −(0·1 + 3·2 + 0·1) = −6. Total <b>−3</b>.</li>
+      <li><b>Posición (1, 2):</b> ventana (2, 0, 1; 1, 3, 1; 1, 0, 2). Izquierda: 2 + 2 + 1 = 5. Derecha: −(1 + 2 + 2) = −5. Total <b>0</b>.</li>
+      <li><b>Posición (2, 1):</b> ventana (0, 1, 3; 2, 1, 0; 1, 0, 1). Izquierda: 0 + 4 + 1 = 5. Derecha: −(3 + 0 + 1) = −4. Total <b>1</b>.</li>
+      <li><b>Posición (2, 2):</b> ventana (1, 3, 1; 1, 0, 2; 0, 1, 3). Izquierda: 1 + 2 + 0 = 3. Derecha: −(1 + 4 + 3) = −8. Total <b>−5</b>.</li>
+      <li><b>(a)</b> Correlación: (−3, 0; 1, −5).</li>
+      <li><b>(b)</b> Voltear este kernel de arriba abajo no lo cambia y de izquierda a derecha lo cambia de signo: el kernel volteado es −V. La convolución da (3, 0; −1, 5).</li>
+      <li><b>(c)</b> No: los pesos se aprenden. Si la tarea necesitara −V, el entrenamiento lo encontraría. Las dos operaciones representan el mismo conjunto de funciones.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Temario §1 · parámetros y cómputo al escalar</span>
+  <div class="e-enun">Una capa convolucional 3×3 recibe 64×64×32 y produce 64×64×32 (same padding). Predice qué pasa con el número de parámetros y con el cómputo (multiplicaciones) si (a) duplicas c<sub>i</sub> y c<sub>o</sub>; (b) duplicas el alto y el ancho de la entrada sin tocar los canales.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>Base:</b> parámetros 32·32·9 + 32 = 9 248. Multiplicaciones 64·64·32 salidas × 32·9 = 37 748 736.</li>
+      <li><b>(a) Canales al doble:</b> parámetros 64·64·9 + 64 = 36 928, casi 4 veces (los pesos ×4 exactamente; los sesgos solo ×2). Cómputo: hay el doble de salidas (c<sub>o</sub>) y cada una suma el doble de términos (c<sub>i</sub>): ×4, 150 994 944.</li>
+      <li><b>(b) Resolución al doble:</b> parámetros <b>iguales</b> (9 248): la fórmula no depende del tamaño de la imagen. Cómputo ×4 (128·128 en lugar de 64·64 posiciones de salida): 150 994 944.</li>
+      <li><b>Lectura:</b> lo que cuesta memoria de parámetros son los canales; lo que cuesta tiempo son canales y resolución. Por eso las redes bajan la resolución conforme suben los canales.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · receptive field, profundidad y stride</span>
+  <div class="e-enun">(a) Calcula el receptive field al final de: conv 3×3 (s = 1) → conv 3×3 (s = 1) → max-pool 2×2 (s = 2) → conv 3×3 (s = 1). (b) Si solo usaras convoluciones 3×3 con stride 1, ¿cuántas capas necesitarías para que una unidad vea 28 pixeles en cada eje?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>conv 3:</b> r = 1 + 2·1 = 3, j = 1.</li>
+      <li><b>conv 3:</b> r = 3 + 2·1 = 5, j = 1.</li>
+      <li><b>pool 2, s 2:</b> r = 5 + 1·1 = 6, j = 2.</li>
+      <li><b>conv 3:</b> r = 6 + 2·2 = <b>10</b>, j = 2.</li>
+      <li><b>(b)</b> Con L capas 3×3 de stride 1, r = 1 + 2L. Necesitas 1 + 2L ≥ 28, o sea L ≥ 13.5: <b>14 capas</b> (r = 29). Con un pooling en medio llegas con muchas menos, porque las capas posteriores suman de 4 en 4.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · convoluciones 1×1 y costo</span>
+  <div class="e-enun">Un mapa de 28×28×192 debe convertirse en 28×28×64 con un kernel 5×5 (same padding). Opción A: una convolución 5×5 directa de 192 a 64 canales. Opción B: primero una 1×1 de 192 a 32 canales y después la 5×5 de 32 a 64. Compara multiplicaciones y parámetros (con bias). ¿Qué pierde la opción B?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Multiplicaciones = (alto·ancho·c<sub>o</sub> de la salida) × (c<sub>i</sub>·k·k).</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>A, cómputo:</b> 28·28·64 × 192·25 = 50 176 × 4 800 = <b>240 844 800</b>.</li>
+      <li><b>A, parámetros:</b> 64·192·25 + 64 = <b>307 264</b>.</li>
+      <li><b>B, la 1×1:</b> 28·28·32 × 192 = 4 816 896 multiplicaciones; 32·192 + 32 = 6 176 parámetros.</li>
+      <li><b>B, la 5×5:</b> 28·28·64 × 32·25 = 40 140 800 multiplicaciones; 64·32·25 + 64 = 51 264 parámetros.</li>
+      <li><b>B, total:</b> <b>44 957 696</b> multiplicaciones (unas 5.4 veces menos) y <b>57 440</b> parámetros.</li>
+      <li><b>Qué pierde:</b> la 5×5 solo ve 32 combinaciones de los 192 canales, no los 192 originales: es un cuello de botella. Funciona si esas 32 combinaciones conservan lo importante; con una no linealidad entre las dos, además gana expresividad.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §1 · invarianza vs equivarianza</span>
+  <div class="e-enun">Define invarianza y equivarianza a traslaciones. Para cada tarea, di cuál quieres y por qué: (a) clasificar si una imagen satelital de una localidad corresponde a pobreza alta o baja; (b) segmentar los techos de una imagen. ¿Qué parte de una CNN aporta cada propiedad? Da un ejemplo donde la invarianza sea mala idea.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ul>
+      <li><b>Definiciones:</b> f es invariante a t si f(t[x]) = f(x) (mover la entrada no cambia la salida); equivariante si f(t[x]) = t[f(x)] (la salida se mueve igual que la entrada).</li>
+      <li><b>(a)</b> Invarianza: la clase de la localidad no depende de si el pueblo aparece unos pixeles más a la izquierda.</li>
+      <li><b>(b)</b> Equivarianza: si la imagen se mueve, la máscara de techos debe moverse igual.</li>
+      <li><b>Quién aporta qué:</b> la convolución (pesos compartidos) es equivariante, de forma aproximada por los bordes. La invarianza se construye después con pooling, downsampling o agregación global; el pooling local solo da robustez a movimientos pequeños.</li>
+      <li><b>Mala idea:</b> rotación en dígitos (6 y 9), espejo en señales de tránsito o en radiografías, o cualquier tarea donde la posición es parte de la respuesta.</li>
+    </ul>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Temario §1 · pooling, 1×1 y convolución</span>
+  <div class="e-enun">Verdadero o falso; justifica en una o dos líneas. (a) Agregar max-pooling hace que una CNN sea invariante a cualquier traslación. (b) Una convolución 1×1 no mezcla información de ningún tipo. (c) Una capa de max-pooling 2×2 sobre 64 canales tiene 64·4 parámetros. (d) Usar convolución matemática en lugar de correlación cruzada cambia qué funciones puede aprender la red.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ul>
+      <li><b>(a) F.</b> El pooling local solo reduce la sensibilidad a movimientos pequeños: un desplazamiento de 1 pixel puede cambiar los valores del pooling (en el laboratorio de la sección 8 cambia 1 de 4). La invarianza completa requiere agregación global.</li>
+      <li><b>(b) F.</b> No mezcla pixeles vecinos, pero sí mezcla canales en cada posición: es una capa lineal ℝ<sup>c<sub>i</sub></sup> → ℝ<sup>c<sub>o</sub></sup> compartida.</li>
+      <li><b>(c) F.</b> El pooling no tiene parámetros: el máximo es una operación fija. Tiene hiperparámetros (ventana, stride, padding).</li>
+      <li><b>(d) F.</b> Voltear el kernel es una reparametrización; como los pesos se aprenden, el conjunto de funciones representables es el mismo.</li>
+    </ul>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Temario §1 · detección: IoU</span>
+  <div class="e-enun">La caja verdadera de un vehículo es A = [0, 4]×[0, 4] y la predicha es B = [2, 6]×[1, 5] (coordenadas x e y). Calcula el IoU. Si el criterio de acierto fuera IoU ≥ 0.5, ¿contaría como detección correcta?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>Intersección:</b> en x, [2, 4] (ancho 2); en y, [1, 4] (alto 3). Área 2·3 = 6.</li>
+      <li><b>Áreas:</b> |A| = 16, |B| = 4·4 = 16.</li>
+      <li><b>Unión:</b> 16 + 16 − 6 = 26.</li>
+      <li><b>IoU</b> = 6/26 ≈ <b>0.231</b>. Con umbral 0.5, <b>no</b> cuenta como acierto, aunque las cajas se traslapan bastante a simple vista.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §1 · ResNet y conexiones residuales</span>
+  <div class="e-enun">Un equipo entrena una CNN plana de 20 capas y otra de 56 capas, con los mismos datos y el mismo optimizador. La de 56 tiene <em>mayor</em> error de entrenamiento y de validación. Un colega dice: «es sobreajuste, hay que agregar dropout». ¿Tiene razón? ¿Qué propones y por qué funciona?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ul>
+      <li><b>No es sobreajuste:</b> el sobreajuste baja el error de entrenamiento y sube el de validación. Aquí sube el de <em>entrenamiento</em>: es un problema de <b>optimización</b>. Dropout le quitaría más capacidad y lo empeoraría.</li>
+      <li><b>Propuesta:</b> bloques residuales h<sub>k+1</sub> = h<sub>k</sub> + F(h<sub>k</sub>).</li>
+      <li><b>Por qué funciona:</b> (1) si un bloque no hace falta, basta F ≈ 0 para que deje pasar la representación; aprender «no hacer nada» se vuelve fácil, así que la red de 56 puede, como mínimo, imitar a la de 20. (2) La derivada de cada bloque es 1 + F′, así que el gradiente tiene un camino directo que no se multiplica por factores pequeños (con F′ = 0.1 en 10 bloques: 10⁻¹⁰ en la red plana contra ≈ 2.59 con atajos).</li>
+    </ul>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Temario §1 y §5 · caso Jean et al. y diseño de validación</span>
+  <div class="e-enun">Una dependencia tiene encuestas de consumo de 800 localidades y 12 imágenes satelitales por localidad. Un agente de IA propone: entrenar una CNN desde cero con las 9 600 imágenes, repartirlas al azar 80/20 entre entrenamiento y validación, y reporta 94% de accuracy en validación. Señala al menos tres problemas y propone la corrección de cada uno.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ul>
+      <li><b>Fuga por el split:</b> imágenes de la misma localidad caen en entrenamiento y validación; el modelo reconoce el lugar, no la pobreza. Corrección: split <b>por localidad</b> (mejor aún, por región) y, si hay varios años, por tiempo.</li>
+      <li><b>Pocos datos para entrenar desde cero:</b> hay 800 etiquetas independientes, no 9 600. Corrección: transfer learning en dos pasos como Jean et al.: CNN preentrenada en ImageNet, ajustada para predecir luminosidad nocturna (datos abundantes), y un modelo sencillo sobre esas features con las encuestas.</li>
+      <li><b>Una sola métrica global:</b> 94% puede esconder que falla en zonas rurales o en regiones con pocas encuestas. Corrección: métricas por subgrupo (rural y urbano, por región) y revisión de errores antes de asignar recursos.</li>
+      <li><b>Supuesto de estabilidad:</b> las correlaciones visuales pueden cambiar entre regiones o con el tiempo, y el proxy de luminosidad puede sesgar (zonas agrícolas prósperas pero oscuras). Corrección: validación espacial y temporal explícita, y tratar el modelo como complemento de la encuesta, no como sustituto.</li>
+    </ul>
+  </div></details>
+</div>
+
+<!-- ============ 13. GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 13</span>Glosario</h2>
+<div class="gloss">
+  <div class="item"><div class="term">red convolucional (CNN)</div><div class="def">Red que usa capas convolucionales: cada unidad mira una región pequeña y comparte pesos con todas las demás posiciones.</div></div>
+  <div class="item"><div class="term">localidad</div><div class="def">Supuesto de que lo relevante para una posición está cerca de ella. Se implementa limitando la ventana a un radio Δ.</div></div>
+  <div class="item"><div class="term">compartición de parámetros (weight sharing)</div><div class="def">Usar los mismos pesos en todas las posiciones. Reduce parámetros y da equivarianza a traslaciones.</div></div>
+  <div class="item"><div class="term">kernel o filtro</div><div class="def">Los pesos V de una convolución: una ventana de k<sub>h</sub>×k<sub>w</sub> (por cada canal de entrada) que se desliza sobre la entrada.</div></div>
+  <div class="item"><div class="term">correlación cruzada</div><div class="def">Lo que calculan los frameworks: suma de ventana por kernel sin voltear el kernel. La convolución matemática lo voltea; la diferencia no importa cuando los pesos se aprenden.</div></div>
+  <div class="item"><div class="term">canal</div><div class="def">Cada «capa» de un tensor de imagen: rojo, verde y azul en la entrada; un mapa por filtro en las capas intermedias.</div></div>
+  <div class="item"><div class="term">mapa de características (feature map)</div><div class="def">La salida de una capa convolucional: una representación espacial aprendida, de alto × ancho × canales.</div></div>
+  <div class="item"><div class="term">padding</div><div class="def">Filas y columnas extra (casi siempre ceros) alrededor de la entrada. Controla el tamaño de salida y evita perder los bordes.</div></div>
+  <div class="item"><div class="term">same padding</div><div class="def">El padding p = (k − 1)/2 que, con stride 1 y kernel impar, deja la salida del mismo tamaño que la entrada.</div></div>
+  <div class="item"><div class="term">stride</div><div class="def">Cuántas posiciones avanza la ventana en cada paso. Stride 2 reduce la resolución a la mitad, más o menos.</div></div>
+  <div class="item"><div class="term">campo receptivo (receptive field)</div><div class="def">Las posiciones de la entrada original que pueden afectar a una unidad. Crece con la profundidad, el stride y el pooling.</div></div>
+  <div class="item"><div class="term">convolución 1×1</div><div class="def">Capa lineal entre canales aplicada en cada pixel con los mismos pesos. Cambia el número de canales sin mirar vecinos.</div></div>
+  <div class="item"><div class="term">pooling (max, average)</div><div class="def">Resume cada ventana con su máximo o su promedio. Sin parámetros, por canal; reduce resolución y da robustez local, no invarianza total.</div></div>
+  <div class="item"><div class="term">agregación global</div><div class="def">Pooling sobre todo el mapa: un número por canal. Ahí sí aparece la invarianza a traslaciones.</div></div>
+  <div class="item"><div class="term">invarianza</div><div class="def">f(t[x]) = f(x): transformar la entrada no cambia la salida. Deseable en clasificación.</div></div>
+  <div class="item"><div class="term">equivarianza</div><div class="def">f(t[x]) = t[f(x)]: la salida se transforma igual que la entrada. Deseable en segmentación; la aporta la convolución.</div></div>
+  <div class="item"><div class="term">upsampling</div><div class="def">Recuperar resolución espacial: repetir, max-unpooling, interpolación bilineal o transposed convolution.</div></div>
+  <div class="item"><div class="term">max-unpooling</div><div class="def">Devuelve cada valor a la posición donde estuvo el máximo del max-pooling previo; el resto queda en cero.</div></div>
+  <div class="item"><div class="term">interpolación bilineal</div><div class="def">Rellena los pixeles nuevos con promedios ponderados de los vecinos. Sin parámetros, más suave que repetir.</div></div>
+  <div class="item"><div class="term">transposed convolution</div><div class="def">Upsampling aprendible: cada valor de entrada pinta un kernel aprendido en varias posiciones de salida.</div></div>
+  <div class="item"><div class="term">conexión residual</div><div class="def">h<sub>k+1</sub> = h<sub>k</sub> + F(h<sub>k</sub>). El bloque aprende una corrección sobre la identidad; facilita entrenar redes muy profundas.</div></div>
+  <div class="item"><div class="term">ImageNet / ILSVRC</div><div class="def">Base de unos 1.2 millones de imágenes de 1 000 clases y la competencia que midió el progreso en clasificación.</div></div>
+  <div class="item"><div class="term">error top-5</div><div class="def">Proporción de imágenes cuya clase correcta no está entre las 5 más probables del modelo.</div></div>
+  <div class="item"><div class="term">IoU (Intersection over Union)</div><div class="def">Área de la intersección entre la región predicha y la verdadera, dividida entre el área de su unión. 1 es perfecto, 0 es sin traslape.</div></div>
+  <div class="item"><div class="term">AP y mAP</div><div class="def">Average Precision y su promedio sobre clases (mean AP): las métricas estándar de detección.</div></div>
+  <div class="item"><div class="term">YOLO</div><div class="def">Detector de una sola pasada: divide la imagen en S×S celdas y cada celda predice cajas, confianza y clases.</div></div>
+  <div class="item"><div class="term">Non-Maximum Suppression (NMS)</div><div class="def">Entre cajas que se traslapan mucho y predicen lo mismo, conserva la de mayor confianza y descarta las demás.</div></div>
+  <div class="item"><div class="term">encoder-decoder</div><div class="def">Arquitectura que primero reduce la resolución (encoder) y luego la recupera (decoder). Típica en segmentación.</div></div>
+  <div class="item"><div class="term">U-Net</div><div class="def">Encoder-decoder clásico de segmentación con skip connections entre niveles de igual resolución.</div></div>
+  <div class="item"><div class="term">skip connection</div><div class="def">Atajo que lleva una representación temprana a una capa posterior. En segmentación aporta detalle espacial; en ResNet, un camino directo para el gradiente.</div></div>
+  <div class="item"><div class="term">proxy</div><div class="def">Variable observable que sustituye a la que importa, como la luminosidad nocturna en lugar del consumo. Útil, pero puede sesgar.</div></div>
+  <div class="item"><div class="term">split espacial y temporal</div><div class="def">Separar entrenamiento y validación por unidad geográfica y por tiempo, no por imagen, para no medir con datos «gemelos» de los de entrenamiento.</div></div>
+</div>
+<p>Notación completa: <a href="00_matematicas.html#notacion">tabla de notación del artefacto 00</a>; los símbolos de esta clase están en <a href="00_matematicas.html#not-cnn">Convoluciones (clase 6)</a>.</p>
+
+<nav class="serie" data-actual="06"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>slides/CNN.Rmd</code> del curso Aprendizaje Profundo (Tec, 2026).</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+  function miles(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); }
+  function num(v){ return (v < 0 ? "(" + DL.fmt(v, 0) + ")" : DL.fmt(v, 0)); }
+
+  /* =========================================================
+     Lab 1 · desplaza la señal (equivarianza vs invarianza)
+     ========================================================= */
+  (function(){
+    var N = 20, PAT = [1, 3, 2], V = [1, 2, 1], INI = 3, s = 0;
+    function senal(sh){ var x = []; for(var i=0;i<N;i++) x.push(0); for(var t=0;t<PAT.length;t++) x[INI+sh+t] = PAT[t]; return x; }
+    function conv(x){
+      var h = [];
+      for(var i=0;i<N;i++){ var v = 0; for(var a=-1;a<=1;a++){ var q = i+a; if(q >= 0 && q < N) v += V[a+1]*x[q]; } h.push(v); }
+      return h;
+    }
+    function pool(h){ var p = []; for(var m=0;m<N/2;m++) p.push(Math.max(h[2*m], h[2*m+1])); return p; }
+    /* ¿b es a desplazado m lugares? devuelve m o −1 */
+    function desplazamiento(b, a){
+      for(var m=0;m<a.length;m++){
+        var ok = true;
+        for(var q=0;q<a.length;q++){ var ref = q-m >= 0 ? a[q-m] : 0; if(Math.abs(b[q]-ref) > 1e-9){ ok = false; break; } }
+        if(ok) return m;
+      }
+      return -1;
+    }
+    var x0 = senal(0), h0 = conv(x0), p0 = pool(h0);
+    var M = {l:30, r:10, t:8, b:20};
+    function barras(g, vals, centro, ancho, e){ vals.forEach(function(v, i){ if(v !== 0 || !e.ghost) g.rect(centro(i) - ancho/2, 0, ancho, v, e.ghost ? {color:"text-3", guiones:true, ancho:1} : {color:e.color, relleno:true, alfa:0.75, ancho:1}); }); }
+    function mk(id, ymax, ty, f){
+      return DL.grafica($(id), {x:[-0.5, N-0.5], y:[0, ymax], alto:118, margen:M, opcionesEjes:{ticksX:[0,4,8,12,16,19], ticksY:ty, fmtX:function(v){ return String(v+1); }}}, f);
+    }
+    var gx = mk("despX", 3.5, [0,1,2,3], function(g){
+      barras(g, x0, function(i){ return i; }, 0.7, {ghost:true});
+      barras(g, senal(s), function(i){ return i; }, 0.7, {color:"r-dato"});
+    });
+    var gh = mk("despH", 10, [0,5,10], function(g){
+      barras(g, h0, function(i){ return i; }, 0.7, {ghost:true});
+      barras(g, conv(senal(s)), function(i){ return i; }, 0.7, {color:"r-calc"});
+    });
+    var gp = mk("despP", 10, [0,5,10], function(g){
+      barras(g, p0, function(m){ return 2*m + 0.5; }, 1.6, {ghost:true});
+      barras(g, pool(conv(senal(s))), function(m){ return 2*m + 0.5; }, 1.6, {color:"accent"});
+    });
+    function actualizar(){
+      var x = senal(s), h = conv(x), p = pool(h);
+      var gmax = Math.max.apply(null, h), imax = h.indexOf(gmax);
+      var dh = desplazamiento(h, h0), dp = desplazamiento(p, p0);
+      var txt = function(d){ return d === 0 ? "igual" : (d > 0 ? "desplazada " + d : "distinta"); };
+      DL.readout($("despRead"), [
+        ["desplazamiento s", s],
+        ["convolución H", txt(dh)],
+        ["pooling", txt(dp)],
+        ["pixel del máximo de H", imax + 1],
+        ["máximo global", DL.fmt(gmax, 0)]
+      ]);
+      var st = $("despStatus");
+      if(dp < 0){ st.className = "status bad"; st.textContent = "El pooling cambió sus valores: el patrón cayó partido entre dos ventanas. La convolución sigue siendo una copia desplazada."; }
+      else if(s === 0){ st.className = "status ok"; st.textContent = "Posición original. Mueve el desplazamiento."; }
+      else { st.className = "status ok"; st.textContent = "Convolución y pooling se desplazaron sin cambiar sus valores; el máximo global sigue en " + gmax + "."; }
+      gx.redibujar(); gh.redibujar(); gp.redibujar();
+    }
+    DL.control($("despCtrl"), {etiqueta:"desplazamiento s (pixeles)", min:0, max:10, paso:1, valor:0,
+      formato:function(v){ return String(v); }, alCambiar:function(v){ s = Math.round(v); actualizar(); }});
+    actualizar();
+  })();
+
+  /* =========================================================
+     Lab 2 · convolución 2D paso a paso
+     ========================================================= */
+  (function(){
+    var X = [[3,1,0,2,1],[1,2,3,0,0],[0,1,2,3,1],[2,0,1,2,3],[1,2,0,1,2]];
+    var KER = {
+      vert:[[1,0,-1],[1,0,-1],[1,0,-1]],
+      hor:[[1,1,1],[0,0,0],[-1,-1,-1]],
+      id:[[0,0,0],[0,1,0],[0,0,0]],
+      asim:[[2,1,0],[0,1,0],[0,0,-1]]
+    };
+    var st = {ker:"vert", op:"corr", p:0, s:1};
+    var widget = $("labConv");
+    function voltear(K){ return K.slice().reverse().map(function(r){ return r.slice().reverse(); }); }
+    function rehacer(){
+      var n = 5, p = st.p, s = st.s, k = 3;
+      var np = n + 2*p, Xp = [];
+      for(var i=0;i<np;i++){ Xp.push([]); for(var j=0;j<np;j++){ var a = i-p, b = j-p; Xp[i].push(a >= 0 && a < n && b >= 0 && b < n ? X[a][b] : 0); } }
+      var no = Math.floor((n + 2*p - k)/s) + 1;
+      var K = st.op === "conv" ? voltear(KER[st.ker]) : KER[st.ker];
+      var Y = [];
+      for(var r=0;r<no;r++){ Y.push([]); for(var c=0;c<no;c++){ var v = 0; for(var u=0;u<k;u++) for(var w=0;w<k;w++) v += K[u][w]*Xp[r*s+u][c*s+w]; Y[r].push(v); } }
+      $("convStatus").innerHTML = "Salida de " + no + "×" + no + ":  ⌊(5 + 2·" + p + " − 3)/" + s + "⌋ + 1 = ⌊" + (n + 2*p - k) + "/" + s + "⌋ + 1 = " + no + "." +
+        (st.op === "conv" ? "  Con «convolución», el kernel se voltea de arriba abajo y de izquierda a derecha antes de deslizarlo." : "");
+      DL.pasos(widget, {total: no*no + 1, etiqueta:"ventana", render:function(i){
+        var idx = i - 1, r0 = Math.floor(idx/no), c0 = idx % no;
+        var enVentana = function(a, b){ return idx >= 0 && a >= r0*s && a < r0*s + k && b >= c0*s && b < c0*s + k; };
+        var html = DL.matriz(Xp, {titulo: p ? "entrada X con padding" : "entrada X", forma: np + "×" + np, dec:0, clase:function(a, b){
+          if(enVentana(a, b)) return "hl2";
+          return (a < p || b < p || a >= p + n || b >= p + n) ? "dim" : "";
+        }});
+        html += '<span class="op">⊙</span>' + DL.matriz(K, {titulo: st.op === "conv" ? "kernel volteado" : "kernel V", forma:"3×3", dec:0, clase:function(){ return idx >= 0 ? "hl2" : ""; }});
+        html += '<span class="op">=</span>' + DL.matriz(Y.map(function(fila, a){ return fila.map(function(v, b){ return a*no + b <= idx ? v : "·"; }); }),
+          {titulo:"salida H", forma: no + "×" + no, dec:0, clase:function(a, b){ return a*no + b === idx ? "ok" : ""; }});
+        $("convRow").innerHTML = html;
+        if(idx < 0){ $("convCalc").innerHTML = "Pulsa «Siguiente» para colocar la ventana en la primera posición."; return; }
+        var terms = [];
+        for(var u=0;u<k;u++) for(var w=0;w<k;w++) if(K[u][w] !== 0) terms.push(num(Xp[r0*s+u][c0*s+w]) + "·" + num(K[u][w]));
+        $("convCalc").innerHTML = "H<sub>" + (r0+1) + "," + (c0+1) + "</sub> = " + terms.join(" + ") + " = <b>" + DL.fmt(Y[r0][c0], 0) + "</b>" +
+          '  <span style="color:var(--text-3)">(se omiten los pesos que valen 0)</span>';
+      }});
+    }
+    DL.selector($("convKer"), {valor:"vert", opciones:[{v:"vert", t:"borde vertical"}, {v:"hor", t:"borde horizontal"}, {v:"id", t:"identidad"}, {v:"asim", t:"asimétrico"}],
+      alCambiar:function(v){ st.ker = v; rehacer(); }});
+    DL.selector($("convOp"), {valor:"corr", opciones:[{v:"corr", t:"correlación cruzada (frameworks)"}, {v:"conv", t:"convolución matemática"}],
+      alCambiar:function(v){ st.op = v; rehacer(); }});
+    DL.selector($("convPad"), {valor:0, opciones:[{v:0, t:"p = 0"}, {v:1, t:"p = 1"}], alCambiar:function(v){ st.p = v; rehacer(); }});
+    DL.selector($("convStr"), {valor:1, opciones:[{v:1, t:"s = 1"}, {v:2, t:"s = 2"}], alCambiar:function(v){ st.s = v; rehacer(); }});
+    rehacer();
+  })();
+
+  /* =========================================================
+     Lab 3 · calculadora de arquitecturas
+     ========================================================= */
+  (function(){
+    var PRESETS = {
+      nb:{n:28, c:1, capas:[{t:"conv",k:3,s:1,p:1,co:32},{t:"pool",k:2,s:2},{t:"conv",k:3,s:1,p:1,co:64},{t:"pool",k:2,s:2},{t:"densa",u:128},{t:"densa",u:10}]},
+      tem:{n:64, c:3, capas:[{t:"conv",k:5,s:2,p:2,co:16},{t:"conv",k:3,s:1,p:1,co:32}]},
+      solo:{n:32, c:3, capas:[{t:"conv",k:3,s:1,p:1,co:16},{t:"conv",k:3,s:1,p:1,co:16},{t:"conv",k:3,s:1,p:1,co:16},{t:"conv",k:3,s:1,p:1,co:16}]}
+    };
+    var st, sel = 0;
+    function copiar(o){ return JSON.parse(JSON.stringify(o)); }
+    function cargar(k){ st = copiar(PRESETS[k]); sel = 0; panelEntrada(); todo(); }
+    function nombre(L){
+      if(L.t === "conv") return "conv " + L.k + "×" + L.k + ", s " + L.s + ", p " + L.p + ", " + L.co + " filtros";
+      if(L.t === "pool") return "pooling " + L.k + "×" + L.k + ", s " + L.s;
+      return "densa, " + L.u + " unidades";
+    }
+    function calcular(){
+      var h = st.n, c = st.c, r = 1, j = 1, plano = false, err = null, filas = [], totP = 0, totM = 0, densP = 0;
+      st.capas.forEach(function(L, i){
+        if(err){ filas.push(null); return; }
+        var f = {params:0, mult:0};
+        if(L.t === "densa"){
+          var ent = h*h*c; f.params = ent*L.u + L.u; f.mult = ent*L.u; densP += f.params;
+          h = 1; c = L.u; plano = true; f.forma = String(L.u); f.rf = "toda la entrada";
+        } else {
+          if(plano){ err = "Capa " + (i+1) + ": después de una densa ya no hay mapa espacial; quita la " + (L.t === "conv" ? "conv" : "capa de pooling") + " o muévela antes."; filas.push(null); return; }
+          var p = L.t === "conv" ? L.p : 0, hn = Math.floor((h + 2*p - L.k)/L.s) + 1;
+          if(hn < 1){ err = "Capa " + (i+1) + ": la ventana de " + L.k + " no cabe en una entrada de " + h + (p ? " + 2·" + p : "") + ". La salida quedaría en " + hn + "."; filas.push(null); return; }
+          if(L.t === "conv"){ f.params = L.co*c*L.k*L.k + L.co; f.mult = hn*hn*L.co*c*L.k*L.k; c = L.co; }
+          r = r + (L.k - 1)*j; j = j*L.s; h = hn;
+          f.forma = h + "×" + h + "×" + c; f.rf = r + " (j = " + j + ")";
+        }
+        totP += f.params; totM += f.mult; filas.push(f);
+      });
+      return {filas:filas, err:err, totP:totP, totM:totM, densP:densP};
+    }
+    function todo(){
+      var R = calcular();
+      var html = '<table class="tbl chica"><tr><th>#</th><th>Capa</th><th class="nw">Salida</th><th class="nw">Parámetros</th><th class="nw">Receptive field</th><th class="nw">Multiplicaciones</th></tr>';
+      html += '<tr><td>0</td><td>entrada</td><td class="nw">' + st.n + "×" + st.n + "×" + st.c + '</td><td class="num-c">—</td><td class="nw">1 (j = 1)</td><td class="num-c">—</td></tr>';
+      st.capas.forEach(function(L, i){
+        var f = R.filas[i];
+        html += '<tr data-i="' + i + '" style="cursor:pointer"' + (i === sel ? ' class="sel"' : '') + '><td>' + (i+1) + '</td><td>' + nombre(L) + '</td>' +
+          (f ? '<td class="nw">' + f.forma + '</td><td class="num-c">' + miles(f.params) + '</td><td class="nw">' + f.rf + '</td><td class="num-c">' + (L.t === "pool" ? "—" : miles(f.mult)) + '</td>'
+             : '<td colspan="4" style="color:var(--text-3)">—</td>') + '</tr>';
+      });
+      $("calcTabla").innerHTML = html + "</table>";
+      DL.readout($("calcRead"), [
+        ["parámetros totales", miles(R.totP)],
+        ["en capas densas", R.totP ? DL.fmt(100*R.densP/R.totP, 1) + " %" : "—"],
+        ["multiplicaciones totales", miles(R.totM)]
+      ]);
+      var s = $("calcStatus");
+      if(R.err){ s.className = "status bad"; s.textContent = R.err; }
+      else { s.className = "status ok"; s.textContent = st.capas.length ? "Arquitectura válida. Haz clic en una fila para editar esa capa." : "Agrega una capa."; }
+      panelEdicion();
+    }
+    $("calcTabla").addEventListener("click", function(e){
+      var tr = e.target.closest("tr[data-i]"); if(!tr) return;
+      sel = parseInt(tr.getAttribute("data-i"), 10); todo();
+    });
+    function entero(v){ return String(Math.round(v)); }
+    function panelEntrada(){
+      var cont = $("calcEntrada"); cont.innerHTML = '<div class="sub-h">Entrada</div>';
+      DL.control(cont, {etiqueta:"alto y ancho n", min:8, max:224, paso:1, valor:st.n, formato:entero, alCambiar:function(v){ st.n = Math.round(v); todo(); }});
+      DL.control(cont, {etiqueta:"canales de entrada", min:1, max:3, paso:2, valor:st.c, formato:entero, alCambiar:function(v){ st.c = Math.round(v); todo(); }});
+    }
+    function panelEdicion(){
+      var cont = $("calcEdit"); cont.innerHTML = "";
+      var L = st.capas[sel];
+      if(!L){ cont.innerHTML = '<div class="sub-h">Sin capa elegida</div>'; return; }
+      cont.innerHTML = '<div class="sub-h">Editar capa ' + (sel+1) + ' · ' + (L.t === "conv" ? "convolución" : L.t === "pool" ? "pooling" : "densa") + '</div>';
+      function ctl(et, campo, min, max){
+        DL.control(cont, {etiqueta:et, min:min, max:max, paso:1, valor:L[campo], formato:entero, alCambiar:function(v){ L[campo] = Math.round(v); actualizarSinPanel(); }});
+      }
+      if(L.t === "conv"){ ctl("kernel k", "k", 1, 7); ctl("stride s", "s", 1, 3); ctl("padding p", "p", 0, 3); ctl("filtros (canales de salida)", "co", 1, 256); }
+      else if(L.t === "pool"){ ctl("ventana k", "k", 2, 4); ctl("stride s", "s", 1, 3); }
+      else ctl("unidades", "u", 1, 512);
+    }
+    /* al mover un control no se reconstruye el panel (perdería el foco del deslizador) */
+    function actualizarSinPanel(){ var pe = panelEdicion; panelEdicion = function(){}; todo(); panelEdicion = pe; }
+    function agregar(L){ st.capas.splice(sel + 1, 0, L); sel = Math.min(sel + 1, st.capas.length - 1); todo(); }
+    $("calcAddConv").onclick = function(){ agregar({t:"conv", k:3, s:1, p:1, co:32}); };
+    $("calcAddPool").onclick = function(){ agregar({t:"pool", k:2, s:2}); };
+    $("calcAddDensa").onclick = function(){ agregar({t:"densa", u:64}); };
+    $("calcDel").onclick = function(){ if(!st.capas.length) return; st.capas.splice(sel, 1); sel = Math.max(0, Math.min(sel, st.capas.length - 1)); todo(); };
+    DL.selector($("calcPreset"), {valor:"nb", opciones:[{v:"nb", t:"CNN del notebook (MNIST)"}, {v:"tem", t:"Ejemplo del temario (64×64×3)"}, {v:"solo", t:"Solo convoluciones 3×3"}],
+      alCambiar:function(v){ cargar(v); }});
+    cargar("nb");
+  })();
+
+  /* =========================================================
+     Lab 4 · receptive field en 1D
+     ========================================================= */
+  (function(){
+    var N = 24, L = 3, K = 3, S1 = 1, sel = null;
+    var o = {x:[-4.6, N - 0.4], y:[-0.8, L + 0.5], alto:330, ejes:false, margen:{l:8, r:8, t:10, b:10}};
+    var est = null;
+    function estructura(){
+      var lens = [N], js = [1], ss = [0];
+      for(var l=1;l<=L;l++){ var s = l === 1 ? S1 : 1; ss.push(s); lens.push(Math.floor((lens[l-1] - 1)/s) + 1); js.push(js[l-1]*s); }
+      var r = 1, jj = 1; for(var q=1;q<=L;q++){ r += (K - 1)*jj; jj *= ss[q]; }
+      return {lens:lens, js:js, ss:ss, r:r};
+    }
+    function activos(){
+      var p = (K - 1)/2, act = [], aristas = [];
+      for(var l=0;l<=L;l++) act.push({});
+      act[L][sel] = true;
+      for(var l2=L;l2>=1;l2--){
+        Object.keys(act[l2]).forEach(function(ks){
+          var i = +ks;
+          for(var t=0;t<K;t++){ var q = i*est.ss[l2] - p + t; if(q >= 0 && q < est.lens[l2-1]){ act[l2-1][q] = true; aristas.push([l2, i, q]); } }
+        });
+      }
+      return {act:act, aristas:aristas};
+    }
+    var g = DL.grafica($("rfCanvas"), o, function(g){
+      if(!est) return;
+      var A = activos();
+      A.aristas.forEach(function(a){ g.linea(a[1]*est.js[a[0]], a[0], a[2]*est.js[a[0]-1], a[0]-1, {color:"accent", ancho:1, alfa:0.45}); });
+      for(var l=0;l<=L;l++){
+        var todos = [], on = [];
+        for(var i=0;i<est.lens[l];i++){ (A.act[l][i] ? on : todos).push([i*est.js[l], l]); }
+        g.puntos(todos, {color:"text-3", radio:3.5, hueco:true, ancho:1});
+        g.puntos(on, {color: l === 0 ? "r-dato" : "accent", radio:4.5});
+        g.texto(-4.4, l, l === 0 ? "entrada" : "capa " + l, {tam:11.5, color:"text-2"});
+      }
+      g.puntos([[sel*est.js[L], L]], {color:"r-param", radio:6.5, aro:true});
+      var c = sel*est.js[L], h = (est.r - 1)/2;
+      g.linea(c - h, -0.5, c + h, -0.5, {color:"warn", ancho:2.5});
+      g.texto(c, -0.5, "ventana de la fórmula: " + est.r, {tam:11, color:"warn", alinear:"center", base:"top", dy:5});
+    });
+    function leer(){
+      var A = activos(), vis = Object.keys(A.act[0]).length;
+      DL.readout($("rfRead"), [
+        ["r (fórmula)", est.r], ["pixeles reales marcados", vis],
+        ["j de la última capa", est.js[L]], ["neuronas en la última capa", est.lens[L]]
+      ]);
+      var s = $("rfStatus");
+      if(vis < est.r){ s.className = "status info"; s.textContent = (est.r - vis) + " posiciones de la ventana caen fuera de la entrada (padding)" + (est.r > N ? " o más allá de los 24 pixeles." : "."); }
+      else { s.className = "status ok"; s.textContent = "El conteo visual coincide con la fórmula: r = " + est.r + "."; }
+    }
+    var ctlN = null;
+    function rehacer(centrar){
+      est = estructura();
+      var max = est.lens[L] - 1;
+      if(sel === null || centrar || sel > max) sel = Math.floor(max/2);
+      o.y = [-0.8, L + 0.5];
+      var cont = $("rfNeurona");
+      cont.innerHTML = "";
+      ctlN = DL.control(cont, {etiqueta:"neurona de la capa " + L, min:0, max:max, paso:1, valor:sel, formato:function(v){ return String(Math.round(v) + 1); },
+        alCambiar:function(v){ sel = Math.round(v); leer(); g.redibujar(); }});
+      leer(); g.redibujar();
+    }
+    var cc = $("rfCtrl");
+    DL.control(cc, {etiqueta:"número de capas", min:1, max:4, paso:1, valor:L, formato:function(v){ return String(v); }, alCambiar:function(v){ L = Math.round(v); rehacer(true); }});
+    var dn = document.createElement("div"); dn.id = "rfNeurona"; cc.appendChild(dn);
+    DL.selector($("rfK"), {valor:3, opciones:[{v:3, t:"k = 3"}, {v:5, t:"k = 5"}], alCambiar:function(v){ K = v; rehacer(false); }});
+    DL.selector($("rfS"), {valor:1, opciones:[{v:1, t:"s = 1"}, {v:2, t:"s = 2"}], alCambiar:function(v){ S1 = v; rehacer(true); }});
+    rehacer(true);
+  })();
+
+  /* =========================================================
+     Lab 5 · pooling y upsampling
+     ========================================================= */
+  (function(){
+    var A0 = [[1,3,2,0],[4,2,1,1],[0,1,5,2],[2,1,3,4]];
+    var KT = [[1,0.5],[0.5,0.25]];
+    var st = {tipo:"max", shift:false, up:"rep"};
+    function entrada(sh){ return A0.map(function(r){ return sh ? [0].concat(r.slice(0, 3)) : r.slice(); }); }
+    function pool(A){
+      var P = [[0,0],[0,0]], pos = [];
+      for(var a=0;a<2;a++) for(var b=0;b<2;b++){
+        var mx = -Infinity, mi = 0, mj = 0, suma = 0;
+        for(var u=0;u<2;u++) for(var w=0;w<2;w++){ var v = A[2*a+u][2*b+w]; suma += v; if(v > mx){ mx = v; mi = 2*a+u; mj = 2*b+w; } }
+        P[a][b] = st.tipo === "max" ? mx : suma/4; pos.push([mi, mj]);
+      }
+      return {P:P, pos:pos};
+    }
+    function upsample(R){
+      var P = R.P, U = [], i, j;
+      for(i=0;i<4;i++){ U.push([0,0,0,0]); }
+      if(st.up === "rep"){ for(i=0;i<4;i++) for(j=0;j<4;j++) U[i][j] = P[i>>1][j>>1]; }
+      else if(st.up === "unpool"){ R.pos.forEach(function(q, k){ U[q[0]][q[1]] = P[k>>1][k&1]; }); }
+      else if(st.up === "bil"){
+        for(i=0;i<4;i++) for(j=0;j<4;j++){ var y = i/3, x = j/3;
+          U[i][j] = (1-y)*(1-x)*P[0][0] + (1-y)*x*P[0][1] + y*(1-x)*P[1][0] + y*x*P[1][1]; }
+      } else { for(var a=0;a<2;a++) for(var b=0;b<2;b++) for(var u=0;u<2;u++) for(var w=0;w<2;w++) U[2*a+u][2*b+w] = P[a][b]*KT[u][w]; }
+      return U;
+    }
+    function render(){
+      var A = entrada(st.shift), R = pool(A), R0 = pool(entrada(false)), U = upsample(R);
+      var esMax = function(i, j){ return R.pos.some(function(q){ return q[0] === i && q[1] === j; }); };
+      var cambio = 0; for(var a=0;a<2;a++) for(var b=0;b<2;b++) if(Math.abs(R.P[a][b] - R0.P[a][b]) > 1e-9) cambio++;
+      var html = DL.matriz(A, {titulo: st.shift ? "entrada desplazada" : "entrada 4×4", dec:0, clase:function(i, j){
+        if(st.tipo === "max" && esMax(i, j)) return "hl";
+        return ((i>>1) + (j>>1)) % 2 === 0 ? "hl2" : "";
+      }});
+      html += '<span class="op">→</span>' + DL.matriz(R.P, {titulo: (st.tipo === "max" ? "max" : "average") + " pooling", forma:"2×2", dec: st.tipo === "max" ? 0 : 2,
+        clase:function(a, b){ return st.shift && Math.abs(R.P[a][b] - R0.P[a][b]) > 1e-9 ? "hl" : "ok"; }});
+      if(st.up === "trans") html += '<span class="op">⊛</span>' + DL.matriz(KT, {titulo:"kernel (2×2, s 2)", dec:2, clase:function(){ return "hl2"; }});
+      html += '<span class="op">→</span>' + DL.matriz(U, {titulo:"upsampling 4×4", dec: U.every(function(f){ return f.every(function(v){ return v === Math.round(v); }); }) ? 0 : 2});
+      $("poolRow").innerHTML = html;
+      var err = 0; for(var i=0;i<4;i++) for(var j=0;j<4;j++) err += Math.abs(U[i][j] - A[i][j]);
+      DL.readout($("poolRead"), [
+        ["valores del pooling que cambian al desplazar", st.shift ? cambio + " de 4" : "(activa «desplazar 1 pixel»)"],
+        ["error medio |upsampling − entrada|", DL.fmt(err/16, 2)],
+        ["parámetros: pooling / upsampling", "0 / " + (st.up === "trans" ? "4 (el kernel)" : "0")]
+      ]);
+      var msg = {
+        rep:"Repetir: cada valor del pooling se copia en un bloque de 2×2. Sale en escalones.",
+        unpool:"Max-unpooling: cada valor vuelve a la posición donde estuvo el máximo; el resto queda en 0." + (st.tipo === "avg" ? " Ojo: necesita las posiciones de un max-pooling; aquí se usan las del máximo de cada ventana solo para comparar." : ""),
+        bil:"Bilineal (con esquinas alineadas): las esquinas conservan los cuatro valores y en medio se interpola linealmente en cada eje.",
+        trans:"Transposed convolution: cada valor del pooling pinta el kernel, multiplicado por ese valor, en su bloque de 2×2. Con stride 2 y kernel 2×2 no hay traslapes."
+      };
+      $("poolStatus").textContent = msg[st.up];
+      DL.protegerMayusculas($("labPool"));
+    }
+    DL.selector($("poolTipo"), {valor:"max", opciones:[{v:"max", t:"max"}, {v:"avg", t:"average"}], alCambiar:function(v){ st.tipo = v; render(); }});
+    DL.selector($("poolShift"), {valor:false, opciones:[{v:false, t:"original"}, {v:true, t:"desplazar 1 pixel →"}], alCambiar:function(v){ st.shift = v; render(); }});
+    DL.selector($("poolUp"), {valor:"rep", opciones:[{v:"rep", t:"repetir"}, {v:"unpool", t:"max-unpooling"}, {v:"bil", t:"bilineal"}, {v:"trans", t:"transposed conv"}],
+      alCambiar:function(v){ st.up = v; render(); }});
+    render();
+  })();
+
+  /* =========================================================
+     Lab 6 · IoU
+     ========================================================= */
+  (function(){
+    var A = {x:2, y:2, w:4, h:4}, B = {x:3, y:3, w:4, h:4};
+    function inter(){
+      var x1 = Math.max(A.x, B.x), y1 = Math.max(A.y, B.y);
+      var x2 = Math.min(A.x + A.w, B.x + B.w), y2 = Math.min(A.y + A.h, B.y + B.h);
+      return {x:x1, y:y1, w:Math.max(0, x2 - x1), h:Math.max(0, y2 - y1)};
+    }
+    var g = DL.grafica($("iouCanvas"), {x:[0, 10], y:[0, 10], alto:320, etiquetaX:"x", etiquetaY:"y"}, function(g){
+      g.rect(A.x, A.y, A.w, A.h, {color:"r-dato", relleno:true, alfa:0.15, ancho:2});
+      g.rect(B.x, B.y, B.w, B.h, {color:"r-calc", relleno:true, alfa:0.15, ancho:2, guiones:true});
+      var I = inter();
+      if(I.w > 0 && I.h > 0) g.rect(I.x, I.y, I.w, I.h, {color:"accent", relleno:true, alfa:0.5, borde:false});
+      g.texto(A.x + 0.15, A.y + 0.35, "verdadera", {tam:11, color:"r-dato"});
+      g.texto(B.x + 0.15, B.y + B.h - 0.3, "predicha", {tam:11, color:"r-calc"});
+    });
+    function actualizar(){
+      var I = inter(), ai = I.w*I.h, aA = A.w*A.h, aB = B.w*B.h, un = aA + aB - ai, iou = ai/un;
+      DL.readout($("iouRead"), [
+        ["intersección |A ∩ B|", DL.fmt(ai, 2)], ["área verdadera |A|", DL.fmt(aA, 2)], ["área predicha |B|", DL.fmt(aB, 2)],
+        ["unión |A ∪ B|", DL.fmt(un, 2)], ["IoU", DL.fmt(iou, 3)]
+      ]);
+      var s = $("iouStatus");
+      if(ai === 0){ s.className = "status bad"; s.textContent = "Sin traslape: IoU = 0, sin importar qué tan cerca estén."; }
+      else if(iou >= 0.5){ s.className = "status ok"; s.textContent = "IoU ≥ 0.5: pasaría un umbral típico de acierto."; }
+      else { s.className = "status info"; s.textContent = "IoU < 0.5: con un umbral típico de 0.5, no contaría como acierto."; }
+      g.redibujar();
+    }
+    var c = $("iouCtrl");
+    function ctl(et, campo, min, max){ DL.control(c, {etiqueta:et, min:min, max:max, paso:0.5, valor:B[campo], formato:function(v){ return DL.fmt(v, 1); }, alCambiar:function(v){ B[campo] = v; actualizar(); }}); }
+    ctl("x inicial de la predicha", "x", 0, 9.5); ctl("y inicial de la predicha", "y", 0, 9.5);
+    ctl("ancho de la predicha", "w", 0.5, 10); ctl("alto de la predicha", "h", 0.5, 10);
+    actualizar();
+  })();
+
+})();
+</script>
+</body>
+</html>
