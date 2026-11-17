@@ -24,8 +24,8 @@ Para: Juan (orquestador) y Oscar. Estado: nada de esto está en un commit todav�
 | | Secciones | Laboratorios | Ejercicios | Glosario |
 |---|---|---|---|---|
 | 06 CNN | 13 | 6 (desplazamiento de señal, convolución 2D, calculadora de arquitecturas, receptive field, pooling y upsampling, IoU) | 10 | 32 términos |
-| 07 RNN | 15 | 7 (tendencia, bigramas y smoothing, RNN desenrollada, producto en el tiempo, clipping, compuertas LSTM/GRU, entre otros) | 10 | 37 términos |
-| 08 Transformers | 15 | unos 12 (atención a mano, √d_k, multi-head, orden y posición, máscaras, forma del tensor, BPE, etapas del asistente, LoRA y MoE, árbol de decisión) | 10 | 41 términos |
+| 07 RNN | 15 | 6 (tendencia, bigramas y smoothing, RNN desenrollada, producto en el tiempo, clipping, compuertas LSTM/GRU) | 10 | 37 términos |
+| 08 Transformers | 15 | 11 (atención a mano, √d_k, multi-head, orden y posición, máscaras, forma del tensor, BPE, etapas del asistente, LoRA y MoE, árbol de decisión) | 10 | 41 términos |
 
 Cobertura del temario del Examen 2, §1 a §4: completa (verificada por el revisor independiente).
 

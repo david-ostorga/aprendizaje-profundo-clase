@@ -76,7 +76,7 @@
 
 <div class="formula">
   <div class="f-head">Pesos de una capa densa del mismo tamaño que la imagen</div>
-  <div class="f-ejemplo">MNIST: 28 × 28 × 1 = 784  →  784² = 614 656 pesos   ·   RGB de la slide: 224 × 224 × 3 = 150 528  →  150 528² ≈ 22.7 × 10⁹ pesos</div>
+  <div class="f-ejemplo">MNIST: 28 × 28 × 1 = 784  →  784² = 614 656 pesos; RGB de la slide: 224 × 224 × 3 = 150 528  →  150 528² ≈ 22.7 × 10⁹ pesos</div>
   <div class="eq">
     #pesos = ( <span class="sym" data-s="nh">n<sub>h</sub></span> · <span class="r-dato">n<sub>w</sub></span> · <span class="r-dato">c</span> )<span class="sup">2</span>
     <div class="leyenda-roles"></div>
@@ -131,7 +131,7 @@
 
 <div class="formula">
   <div class="f-head">Invarianza y equivarianza a una transformación</div>
-  <div class="f-ejemplo">x = (0, 0, 1, 3, 2, 0, 0),  t = «recorrer 1 a la derecha»   ·   máximo: f(t[x]) = 3 = f(x)  (invariante)   ·   doble: f(t[x]) = (0, 0, 0, 2, 6, 4, 0) = t[f(x)]  (equivariante)</div>
+  <div class="f-ejemplo">x = (0, 0, 1, 3, 2, 0, 0),  t = «recorrer 1 a la derecha»; máximo: f(t[x]) = 3 = f(x)  (invariante); doble: f(t[x]) = (0, 0, 0, 2, 6, 4, 0) = t[f(x)]  (equivariante)</div>
   <div class="eq">
     invarianza:  <span class="sym" data-s="f">f</span>( <span class="sym" data-s="trans">t</span>[ <span class="sym" data-s="x"></span> ] ) = <span class="r-calc">f</span>( <span class="r-dato">x</span> )
     <br>
@@ -234,7 +234,7 @@
 
 <div class="formula">
   <div class="f-head">Convolución de un canal (como la implementan los frameworks)</div>
-  <div class="f-ejemplo">columna izquierda: 3·1 + 1·1 + 0·1 = 4   ·   columna central: pesos 0 → 0   ·   derecha: 0·(−1) + 3·(−1) + 2·(−1) = −5   →   4 + 0 − 5 = −1,  con u = 0:  H = −1</div>
+  <div class="f-ejemplo">columna izquierda: 3·1 + 1·1 + 0·1 = 4; columna central: pesos 0 → 0; derecha: 0·(−1) + 3·(−1) + 2·(−1) = −5   →   4 + 0 − 5 = −1,  con u = 0:  H = −1</div>
   <div class="eq">
     <span class="sym" data-s="Hmap">H<span class="sub">i,j</span></span> = <span class="sym" data-s="uconv">u</span> + <span class="big"><span class="lim"><span class="sym" data-s="Delta">Δ</span></span><span class="o">Σ</span><span class="lim">a=−<span class="r-hiper">Δ</span></span></span> <span class="big"><span class="lim r-hiper">Δ</span><span class="o">Σ</span><span class="lim">b=−<span class="r-hiper">Δ</span></span></span> <span class="sym" data-s="Vker">V<span class="sub">a,b</span></span> · <span class="sym" data-s="Ximg">X<span class="sub">i+a, j+b</span></span>
   </div>
@@ -309,7 +309,7 @@
 
 <div class="formula">
   <div class="f-head">Convolución con canales</div>
-  <div class="f-ejemplo">c<sub>i</sub> = 2, ventana 2×2, salida d = 1:   canal 1: (1, 2; 0, 1) ⊙ (1, 0; 0, 1) = 1 + 1 = 2   ·   canal 2: (3, 0; 1, 1) ⊙ (0, 1; 1, 0) = 0 + 1 = 1   ·   ν₁ = 0.5   →   H = 2 + 1 + 0.5 = 3.5</div>
+  <div class="f-ejemplo">c<sub>i</sub> = 2, ventana 2×2, salida d = 1:   canal 1: (1, 2; 0, 1) ⊙ (1, 0; 0, 1) = 1 + 1 = 2; canal 2: (3, 0; 1, 1) ⊙ (0, 1; 1, 0) = 0 + 1 = 1; ν₁ = 0.5   →   H = 2 + 1 + 0.5 = 3.5</div>
   <div class="eq">
     <span class="sym" data-s="Hmap">H<span class="sub">i,j,d</span></span> = <span class="sym" data-s="nu">ν<span class="sub">d</span></span> + <span class="sym" data-s="sum">Σ</span><span class="sub">a</span> Σ<span class="sub">b</span> Σ<span class="sub">c</span> <span class="sym" data-s="Vker">V<span class="sub">d,c,a,b</span></span> · <span class="sym" data-s="Ximg">X<span class="sub">i+a, j+b, c</span></span>
     <div class="leyenda-roles"></div>
@@ -361,7 +361,7 @@
 <h3 id="uno-por-uno" data-toc="Convoluciones 1×1">Convoluciones 1×1</h3>
 
 <p>Parece absurdo un kernel de 1×1: no ve vecinos. Pero con canales sí hace algo. En cada pixel, toma el vector de c<sub>i</sub> canales y lo multiplica por una matriz de c<sub>o</sub>×c<sub>i</sub>. Ejemplo: un pixel con 3 canales x = (1, 2, 3) y una 1×1 con 2 filtros, pesos (1, 0, −1) y (0.5, 0.5, 0.5), sin sesgo:</p>
-<div class="eq">canal 1: 1·1 + 0·2 + (−1)·3 = −2    ·    canal 2: 0.5·1 + 0.5·2 + 0.5·3 = 3    →   (−2, 3)</div>
+<div class="eq">canal 1: 1·1 + 0·2 + (−1)·3 = −2; canal 2: 0.5·1 + 0.5·2 + 0.5·3 = 3    →   (−2, 3)</div>
 <p>Es exactamente una capa lineal ℝ<sup>3</sup> → ℝ<sup>2</sup> (<a href="00_matematicas.html#matriz-vector">matriz por vector</a>), aplicada en cada pixel con los mismos pesos. La slide lo dice así: <strong>una 1×1 no mezcla información entre pixeles vecinos, pero sí entre canales en la misma ubicación</strong>. Necesita c<sub>i</sub>·c<sub>o</sub> pesos (más c<sub>o</sub> sesgos opcionales): de 64 canales a 16, 64·16 + 16 = 1 040 parámetros.</p>
 
 <p>Para qué se usa:</p>
@@ -399,7 +399,7 @@
 
 <div class="formula">
   <div class="f-head">Tamaño de salida con padding y stride (por dimensión)</div>
-  <div class="f-ejemplo">n = 28, k = 3:   p = 0, s = 1 → ⌊25/1⌋ + 1 = 26   ·   p = 1, s = 1 → ⌊27/1⌋ + 1 = 28   ·   p = 1, s = 2 → ⌊27/2⌋ + 1 = 13 + 1 = 14   ·   n = 8, k = 3, p = 0, s = 2 → ⌊5/2⌋ + 1 = 2 + 1 = 3</div>
+  <div class="f-ejemplo">n = 28, k = 3:   p = 0, s = 1 → ⌊25/1⌋ + 1 = 26; p = 1, s = 1 → ⌊27/1⌋ + 1 = 28; p = 1, s = 2 → ⌊27/2⌋ + 1 = 13 + 1 = 14; n = 8, k = 3, p = 0, s = 2 → ⌊5/2⌋ + 1 = 2 + 1 = 3</div>
   <div class="eq">
     <span class="r-calc">salida</span> = ⌊ <span class="frac"><span class="num"><span class="r-dato">n</span> + 2<span class="sym" data-s="pad">p</span> − <span class="r-hiper">k</span></span><span class="den"><span class="sym" data-s="stride">s</span></span></span> ⌋ + 1
   </div>
@@ -482,7 +482,7 @@
 
 <div class="formula">
   <div class="f-head">Receptive field al apilar capas</div>
-  <div class="f-ejemplo">conv 3×3 (s = 1) → pooling 2×2 (s = 2) → conv 3×3 (s = 1):   r₁ = 1 + 2·1 = 3, j₁ = 1   ·   r₂ = 3 + 1·1 = 4, j₂ = 2   ·   r₃ = 4 + 2·2 = 8, j₃ = 2   →   cada unidad final ve 8×8 pixeles</div>
+  <div class="f-ejemplo">conv 3×3 (s = 1) → pooling 2×2 (s = 2) → conv 3×3 (s = 1):   r₁ = 1 + 2·1 = 3, j₁ = 1; r₂ = 3 + 1·1 = 4, j₂ = 2; r₃ = 4 + 2·2 = 8, j₃ = 2   →   cada unidad final ve 8×8 pixeles</div>
   <div class="eq">
     <span class="sym" data-s="rl">r<span class="sub">l</span></span> = <span class="r-calc">r</span><span class="sub">l−1</span> + ( <span class="r-hiper">k</span><span class="sub">l</span> − 1 ) · <span class="r-calc">j</span><span class="sub">l−1</span>
 <br><span class="sym" data-s="jl">j<span class="sub">l</span></span> = <span class="r-calc">j</span><span class="sub">l−1</span> · <span class="sym" data-s="stride">s<span class="sub">l</span></span>
@@ -623,7 +623,7 @@
 
 <div class="formula">
   <div class="f-head">Bloque residual</div>
-  <div class="f-ejemplo">h = 2, F(h) = 0.3 → 2.3   ·   derivadas en 10 bloques con F′ = 0.1:  plana 0.1¹⁰ = 10⁻¹⁰   ·   residual (1 + 0.1)¹⁰ = 1.1¹⁰ ≈ 2.59</div>
+  <div class="f-ejemplo">h = 2, F(h) = 0.3 → 2.3; derivadas en 10 bloques con F′ = 0.1:  plana 0.1¹⁰ = 10⁻¹⁰; residual (1 + 0.1)¹⁰ = 1.1¹⁰ ≈ 2.59</div>
   <div class="eq">
     <span class="sym" data-s="h"></span><span class="sub">k+1</span> = <span class="r-calc">h</span><span class="sub">k</span> + <span class="sym" data-s="Fres">F(h<span class="sub">k</span>)</span>
   </div>
@@ -668,7 +668,7 @@
 
 <div class="formula">
   <div class="f-head">Intersection over Union</div>
-  <div class="f-ejemplo">A = [2, 6]×[2, 6], B = [3, 7]×[3, 7]:   |A ∩ B| = 3·3 = 9   ·   |A ∪ B| = 16 + 16 − 9 = 23   →   IoU = 9/23 ≈ 0.391</div>
+  <div class="f-ejemplo">A = [2, 6]×[2, 6], B = [3, 7]×[3, 7]:   |A ∩ B| = 3·3 = 9; |A ∪ B| = 16 + 16 − 9 = 23   →   IoU = 9/23 ≈ 0.391</div>
   <div class="eq">
     <span class="sym" data-s="IoU">IoU</span> = <span class="frac"><span class="num">| <span class="r-dato">A</span> ∩ <span class="r-calc">B</span> |</span><span class="den">| <span class="r-dato">A</span> ∪ <span class="r-calc">B</span> |</span></span>
   </div>
@@ -829,6 +829,21 @@
       <li><b>pool 2, s 2:</b> r = 5 + 1·1 = 6, j = 2.</li>
       <li><b>conv 3:</b> r = 6 + 2·2 = <b>10</b>, j = 2.</li>
       <li><b>(b)</b> Con L capas 3×3 de stride 1, r = 1 + 2L. Necesitas 1 + 2L ≥ 28, o sea L ≥ 13.5: <b>14 capas</b> (r = 29). Con un pooling en medio llegas con muchas menos, porque las capas posteriores suman de 4 en 4.</li>
+    </ol>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Derivar</span><span class="e-tem">Temario §1 · de la capa totalmente conectada a la convolución</span>
+  <div class="e-enun">Una imagen en escala de grises de 32×32 entra a una capa intermedia H del mismo tamaño. (a) Sin ver la sección 4, escribe la derivación que lleva de la capa totalmente conectada a una convolución de 5×5: una línea por paso, con la regla o decisión que aplicas. (b) Cuenta los parámetros (pesos + sesgos) después de cada paso. (c) ¿Qué supuesto sobre las imágenes justifica cada decisión, y qué propiedad gana la capa?</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>Son cuatro pasos: capa densa, reindexar alrededor de cada pixel, compartir parámetros y restringir a una vecindad. Solo dos de ellos ahorran parámetros.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <ol>
+      <li><b>Capa densa:</b> H<sub>i,j</sub> = U<sub>i,j</sub> + Σ<sub>k</sub> Σ<sub>l</sub> W<sub>i,j,k,l</sub> X<sub>k,l</sub>. Cada una de las 32·32 = 1 024 salidas tiene su sesgo y un peso hacia cada uno de los 1 024 pixeles: 1 024² + 1 024 = <b>1 049 600</b>.</li>
+      <li><b>Reindexar</b> con k = i + a y l = j + b: H<sub>i,j</sub> = U<sub>i,j</sub> + Σ<sub>a</sub> Σ<sub>b</sub> V<sub>i,j,a,b</sub> X<sub>i+a, j+b</sub>. Es la misma capa vista desde cada salida: siguen siendo <b>1 049 600</b>.</li>
+      <li><b>Decisión 1, compartir parámetros:</b> los mismos pesos en todas las posiciones, H<sub>i,j</sub> = u + Σ<sub>a</sub> Σ<sub>b</sub> V<sub>a,b</sub> X<sub>i+a, j+b</sub>. Queda un peso por desplazamiento posible, de −31 a 31 en cada eje: 63² + 1 = 3 969 + 1 = <b>3 970</b>.</li>
+      <li><b>Decisión 2, localidad:</b> solo una vecindad de radio Δ = 2, es decir a, b ∈ {−2, …, 2}: 5·5 + 1 = <b>26</b>.</li>
+      <li><b>(c)</b> Compartir parámetros supone que un patrón (un borde, una esquina) significa lo mismo en cualquier lugar de la imagen; a cambio, la capa se vuelve <b>equivariante</b> a traslaciones. La localidad supone que lo que explica un pixel está cerca de él; reduce los parámetros a un kernel pequeño, y la vista amplia se recupera apilando capas (receptive field).</li>
     </ol>
   </div></details>
 </div>

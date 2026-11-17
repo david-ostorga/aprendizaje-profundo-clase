@@ -104,6 +104,9 @@
 </div>
 <p>La diferencia con una biblioteca real es que aquí no eliges <em>un</em> libro: tomas un poco de todos, en proporción a qué tan relevante es cada uno. Esa proporción son los pesos de atención.</p>
 
+<div class="q"><span class="qlabel">Duda típica</span>¿Para qué separar keys y values? ¿No bastaría un solo vector por token?</div>
+<p>Hacen dos trabajos distintos. La key decide <em>si</em> un token recibe atención; el value decide <em>qué</em> aporta cuando la recibe. En la biblioteca, el índice te sirve para encontrar el libro, pero lo que te llevas es el contenido. Con vectores separados, un token puede ser «encontrado» por un rasgo (por ejemplo, ser un sustantivo) y aportar otro (su significado). En self-attention los dos salen del mismo token, pero con proyecciones distintas, W<sub>K</sub> y W<sub>V</sub>, que se aprenden por separado.</p>
+
 <h3 id="pooling" data-toc="Attention pooling">Atención como promedio ponderado</h3>
 <p>Primero con números. Tres libros con values v₁ = (4, 0), v₂ = (0, 4) y v₃ = (2, 2). Si la búsqueda decide que los pesos son 0.5, 0.25 y 0.25, el resultado es 0.5·(4, 0) + 0.25·(0, 4) + 0.25·(2, 2) = (2, 0) + (0, 1) + (0.5, 0.5) = <b>(2.5, 1.5)</b>. Un vector que «se parece más» al libro 1 porque le dimos más peso.</p>
 
@@ -316,6 +319,9 @@
 
 <p>Una sola atención produce, para cada token, <em>una</em> forma de repartir los pesos. Pero en una frase hay muchas relaciones a la vez: el verbo con su sujeto, cada palabra con la anterior, un pronombre con el sustantivo al que se refiere. Con un solo reparto de pesos, el modelo tiene que escoger. La solución es calcular <strong>varias atenciones en paralelo</strong>, cada una con sus propias proyecciones. Cada una es una <strong>cabeza</strong> (head).</p>
 <p>Un ejemplo de tamaños con números del Transformer original: el modelo representa cada token con d<sub>model</sub> = 512 números y usa h = 8 cabezas. Cada cabeza proyecta esos 512 números a vectores de d<sub>h</sub> = 512/8 = 64 dimensiones, hace su atención ahí, y devuelve un vector de 64. Se concatenan las 8 salidas (8 × 64 = 512) y una última matriz W<sub>o</sub> las mezcla.</p>
+
+<div class="q"><span class="qlabel">Duda típica</span>Si 8 cabezas de 64 tienen los mismos parámetros que una cabeza de 512, ¿qué se gana?</div>
+<p>No se gana capacidad, se gana <strong>variedad de repartos</strong>. Una cabeza de 512 produce un solo conjunto de pesos por token: tiene que decidir a quién mirar con una sola regla. Ocho cabezas producen ocho conjuntos distintos, así que el mismo token puede mirar a su sujeto en una cabeza y a la palabra anterior en otra, al mismo tiempo. El costo es que cada cabeza compara queries y keys en un espacio más chico (64 dimensiones en lugar de 512).</p>
 
 <div class="formula">
   <div class="f-head">Multi-head attention</div>
@@ -753,7 +759,7 @@
 <p>En dominios donde el éxito se puede <strong>verificar mecánicamente</strong> no hacen falta ni modelo de recompensa ni preferencias humanas: en matemáticas, ¿la respuesta final es correcta?; en código, ¿pasan los tests? Se entrena con RL directamente contra esa señal (la receta de DeepSeek-R1, 2025). El modelo aprende solo a pensar más, con cadenas largas de razonamiento, porque pensar más gana más recompensa. Así nacen los <strong>modelos de razonamiento</strong> (2024 en adelante): gastan más cómputo en inferencia, mejoran mucho en razonamiento y cuestan más en latencia.</p>
 <p>De ahí la observación de la slide: el progreso 2024–2026 fue <strong>más rápido en matemáticas y código</strong> que en juicio abierto, porque avanza más rápido donde hay verificador. Y la moraleja del escalamiento: ya no solo «más parámetros y más datos», también «más pensamiento por pregunta».</p>
 
-<h3 id="lab-etapas" class="lab" data-toc="Lab: una pregunta, cuatro modelos">Laboratorio: una instrucción, cuatro etapas</h3>
+<h3 id="lab-etapas" class="lab" data-toc="Lab: una instrucción, cuatro etapas">Laboratorio: una instrucción, cuatro etapas</h3>
 <p>La misma instrucción a un modelo en cada etapa. Las respuestas son <strong>ilustrativas</strong>, escritas para mostrar el tipo de comportamiento; no son salidas reales de un modelo.</p>
 <div class="widget" id="labEtapas">
   <div class="widget-head"><div class="wt">Qué cambia en cada etapa del post-entrenamiento</div><div class="ws">Elige la etapa.</div></div>

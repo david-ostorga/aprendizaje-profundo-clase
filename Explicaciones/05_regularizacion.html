@@ -91,7 +91,7 @@
 
 <div class="formula">
   <div class="f-head">Objetivo con regularización explícita</div>
-  <div class="f-ejemplo">Σℓᵢ = 2.0,  φ = (3, −2),  g(φ) = 3² + (−2)² = 13,  λ = 0.1  →  2.0 + 0.1 · 13 = 3.3   ·   con φ′ = (1, −1): 2.6 + 0.1 · 2 = 2.8  (gana φ′)</div>
+  <div class="f-ejemplo">Σℓᵢ = 2.0,  φ = (3, −2),  g(φ) = 3² + (−2)² = 13,  λ = 0.1  →  2.0 + 0.1 · 13 = 3.3; con φ′ = (1, −1): 2.6 + 0.1 · 2 = 2.8  (gana φ′)</div>
   <div class="eq">
     <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmin"></span><span class="sub r-param">φ</span> [ <span class="big"><span class="lim r-dato">I</span><span class="o">Σ</span><span class="lim">i=1</span></span> <span class="sym" data-s="ell"></span><span class="sub">i</span>( <span class="r-dato">x</span><span class="sub">i</span>, <span class="r-dato">y</span><span class="sub">i</span>, <span class="r-param">φ</span> ) + <span class="sym" data-s="lambda"></span> <span class="r-calc">g</span>(<span class="r-param">φ</span>) ]
     <span class="lbl">la slide escribe I (no n) para el número de observaciones</span>
@@ -166,7 +166,7 @@
 
 <div class="formula">
   <div class="f-head">Estimación MAP: verosimilitud × prior</div>
-  <div class="f-ejemplo">A: 0.020 · 0.10 = 0.0020   ·   B: 0.025 · 0.04 = 0.0010   →   MAP elige A (máxima verosimilitud habría elegido B)</div>
+  <div class="f-ejemplo">A: 0.020 · 0.10 = 0.0020; B: 0.025 · 0.04 = 0.0010   →   MAP elige A (máxima verosimilitud habría elegido B)</div>
   <div class="eq">
     <span class="sym" data-s="phihat"></span> = <span class="sym" data-s="argmax"></span><span class="sub r-param">φ</span> [ <span class="big"><span class="lim r-dato">I</span><span class="o">Π</span><span class="lim">i=1</span></span> <span class="sym" data-s="P">P(y<sub>i</sub> | x<sub>i</sub>, φ)</span> ] · <span class="sym" data-s="prior"></span>
   </div>
@@ -296,7 +296,7 @@
 
 <div class="formula">
   <div class="f-head">Pérdida modificada de gradient descent</div>
-  <div class="f-ejemplo">α = 0.1,  L = 1:   P con ‖∇L‖ = 1 → L̃ = 1 + 0.025 · 1 = 1.025   ·   Q con ‖∇L‖ = 10 → L̃ = 1 + 0.025 · 100 = 3.5</div>
+  <div class="f-ejemplo">α = 0.1,  L = 1:   P con ‖∇L‖ = 1 → L̃ = 1 + 0.025 · 1 = 1.025; Q con ‖∇L‖ = 10 → L̃ = 1 + 0.025 · 100 = 3.5</div>
   <div class="eq">
     <span class="sym" data-s="Ltilde"></span><span class="sub">GD</span>(<span class="r-param">φ</span>) = <span class="sym" data-s="L">L(φ)</span> + <span class="frac"><span class="num"><span class="r-hiper">α</span></span><span class="den">4</span></span> ‖ <span class="frac"><span class="num">∂<span class="r-calc">L</span></span><span class="den">∂<span class="r-param">φ</span></span></span> ‖<span class="sup">2</span>
     <span class="lbl">‖∂L/∂φ‖² = (∂L/∂φ₁)² + (∂L/∂φ₂)² + …, la norma al cuadrado del gradiente</span>
