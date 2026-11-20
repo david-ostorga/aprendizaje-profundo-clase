@@ -1,0 +1,1303 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Examen de práctica 2, pregunta por pregunta</title>
+<link rel="stylesheet" href="_compartido/estilos.css">
+<style>
+  [hidden]{display:none!important}
+  .preg{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin:18px 0 26px; box-shadow:var(--shadow)}
+  .preg-enun{font-size:16.5px; margin:0 0 12px; padding:12px 14px; border-left:3px solid var(--accent); background:var(--surface-2); border-radius:6px}
+  .preg-enun .pid{font-family:ui-sans-serif,system-ui,sans-serif; font-weight:700; color:var(--accent); margin-right:6px}
+  .preg h4{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin:18px 0 6px}
+  .preg .resp{margin:8px 0; padding:10px 14px; background:var(--ok-soft); border-radius:8px}
+  .preg .resp b.ver{color:var(--ok)}
+  .logica{margin:6px 0 6px 1.2em; padding:0}
+  .logica li{margin:5px 0}
+  .escribe{font-style:italic; color:var(--text-2); border-left:3px solid var(--ok); padding:4px 12px; margin:10px 0}
+  .variante{margin-top:16px; padding:14px 16px; border:1.5px dashed var(--border); border-radius:10px}
+  .variante > .vt{font-family:ui-sans-serif,system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--info); margin-bottom:6px}
+  .vt .cambio{font-weight:500; text-transform:none; letter-spacing:0; color:var(--text-3); margin-left:6px}
+  .vf{margin:10px 0; padding:10px 0; border-top:1px solid var(--border)}
+  .vf:first-of-type{border-top:none}
+  .vf-bar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:6px 0}
+  .vf-bar .status{margin:0}
+  .vf-bar .btn.sel{outline:2px solid var(--accent)}
+  .vf-exp{margin:6px 0 0; color:var(--text-2)}
+  .chk-campos{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px 14px; margin:10px 0}
+  .chk-campos label{font-family:ui-sans-serif,system-ui,sans-serif; font-size:13px; color:var(--text-2); display:flex; justify-content:space-between; align-items:center; gap:8px}
+  .chk-campos input{width:90px; padding:5px 8px; font:inherit; font-size:14px; border:1.5px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text)}
+  .chk-campos input.ok{border-color:var(--ok); background:var(--ok-soft)}
+  .chk-campos input.bad{border-color:var(--warn); background:var(--warn-soft)}
+  .chk-fila{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .chk-fila .status{margin:0}
+  .gen-enun{margin:8px 0}
+  .opciones{display:flex; flex-direction:column; gap:6px; margin:10px 0}
+  .opciones label{font-family:ui-sans-serif,system-ui,sans-serif; font-size:14px; display:flex; gap:8px; align-items:flex-start}
+  .opciones label.acierto{color:var(--ok)} .opciones label.falta{color:var(--warn)} .opciones label.sobra{color:var(--warn); text-decoration:line-through}
+  .tbl td.nw{white-space:nowrap}
+  .procm{font-family:ui-monospace,Menlo,monospace; font-size:13.5px; white-space:pre-wrap; background:var(--code-bg); padding:10px 12px; border-radius:8px; overflow-x:auto}
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+<nav id="toc" data-auto></nav>
+
+<main>
+<div class="topbar">
+  <button class="btn" id="menuBtn">☰ Índice</button>
+  <div class="crumb" id="crumb">Examen de práctica 2</div>
+  <button class="btn" id="themeBtn">◐ Tema</button>
+</div>
+
+<div class="wrap">
+
+<!-- ============ PORTADA ============ -->
+<header class="hero" id="inicio">
+  <div class="eyebrow">Aprendizaje Profundo · Artefacto 09 · Repaso del Examen 2</div>
+  <h1>El examen de práctica 2, pregunta por pregunta</h1>
+  <p class="lead">Cada pregunta del examen de práctica con su respuesta correcta, la lógica que lleva a ella y una variante que cambia un número, invierte la afirmación o reescribe el caso, como lo hizo la profesora en el Examen 1.</p>
+  <div class="meta">Fuente: <code>Examenes/Examen2_GuiaEstudio.md</code> · Temario del Examen 2, secciones 1 a 5 · Teoría a fondo en los artefactos <a href="06_cnn.html">06</a>, <a href="07_rnn.html">07</a> y <a href="08_transformers.html">08</a></div>
+</header>
+
+<!-- ============ 1. CÓMO USAR ============ -->
+<h2 id="mapa"><span class="num">Sección 1</span>Cómo usar este repaso</h2>
+
+<p>El Examen 1 real se pareció mucho a su examen de práctica. La profesora hizo tres tipos de cambio, y las variantes de este artefacto entrenan justo esos tres:</p>
+
+<table class="tbl">
+  <tr><th>Cambio</th><th>Ejemplo</th><th>Qué te protege</th></tr>
+  <tr><td><b>Otros parámetros</b></td><td>La misma CNN, pero con kernel 5×5 en vez de 3×3, o una imagen de 28 en vez de 32.</td><td>Saber el procedimiento, no el resultado.</td></tr>
+  <tr><td><b>Lógica invertida</b></td><td>«Forget gate cerca de 0 conserva la memoria» pasa a «forget gate cerca de 1 la borra».</td><td>Saber el porqué de cada V o F, no la letra.</td></tr>
+  <tr><td><b>Caso reescrito</b></td><td>La demanda de consultas pasa a ser demanda de agua, o pobreza vista desde satélite.</td><td>Tener una lista fija de qué revisar en cualquier propuesta.</td></tr>
+</table>
+
+<p>Cada pregunta trae el mismo recorrido:</p>
+<div class="flow">
+  <div class="node"><div class="t">1. Intenta</div><div class="d">Lee el enunciado y contesta en papel (en la Parte A, con los botones V/F).</div></div>
+  <div class="node aqui"><div class="t">2. Respuesta y lógica</div><div class="d">Ábrela y compara tu razonamiento, no solo tu resultado.</div></div>
+  <div class="node"><div class="t">3. Variante</div><div class="d">Resuelve la versión cambiada. En las de cálculo, «Otra variante» genera números nuevos.</div></div>
+</div>
+
+<div class="note key">
+  <span class="tag">La idea de fondo</span>
+  <p>El examen da un formulario con todas las ecuaciones. Lo que evalúa es si sabes <b>qué hace cada pieza y qué pasa si la cambias</b>. Por eso cada respuesta de aquí tiene la lógica separada del resultado: la lógica es lo que sobrevive cuando cambian los números.</p>
+</div>
+
+<table class="tbl chica">
+  <tr><th>Parte</th><th>Qué es</th><th>Tiempo sugerido de 40 min</th><th>Teoría</th></tr>
+  <tr><td><a href="#parte-a">A</a></td><td>10 afirmaciones V/F con justificación de una o dos líneas</td><td class="nw">8–10 min</td><td>06, 07, 08</td></tr>
+  <tr><td><a href="#b1">B1</a></td><td>Aritmética de una CNN: tamaños, parámetros, receptive field, 1×1</td><td class="nw">7 min</td><td><a href="06_cnn.html#tamano">06</a></td></tr>
+  <tr><td><a href="#b2">B2</a></td><td>RNN: parámetros, GRU, clipping, perplejidad</td><td class="nw">7 min</td><td><a href="07_rnn.html#rnn">07</a></td></tr>
+  <tr><td><a href="#b3">B3</a></td><td>Atención a mano, √d<sub>k</sub>, máscara causal, residual</td><td class="nw">7 min</td><td><a href="08_transformers.html#atencion">08</a></td></tr>
+  <tr><td><a href="#parte-c">C</a></td><td>Diseño aplicado: criticar una propuesta y elegir herramienta</td><td class="nw">10 min</td><td><a href="08_transformers.html#decidir">08</a>, <a href="07_rnn.html#bidireccional">07</a></td></tr>
+</table>
+
+<!-- ============ 2. PARTE A ============ -->
+<h2 id="parte-a"><span class="num">Sección 2</span>Parte A · Conceptos rápidos</h2>
+
+<p>Diez afirmaciones. En el examen escribes V o F y lo justificas en una o dos líneas. <b>La justificación vale más que la letra:</b> un V sin porqué puede valer cero.</p>
+
+<div class="note exam">
+  <span class="tag">Receta para justificar un V/F</span>
+  <p>1) Nombra la pieza («el forget gate multiplica la memoria anterior»). 2) Di qué hace con el valor del enunciado («con f ≈ 0 la multiplica por casi cero»). 3) Concluye («así que la borra: F»). Si es falsa, di cuál sería la versión verdadera.</p>
+</div>
+
+<!-- A1 -->
+<h3 id="a1" data-toc="A1 · Max-pooling y parámetros">A1 · ¿Tiene parámetros el max-pooling?</h3>
+<div class="preg">
+  <div class="vf" data-r="V">
+    <p class="preg-enun"><span class="pid">A1.</span>Una capa de max-pooling no tiene parámetros entrenables.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Verdadero.</b> El pooling solo toma el máximo (o el promedio) de cada ventana: es una regla fija y no hay pesos que aprender.</div>
+      <h4>La lógica</h4>
+      <ol class="logica">
+        <li>Un parámetro entrenable es un número que el gradiente mueve, como los pesos de un kernel.</li>
+        <li>Max-pooling 2×2 sobre la ventana [1, 5, 3, 2] devuelve 5. No multiplicó nada por ningún peso: solo eligió.</li>
+        <li>Lo que sí tiene son <b>hiperparámetros</b>, que eliges tú: tamaño de ventana, stride y padding.</li>
+      </ol>
+      <p class="escribe">Para el examen: «V. Pooling aplica una operación fija (máximo) por ventana y canal; no hay pesos. Solo tiene hiperparámetros: ventana, stride, padding.»</p>
+      <p>Teoría: <a href="06_cnn.html#pooling-que">06 · Qué hace el pooling</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">misma idea, otra pregunta</span></div>
+    <div class="vf" data-r="F"><p>Average pooling 2×2 tiene 4 pesos entrenables por canal (uno por cada pixel de la ventana).</p>
+      <div class="vf-exp"><b>Falso.</b> El promedio usa pesos fijos de 1/4 que nadie entrena. Si esos 4 pesos se aprendieran, sería una convolución 2×2 con stride 2, no un pooling.</div></div>
+    <div class="vf" data-r="F"><p>Una capa de pooling no tiene nada que tú debas elegir.</p>
+      <div class="vf-exp"><b>Falso.</b> No tiene parámetros, pero sí hiperparámetros: ventana, stride y padding. La trampa es confundir parámetro con hiperparámetro.</div></div>
+    <div class="vf" data-r="F"><p>Una convolución 1×1 no tiene parámetros porque su kernel es de un solo pixel.</p>
+      <div class="vf-exp"><b>Falso.</b> Tiene c<sub>o</sub>·c<sub>i</sub>·1·1 + c<sub>o</sub> parámetros. De 8 a 16 canales son 16·8 + 16 = 144. El kernel es chico en el espacio, pero mezcla todos los canales.</div></div>
+  </div>
+</div>
+
+<!-- A2 -->
+<h3 id="a2" data-toc="A2 · Padding que conserva el tamaño">A2 · ¿Conserva el tamaño una 3×3 con padding 1?</h3>
+<div class="preg">
+  <div class="vf" data-r="V">
+    <p class="preg-enun"><span class="pid">A2.</span>Una convolución 3×3 con padding 1 y stride 1 conserva el alto y el ancho de la entrada.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Verdadero.</b> Con n = 32: ⌊(32 + 2·1 − 3)/1⌋ + 1 = 31 + 1 = 32.</div>
+      <h4>La lógica</h4>
+      <ol class="logica">
+        <li>Sin padding, un kernel de 3 «se come» 1 pixel de cada lado: 32 → 30. En general pierdes k − 1 pixeles.</li>
+        <li>El padding p agrega p pixeles de cada lado: recuperas 2p.</li>
+        <li>Si 2p = k − 1, lo que pierdes y lo que agregas se cancelan. Con k = 3, p = 1. Esta es la regla del «same padding»: <b>p = (k − 1)/2</b>.</li>
+        <li>El stride 1 no divide nada. Con stride 2 la salida se reduce a la mitad aproximadamente.</li>
+      </ol>
+      <div class="formula">
+        <div class="f-head">Tamaño de salida (viene en el formulario)</div>
+        <div class="f-ejemplo">n = 32, k = 3, p = 1, s = 1  →  (32 + 2 − 3)/1 + 1 = 32</div>
+        <div class="eq">salida = ⌊ (<span class="r-dato">n</span> + 2<span class="sym" data-s="pad"></span> − <span class="r-hiper">k</span>) / <span class="sym" data-s="stride"></span> ⌋ + 1<div class="leyenda-roles"></div></div>
+        <div class="f-lectura"><span class="tag">Se lee</span><p>«Al tamaño de entrada súmale el relleno de los dos lados, réstale lo que ocupa el kernel, divide entre lo que salta cada paso y redondea hacia abajo. El +1 cuenta la primera posición.»</p></div>
+        <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span><ul>
+          <li>…k sube de 3 a 5 con p = 1: la salida baja 2 (32 → 30). Para conservar necesitas p = 2.</li>
+          <li>…s sube a 2: la salida baja a la mitad (32 → 16).</li>
+          <li>…la división no es exacta: el ⌊ ⌋ tira la última columna que no cabe.</li>
+        </ul></div>
+      </div>
+      <p class="escribe">Para el examen: «V. (n + 2·1 − 3)/1 + 1 = n. Es same padding: p = (k − 1)/2.»</p>
+      <p>Teoría: <a href="06_cnn.html#padding">06 · Padding</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">cambian k, p o s</span></div>
+    <div class="vf" data-r="F"><p>Una convolución 5×5 con padding 1 y stride 1 conserva el alto y el ancho de una entrada de 32×32.</p>
+      <div class="vf-exp"><b>Falso.</b> (32 + 2 − 5)/1 + 1 = 30. Para conservar 32 con k = 5 hace falta p = (5 − 1)/2 = 2.</div></div>
+    <div class="vf" data-r="F"><p>Una convolución 3×3 con padding 1 y stride 2 conserva el alto y el ancho de una entrada de 32×32.</p>
+      <div class="vf-exp"><b>Falso.</b> ⌊(32 + 2 − 3)/2⌋ + 1 = ⌊15.5⌋ + 1 = 16. El padding arregla los bordes, pero el stride 2 reduce a la mitad.</div></div>
+    <div class="vf" data-r="V"><p>Una convolución 3×3 sin padding y con stride 1 convierte una entrada de 32×32 en una de 30×30.</p>
+      <div class="vf-exp"><b>Verdadero.</b> (32 + 0 − 3)/1 + 1 = 30: pierdes k − 1 = 2 pixeles.</div></div>
+  </div>
+</div>
+
+<!-- A3 -->
+<h3 id="a3" data-toc="A3 · Receptive field en una esquina">A3 · ¿Basta un receptive field que solo cubre una esquina?</h3>
+<div class="preg">
+  <div class="vf" data-r="F">
+    <p class="preg-enun"><span class="pid">A3.</span>Si el receptive field de las unidades de la última capa convolucional cubre solo una esquina de la imagen, la red igual puede clasificar la imagen completa sin problema.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Falso.</b> Una unidad solo «ve» los pixeles de su receptive field. Si ninguna capa junta la información de toda la imagen, la decisión ignora el resto.</div>
+      <h4>La lógica</h4>
+      <ol class="logica">
+        <li>Receptive field = qué pixeles de la imagen original pueden cambiar el valor de esa unidad. Lo que está fuera no la afecta, se mueva como se mueva.</li>
+        <li>Si cubre solo una esquina, un gato en la otra esquina es invisible para esa unidad.</li>
+        <li>Soluciones del curso: apilar más capas, usar stride o pooling (hacen crecer el receptive field más rápido) o terminar con una <b>agregación global</b> (pooling global o capa densa) que junte todas las posiciones.</li>
+      </ol>
+      <p class="escribe">Para el examen: «F. Cada unidad solo usa la información de su receptive field; si no cubre la imagen, el resto se ignora. Se arregla con más profundidad, stride/pooling o agregación global antes de clasificar.»</p>
+      <p>Teoría: <a href="06_cnn.html#receptive-field">06 · Receptive field</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">qué agranda el receptive field y qué no</span></div>
+    <div class="vf" data-r="V"><p>Poner pooling o stride entre convoluciones hace crecer el receptive field más rápido que apilar solo convoluciones con stride 1.</p>
+      <div class="vf-exp"><b>Verdadero.</b> Después de un stride 2, cada paso de la capa siguiente salta 2 pixeles de la original (j se duplica). Cada kernel posterior agrega (k − 1)·j en vez de (k − 1).</div></div>
+    <div class="vf" data-r="F"><p>Agregar una convolución 1×1 al final agranda el receptive field.</p>
+      <div class="vf-exp"><b>Falso.</b> Con k = 1, la recurrencia suma (1 − 1)·j = 0. La 1×1 mezcla canales, no vecinos.</div></div>
+    <div class="vf" data-r="V"><p>Con un pooling global (promedio de todo el mapa) al final, la salida depende de toda la imagen aunque cada unidad anterior vea solo un pedazo.</p>
+      <div class="vf-exp"><b>Verdadero.</b> El pooling global junta todas las posiciones, así que alguna unidad cubre cada región. Es una de las soluciones al problema de A3.</div></div>
+  </div>
+</div>
+
+<!-- A4 -->
+<h3 id="a4" data-toc="A4 · Perplejidad del modelo uniforme">A4 · ¿Perplejidad |V| para el modelo uniforme?</h3>
+<div class="preg">
+  <div class="vf" data-r="V">
+    <p class="preg-enun"><span class="pid">A4.</span>Un modelo de lenguaje que predice uniformemente sobre un vocabulario de |V| tokens tiene perplejidad |V|.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Verdadero.</b> Cada token tiene probabilidad 1/|V|, la cross-entropy promedio es log|V| y la perplejidad es exp(log|V|) = |V|.</div>
+      <h4>La lógica, con números</h4>
+      <ol class="deriv" data-revelar>
+        <li><div class="d-ex">|V| = 4 (tokens: a, b, c, d) → P(cada token) = 1/4</div><div class="d-por"><b>Uniforme:</b> el modelo no sabe nada; reparte la probabilidad igual.</div></li>
+        <li><div class="d-ex">−log P(x<sub>t</sub> | x<sub>&lt;t</sub>) = −log(1/4) = log 4  en cada paso</div><div class="d-por"><b>Sorpresa de un token:</b> como todos valen 1/4, la sorpresa es la misma en cada paso.</div></li>
+        <li><div class="d-ex">promedio de n sorpresas iguales = log 4</div><div class="d-por"><b>Cross-entropy:</b> el promedio de un número repetido es ese número.</div></li>
+        <li><div class="d-ex">perplejidad = exp(log 4) = 4</div><div class="d-por"><b>exp deshace el log.</b> Interpretación: el modelo «duda» entre 4 opciones igual de probables, tantas como tokens tiene el vocabulario.</div></li>
+      </ol>
+      <p class="escribe">Para el examen: «V. P = 1/|V| para cada token ⇒ cross-entropy = log|V| ⇒ perplejidad = exp(log|V|) = |V|: duda entre |V| opciones.»</p>
+      <p>Teoría: <a href="07_rnn.html#perplejidad">07 · Perplejidad</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">otros extremos y la trampa del log</span></div>
+    <div class="vf" data-r="F"><p>Un modelo uniforme sobre 50,000 tokens tiene perplejidad log(50,000).</p>
+      <div class="vf-exp"><b>Falso.</b> log(50,000) ≈ 10.8 es la <i>cross-entropy</i>. La perplejidad es su exponencial: 50,000. La trampa es olvidar el exp.</div></div>
+    <div class="vf" data-r="V"><p>Un modelo que siempre asigna probabilidad 1 al token correcto tiene perplejidad 1.</p>
+      <div class="vf-exp"><b>Verdadero.</b> −log 1 = 0, exp(0) = 1: no duda entre nada. 1 es el mínimo posible.</div></div>
+    <div class="vf" data-r="F"><p>Si el modelo A tiene perplejidad 40 y el B 120, A siempre es mejor, aunque usen tokenizadores distintos.</p>
+      <div class="vf-exp"><b>Falso.</b> La perplejidad es por token. Con tokenizadores distintos cambia qué es «un token» y cuántos hay. Ver <a href="#b2d">B2 d</a>.</div></div>
+  </div>
+</div>
+
+<!-- A5 -->
+<h3 id="a5" data-toc="A5 · BPTT truncado">A5 · ¿BPTT truncado da el mismo gradiente?</h3>
+<div class="preg">
+  <div class="vf" data-r="F">
+    <p class="preg-enun"><span class="pid">A5.</span>BPTT truncado calcula exactamente el mismo gradiente que BPTT completo, solo que más barato.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Falso.</b> Truncar a τ pasos ignora las dependencias más largas que τ. Es una <b>aproximación</b> del gradiente: más barata y estable, pero no igual.</div>
+      <h4>La lógica</h4>
+      <ol class="logica">
+        <li>El gradiente completo en el paso 100 suma contribuciones de los pasos 99, 98, …, 1.</li>
+        <li>Con τ = 20 solo se retropropaga hasta el paso 80. Lo que aportaban los pasos 1 a 79 se descarta.</li>
+        <li>Ganas memoria, cómputo y menos productos largos (menos riesgo de que el gradiente explote). Pierdes la señal para aprender que algo del paso 5 importa en el paso 100.</li>
+      </ol>
+      <p class="escribe">Para el examen: «F. Truncar a τ pasos ignora dependencias más largas que τ: aproxima el gradiente. Es más barato y estable, pero limita lo que la red aprende del pasado lejano.»</p>
+      <p>Teoría: <a href="07_rnn.html#truncado">07 · BPTT truncado</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">la misma idea, al derecho y con otra herramienta</span></div>
+    <div class="vf" data-r="V"><p>BPTT truncado reduce memoria y cómputo, pero limita qué tan directamente la red aprende dependencias de largo plazo.</p>
+      <div class="vf-exp"><b>Verdadero.</b> Es casi textual de la slide: es el intercambio que hay que saber decir.</div></div>
+    <div class="vf" data-r="F"><p>BPTT truncado le enseña a la RNN dependencias de largo plazo, porque evita que el gradiente se desvanezca.</p>
+      <div class="vf-exp"><b>Falso.</b> No calcular un gradiente no es lo mismo que arreglarlo. Las dependencias largas siguen sin aprenderse; para eso están LSTM y GRU.</div></div>
+    <div class="vf" data-r="F"><p>Gradient clipping resuelve tanto los gradientes que explotan como los que se desvanecen.</p>
+      <div class="vf-exp"><b>Falso.</b> Clipping solo recorta los grandes. Un gradiente pequeño no se toca (min(1, θ/‖g‖) = 1). Ver <a href="#b2c">B2 c</a>.</div></div>
+  </div>
+</div>
+
+<!-- A6 -->
+<h3 id="a6" data-toc="A6 · Forget gate cerca de 0">A6 · ¿Forget gate ≈ 0 conserva la memoria?</h3>
+<div class="preg">
+  <div class="vf" data-r="F">
+    <p class="preg-enun"><span class="pid">A6.</span>En una LSTM, un forget gate cercano a 0 hace que la memoria c<sub>t</sub> conserve lo que traía.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Falso.</b> Es al revés: con f<sub>t</sub> ≈ 0 la memoria anterior se multiplica por casi cero y se <b>borra</b>. Para conservarla se necesita f<sub>t</sub> ≈ 1.</div>
+      <div class="formula">
+        <div class="f-head">Actualización de la memoria de la LSTM</div>
+        <div class="f-ejemplo">c<sub>t−1</sub> = 5, candidato c̃<sub>t</sub> = 2.   f = 0.01, i = 0 → c<sub>t</sub> = 0.05 (borró).   f = 0.99, i = 0 → c<sub>t</sub> = 4.95 (conservó).</div>
+        <div class="eq"><span class="sym" data-s="ct"></span> = <span class="sym" data-s="ft"></span> ⊙ <span class="r-calc">c<sub>t−1</sub></span> + <span class="sym" data-s="it"></span> ⊙ <span class="r-calc">c̃<sub>t</sub></span></div>
+        <div class="f-lectura"><span class="tag">Se lee</span><p>«La memoria nueva es la memoria vieja multiplicada por el forget gate, más el candidato nuevo multiplicado por el input gate.» El forget gate es un «cuánto conservo», no un «cuánto olvido»: 1 = conservo todo.</p></div>
+        <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span><ul>
+          <li>…f ≈ 1 e i ≈ 0: c<sub>t</sub> ≈ c<sub>t−1</sub>. La memoria pasa intacta y el gradiente por ese camino se multiplica por ≈ 1, no por W<sub>hh</sub>.</li>
+          <li>…f ≈ 0 e i ≈ 1: c<sub>t</sub> ≈ c̃<sub>t</sub>. Borra y escribe lo nuevo.</li>
+          <li>…f ≈ 1 e i ≈ 1: c<sub>t</sub> ≈ c<sub>t−1</sub> + c̃<sub>t</sub>. Conserva y además suma.</li>
+        </ul></div>
+      </div>
+      <p class="escribe">Para el examen: «F. c<sub>t</sub> = f<sub>t</sub> ⊙ c<sub>t−1</sub> + i<sub>t</sub> ⊙ c̃<sub>t</sub>; con f<sub>t</sub> ≈ 0 se borra la memoria. Para conservarla se necesita f<sub>t</sub> ≈ 1 (e i<sub>t</sub> ≈ 0).»</p>
+      <p>Teoría: <a href="07_rnn.html#memoria-lstm">07 · Memoria de la LSTM</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">otra compuerta, otra celda</span></div>
+    <div class="vf" data-r="F"><p>En una LSTM, el output gate o<sub>t</sub> decide qué se borra de la memoria c<sub>t</sub>.</p>
+      <div class="vf-exp"><b>Falso.</b> Eso lo hace el forget gate. El output gate decide cuánto de la memoria se muestra hacia fuera: h<sub>t</sub> = o<sub>t</sub> ⊙ tanh(c<sub>t</sub>). Con o ≈ 0 la memoria sigue intacta, solo queda oculta.</div></div>
+    <div class="vf" data-r="F"><p>En una GRU con la convención de la slide (h<sub>t</sub> = z<sub>t</sub> ⊙ h<sub>t−1</sub> + (1 − z<sub>t</sub>) ⊙ h̃<sub>t</sub>), un update gate z<sub>t</sub> ≈ 0 conserva el estado anterior.</p>
+      <div class="vf-exp"><b>Falso.</b> Con z ≈ 0 queda h<sub>t</sub> ≈ h̃<sub>t</sub>: reemplaza. Conserva con z ≈ 1. <b>Ojo:</b> algunos libros (y PyTorch) escriben la fórmula al revés. En el examen, usa la del formulario.</div></div>
+    <div class="vf" data-r="V"><p>Con f<sub>t</sub> ≈ 1 e i<sub>t</sub> ≈ 0 durante 100 pasos, la LSTM puede llevar una información del paso 1 al paso 100 casi sin cambio.</p>
+      <div class="vf-exp"><b>Verdadero.</b> 0.99<sup>100</sup> ≈ 0.37 todavía es mucho; compárralo con 0.9<sup>100</sup> ≈ 0.00003 de una RNN simple que encoge 10% por paso.</div></div>
+  </div>
+</div>
+
+<!-- A7 -->
+<h3 id="a7" data-toc="A7 · Pesos uniformes">A7 · ¿Pesos 1/m dan un promedio simple?</h3>
+<div class="preg">
+  <div class="vf" data-r="V">
+    <p class="preg-enun"><span class="pid">A7.</span>Si todos los pesos de atención son iguales a 1/m, la atención se reduce a un promedio simple de los values.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Verdadero.</b> Σ (1/m)·v<sub>i</sub> = (v<sub>1</sub> + … + v<sub>m</sub>)/m: es average pooling. La atención generaliza esto con pesos que dependen de la query.</div>
+      <h4>La lógica, con números</h4>
+      <ol class="logica">
+        <li>La salida de la atención es un promedio <i>ponderado</i> de los values: salida = Σ α<sub>i</sub> v<sub>i</sub>.</li>
+        <li>Con m = 3 values (1, 0), (0, 1), (1, 1) y pesos 1/3 cada uno: (1 + 0 + 1)/3 = 0.67 y (0 + 1 + 1)/3 = 0.67. Es el promedio de toda la vida.</li>
+        <li>Los dos extremos: pesos uniformes = «no distingo, promedio todo»; un peso en 1 y el resto en 0 = «copio un solo value».</li>
+      </ol>
+      <p class="escribe">Para el examen: «V. Σ(1/m)v<sub>i</sub> es el promedio de los values (average pooling). La atención lo generaliza con pesos que dependen de la query.»</p>
+      <p>Teoría: <a href="08_transformers.html#pesos-softmax">08 · Pesos con softmax</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">el otro extremo y cuándo pasan</span></div>
+    <div class="vf" data-r="V"><p>Si un peso de atención vale 1 y los demás 0, la salida es exactamente el value de esa key.</p>
+      <div class="vf-exp"><b>Verdadero.</b> 1·v<sub>j</sub> + 0 + … = v<sub>j</sub>. Es el otro extremo: búsqueda «dura», como un diccionario.</div></div>
+    <div class="vf" data-r="V"><p>Si todas las keys son iguales, los pesos de atención salen uniformes sin importar la query.</p>
+      <div class="vf-exp"><b>Verdadero.</b> Si k<sub>1</sub> = k<sub>2</sub> = k<sub>3</sub>, entonces q·k<sub>i</sub> es igual para todas, y el softmax de números iguales es uniforme.</div></div>
+    <div class="vf" data-r="F"><p>Un peso de atención puede ser negativo si la query apunta en dirección contraria a la key.</p>
+      <div class="vf-exp"><b>Falso.</b> El <i>score</i> sí puede ser negativo, pero el softmax lo convierte en e<sup>score</sup>/Σ, que siempre es positivo. Los pesos están entre 0 y 1 y suman 1.</div></div>
+  </div>
+</div>
+
+<!-- A8 -->
+<h3 id="a8" data-toc="A8 · Codificación posicional">A8 · ¿La posicional aprendida generaliza mejor?</h3>
+<div class="preg">
+  <div class="vf" data-r="F">
+    <p class="preg-enun"><span class="pid">A8.</span>La codificación posicional aprendida generaliza mejor que la sinusoidal a secuencias más largas que las vistas en entrenamiento.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Falso.</b> La aprendida solo tiene vectores para las posiciones vistas en entrenamiento. La sinusoidal es una fórmula definida para cualquier posición, así que extrapola mejor (aunque no perfecto).</div>
+      <h4>La lógica</h4>
+      <ol class="logica">
+        <li><b>Aprendida:</b> una tabla con un vector por posición, de la 0 a la 511, que se entrena. Si llega la posición 600, no hay fila: no existe vector.</li>
+        <li><b>Sinusoidal:</b> PE(pos) = senos y cosenos de pos. Para pos = 600 se evalúa la misma fórmula. No tiene parámetros.</li>
+        <li>Por qué hace falta alguna: la self-attention no sabe el orden (ver variante). Sin posición, «perro muerde hombre» y «hombre muerde perro» se ven igual.</li>
+      </ol>
+      <p class="escribe">Para el examen: «F. La aprendida solo tiene vectores para posiciones vistas; la sinusoidal se define para cualquier posición y extrapola mejor. Además no agrega parámetros.»</p>
+      <p>Teoría: <a href="08_transformers.html#pe">08 · Codificación posicional</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">parámetros y orden</span></div>
+    <div class="vf" data-r="V"><p>La codificación posicional sinusoidal no agrega parámetros entrenables.</p>
+      <div class="vf-exp"><b>Verdadero.</b> Es una fórmula fija de sin y cos. La aprendida sí agrega (posiciones máximas × d).</div></div>
+    <div class="vf" data-r="F"><p>La self-attention distingue el orden de los tokens por sí sola, así que la codificación posicional es opcional.</p>
+      <div class="vf-exp"><b>Falso.</b> Si permutas los tokens, cada uno recibe la misma salida, solo que en otra posición (es equivariante a permutaciones). Sin posición, el modelo no sabe quién va antes.</div></div>
+  </div>
+</div>
+
+<!-- A9 -->
+<h3 id="a9" data-toc="A9 · BERT para generar">A9 · ¿Un encoder tipo BERT para generar texto?</h3>
+<div class="preg">
+  <div class="vf" data-r="F">
+    <p class="preg-enun"><span class="pid">A9.</span>Un modelo encoder-only tipo BERT es la elección natural para generar texto libre.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Falso.</b> BERT se entrena con MLM viendo contexto de ambos lados; no está diseñado para generar de izquierda a derecha. Para generar se usa decoder-only (GPT) con máscara causal, o encoder-decoder (T5) para seq2seq.</div>
+      <h4>La lógica: objetivo de pre-entrenamiento → para qué sirve</h4>
+      <table class="tbl chica">
+        <tr><th>Modelo</th><th>Objetivo</th><th>Ve</th><th>Natural para</th></tr>
+        <tr><td>BERT (encoder)</td><td>MLM: adivinar palabras tapadas</td><td>Ambos lados</td><td>Entender y clasificar (cabeza sobre [CLS])</td></tr>
+        <tr><td>GPT (decoder)</td><td>LM causal: siguiente token</td><td>Solo el pasado</td><td>Generar texto libre</td></tr>
+        <tr><td>T5 (enc-dec)</td><td>Denoising seq2seq</td><td>Entrada completa → salida causal</td><td>Traducir, resumir</td></tr>
+      </table>
+      <p>La regla mental: <b>generar = predecir el siguiente token sin ver el futuro</b>. BERT nunca practicó eso: en entrenamiento siempre vio el futuro.</p>
+      <p class="escribe">Para el examen: «F. BERT (MLM) ve ambos lados y no se entrena para generar de izquierda a derecha. Para generación se usa decoder-only con máscara causal (GPT) o encoder-decoder (T5).»</p>
+      <p>Teoría: <a href="08_transformers.html#objetivos">08 · Objetivos de pre-entrenamiento</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">otra tarea, otra arquitectura</span></div>
+    <div class="vf" data-r="V"><p>Para clasificar iniciativas de ley en temas, un encoder tipo BERT con una cabeza de clasificación es una elección natural.</p>
+      <div class="vf-exp"><b>Verdadero.</b> Clasificar es entender el texto completo; ver ambos lados ayuda. La cabeza va sobre el token [CLS] (o un promedio).</div></div>
+    <div class="vf" data-r="F"><p>GPT se pre-entrena tapando palabras al azar y adivinándolas con el contexto de ambos lados.</p>
+      <div class="vf-exp"><b>Falso.</b> Eso es MLM, de BERT. GPT predice el siguiente token viendo solo el pasado.</div></div>
+  </div>
+</div>
+
+<!-- A10 -->
+<h3 id="a10" data-toc="A10 · RAG sin reentrenar">A10 · ¿RAG actualiza sin reentrenar?</h3>
+<div class="preg">
+  <div class="vf" data-r="V">
+    <p class="preg-enun"><span class="pid">A10.</span>RAG permite que un LLM responda con información actualizada sin reentrenar sus pesos.</p>
+    <div class="vf-exp">
+      <div class="resp"><b class="ver">Verdadero.</b> RAG busca documentos relevantes y los pega en el prompt. El conocimiento vive en el corpus, que se actualiza, y la respuesta puede citar la fuente. Los pesos no cambian.</div>
+      <h4>La lógica</h4>
+      <ol class="logica">
+        <li>Problema: el conocimiento del LLM está congelado en sus pesos (fecha de corte, sin documentos internos).</li>
+        <li>RAG: pregunta → buscar en el corpus (embeddings + búsqueda semántica) → pegar los pedazos en el prompt → el LLM responde con eso a la vista.</li>
+        <li>Si mañana se publica una norma nueva, la agregas al corpus. Nadie toca los pesos.</li>
+        <li>Por eso es el patrón dominante en gobierno: corpus que cambian y trazabilidad obligatoria.</li>
+      </ol>
+      <p class="escribe">Para el examen: «V. RAG recupera documentos y los pone en el prompt; el conocimiento está en el corpus (actualizable, citable), no en los pesos.»</p>
+      <p>Teoría: <a href="08_transformers.html#rag">08 · RAG</a>.</p>
+    </div>
+  </div>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">confundir RAG, fine-tuning y LoRA</span></div>
+    <div class="vf" data-r="F"><p>RAG actualiza los pesos del modelo con los documentos nuevos.</p>
+      <div class="vf-exp"><b>Falso.</b> Eso sería fine-tuning. RAG deja los pesos congelados y cambia lo que el modelo lee en el prompt.</div></div>
+    <div class="vf" data-r="F"><p>Para que un LLM conozca una ley publicada ayer, lo más barato y trazable es hacerle fine-tuning con la ley.</p>
+      <div class="vf-exp"><b>Falso.</b> Fine-tuning es caro, no cita la fuente y habría que repetirlo con cada ley. RAG resuelve justo esto.</div></div>
+    <div class="vf" data-r="F"><p>LoRA abarata el fine-tuning porque entrena todos los pesos del modelo con una tasa de aprendizaje más pequeña.</p>
+      <div class="vf-exp"><b>Falso.</b> LoRA congela W y entrena solo una corrección de rango bajo ΔW = AB, con A y B diminutas (menos de 1% de los parámetros).</div></div>
+  </div>
+</div>
+
+<!-- ============ 3. B1 ============ -->
+<h2 id="b1"><span class="num">Sección 3</span>Parte B1 · Aritmética de una CNN</h2>
+
+<div class="preg-enun"><span class="pid">B1.</span>Una red recibe imágenes en escala de grises de <b>32×32×1</b> y tiene:
+<br>· Capa 1: convolución con <b>8 filtros de 3×3</b>, padding 1, stride 1, con bias.
+<br>· Capa 2: max-pooling <b>2×2</b>, stride 2.
+<br>· Capa 3: convolución con <b>16 filtros de 3×3</b>, <b>sin</b> padding, stride 1, con bias.</div>
+
+<p>Las cuatro preguntas usan dos fórmulas del formulario y una regla de lectura. Antes de empezar, la regla: <b>una forma se escribe alto × ancho × canales</b>, y los canales de salida de una convolución son el número de filtros. El pooling trabaja canal por canal: no cambia el número de canales.</p>
+
+<h3 id="b1a" data-toc="B1 a · Tamaños de salida">a) Tamaño de la salida de cada capa</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Capa 1: <b>32×32×8</b> · Capa 2: <b>16×16×8</b> · Capa 3: <b>14×14×16</b></div>
+    <ol class="deriv" data-revelar>
+      <li><div class="d-ex">Capa 1: ⌊(32 + 2·1 − 3)/1⌋ + 1 = 32  →  32×32×8</div><div class="d-por"><b>Fórmula de salida</b> con n = 32, k = 3, p = 1, s = 1. Es same padding (A2), así que conserva 32. Canales = 8 filtros.</div></li>
+      <li><div class="d-ex">Capa 2: ⌊(32 + 0 − 2)/2⌋ + 1 = 16  →  16×16×8</div><div class="d-por"><b>Misma fórmula para el pooling</b>, con k = 2 (ventana), s = 2, p = 0. Los canales no cambian: 8.</div></li>
+      <li><div class="d-ex">Capa 3: ⌊(16 + 0 − 3)/1⌋ + 1 = 14  →  14×14×16</div><div class="d-por"><b>Sin padding</b> pierdes k − 1 = 2. Canales = 16 filtros.</div></li>
+    </ol>
+    <div class="note fix"><span class="tag">Trampa común</span><p>Usar 32 como entrada de la Capa 3. Cada capa recibe la <b>salida de la anterior</b>: la Capa 3 ve 16×16×8, no la imagen original.</p></div>
+  </div></details>
+</div>
+
+<h3 id="b1b" data-toc="B1 b · Parámetros">b) Parámetros entrenables de cada capa</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Capa 1: <b>80</b> · Capa 2: <b>0</b> · Capa 3: <b>1,168</b></div>
+    <div class="formula">
+      <div class="f-head">Parámetros de una convolución (viene en el formulario)</div>
+      <div class="f-ejemplo">Capa 1: 8 filtros, cada uno de 3×3 sobre 1 canal = 9 pesos, más 1 bias por filtro → 8·1·3·3 + 8 = 72 + 8 = 80</div>
+      <div class="eq">#parámetros = <span class="r-hiper">c<sub>o</sub></span> · <span class="r-dato">c<sub>i</sub></span> · <span class="r-hiper">k<sub>h</sub></span> · <span class="r-hiper">k<sub>w</sub></span> + <span class="r-hiper">c<sub>o</sub></span></div>
+      <div class="f-lectura"><span class="tag">Se lee</span><p>«Cada filtro tiene un peso por cada pixel de su ventana y por cada canal de entrada; hay c<sub>o</sub> filtros, y cada filtro trae un bias.»</p></div>
+      <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span><dl>
+        <dt class="r-hiper">c<sub>o</sub></dt><dd>Canales de salida = número de filtros. Lo eliges tú.</dd>
+        <dt class="r-dato">c<sub>i</sub></dt><dd>Canales de entrada = canales de lo que llega a esta capa (1 en gris, 3 en color, 8 después de la Capa 1).</dd>
+        <dt class="r-hiper">k<sub>h</sub>, k<sub>w</sub></dt><dd>Alto y ancho del kernel.</dd>
+      </dl></div>
+      <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span><ul>
+        <li>…la imagen pasa de 32×32 a 64×64: <b>los parámetros no cambian</b>. El tamaño de la imagen no aparece en la fórmula (por eso la convolución comparte pesos). Lo que sube es el cómputo.</li>
+        <li>…duplicas c<sub>i</sub> y c<sub>o</sub>: los pesos se multiplican por 4 y el bias por 2.</li>
+      </ul></div>
+    </div>
+    <ol class="logica">
+      <li>Capa 2 (pooling): 0. Toma el máximo, no tiene pesos (A1).</li>
+      <li>Capa 3: c<sub>i</sub> = 8 porque llegan 8 canales del pooling. 16·8·3·3 + 16 = 1,152 + 16 = <b>1,168</b>.</li>
+    </ol>
+    <div class="note fix"><span class="tag">Trampa común</span><p>Poner c<sub>i</sub> = 1 en la Capa 3 porque «la imagen es en gris». El 1 solo vale para la primera capa.</p></div>
+  </div></details>
+</div>
+
+<h3 id="b1c" data-toc="B1 c · Receptive field">c) ¿Cuántos pixeles de la imagen original ve una unidad de la Capa 3?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp"><b>8×8 pixeles.</b></div>
+    <div class="formula">
+      <div class="f-head">Receptive field (viene en el formulario)</div>
+      <div class="f-ejemplo">empezar con r = 1, j = 1 · conv 3: r = 1 + 2·1 = 3 · pool 2 s2: r = 3 + 1·1 = 4, j = 2 · conv 3: r = 4 + 2·2 = 8</div>
+      <div class="eq"><span class="sym" data-s="rl"></span> = <span class="r-calc">r<sub>l−1</sub></span> + (<span class="r-hiper">k<sub>l</sub></span> − 1) · <span class="r-calc">j<sub>l−1</sub></span>,     <span class="r-calc">j<sub>l</sub></span> = <span class="r-calc">j<sub>l−1</sub></span> · <span class="r-hiper">s<sub>l</sub></span>,     r<sub>0</sub> = j<sub>0</sub> = 1</div>
+      <div class="f-lectura"><span class="tag">Se lee</span><p>«Cada capa agranda lo que ve en (tamaño del kernel − 1) pasos, y cada paso mide j pixeles de la imagen original. El salto j se multiplica por el stride de cada capa.»</p></div>
+      <div class="f-simbolos"><span class="tag">Símbolo por símbolo</span><dl>
+        <dt class="r-calc">r<sub>l</sub></dt><dd>Lado del cuadrado de pixeles originales que ve una unidad de la capa l.</dd>
+        <dt class="r-calc">j<sub>l</sub></dt><dd>«Salto»: cuántos pixeles originales hay entre dos unidades vecinas de la capa l. Empieza en 1 y se multiplica por cada stride.</dd>
+      </dl></div>
+    </div>
+    <table class="tbl chica">
+      <tr><th>Capa</th><th>k</th><th>s</th><th>r = r anterior + (k − 1)·j anterior</th><th>j = j anterior · s</th></tr>
+      <tr><td>Entrada</td><td>—</td><td>—</td><td>1</td><td>1</td></tr>
+      <tr><td>Conv 1</td><td>3</td><td>1</td><td class="nw">1 + 2·1 = <b>3</b></td><td>1·1 = 1</td></tr>
+      <tr><td>Pool 2</td><td>2</td><td>2</td><td class="nw">3 + 1·1 = <b>4</b></td><td>1·2 = 2</td></tr>
+      <tr><td>Conv 3</td><td>3</td><td>1</td><td class="nw">4 + 2·<b>2</b> = <b>8</b></td><td>2·1 = 2</td></tr>
+    </table>
+    <p>La lógica sin fórmula: la Capa 3 ve 3 unidades del pooling. Pero cada unidad del pooling está a 2 pixeles de su vecina (por el stride 2), así que esas 3 unidades abarcan más terreno que 3 pixeles.</p>
+    <div class="note fix"><span class="tag">Trampa común</span><p>Sumar (k − 1) sin multiplicar por j. Daría 3 + 1 + 2 = 6. El stride del pooling es lo que hace que la última capa sume 2·2 = 4 en vez de 2. El padding <b>no</b> cambia el receptive field.</p></div>
+  </div></details>
+</div>
+
+<h3 id="b1d" data-toc="B1 d · Convolución 1×1">d) Si la Capa 3 fuera de 16 filtros 1×1, ¿qué mezcla, qué no y cuántos parámetros tiene?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Mezcla los <b>canales</b> de cada posición, pero <b>no</b> pixeles vecinos. Parámetros: 16·8·1·1 + 16 = <b>144</b>.</div>
+    <ol class="logica">
+      <li>Un kernel 1×1 mira un solo pixel, pero ese pixel trae 8 números (uno por canal).</li>
+      <li>Cada filtro hace una suma ponderada de esos 8 números + bias. Con 16 filtros: 8 números → 16 números. Es una capa lineal ℝ⁸ → ℝ¹⁶, la misma en todas las posiciones.</li>
+      <li>Como no mira vecinos, el receptive field no crece (k − 1 = 0) y la salida sería 16×16×16 (no pierde bordes).</li>
+      <li>Para qué se usa: cambiar el número de canales barato, por ejemplo antes de un 5×5 caro.</li>
+    </ol>
+    <p class="escribe">Para el examen: «Mezcla canales en cada posición, no vecinos: es una capa lineal ℝ⁸ → ℝ¹⁶ compartida en todas las posiciones. 16·8 + 16 = 144 parámetros.»</p>
+    <p>Teoría: <a href="06_cnn.html#uno-por-uno">06 · Convolución 1×1</a>.</p>
+  </div></details>
+</div>
+
+<h3 id="b1-var" class="lab" data-toc="B1 · Variantes para practicar">B1 · Variantes para practicar</h3>
+
+<div class="variante"><div class="vt">Variante fija <span class="cambio">otra imagen, otro kernel, padding en la otra capa</span></div>
+  <p class="gen-enun">Entrada <b>28×28×1</b>. Capa 1: <b>6 filtros 5×5</b>, <b>sin</b> padding, stride 1. Capa 2: max-pooling 2×2, stride 2. Capa 3: <b>16 filtros 3×3</b>, padding <b>1</b>, stride 1. Escribe solo el alto (igual al ancho) de cada salida.</p>
+  <div class="chk">
+    <div class="chk-campos">
+      <label>Capa 1 · alto <input data-ans="24"></label>
+      <label>Capa 2 · alto <input data-ans="12"></label>
+      <label>Capa 3 · alto <input data-ans="12"></label>
+      <label>Capa 1 · parámetros <input data-ans="156"></label>
+      <label>Capa 2 · parámetros <input data-ans="0"></label>
+      <label>Capa 3 · parámetros <input data-ans="880"></label>
+      <label>Receptive field tras Capa 3 <input data-ans="10"></label>
+      <label>Parámetros si Capa 3 fuera 1×1 <input data-ans="112"></label>
+    </div>
+    <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+  </div>
+  <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody">
+<div class="procm">Capa 1: (28 + 0 − 5)/1 + 1 = 24        → 24×24×6     parámetros 6·1·5·5 + 6 = 156
+Capa 2: ⌊(24 − 2)/2⌋ + 1 = 12           → 12×12×6     parámetros 0
+Capa 3: (12 + 2 − 3)/1 + 1 = 12         → 12×12×16    parámetros 16·6·3·3 + 16 = 880
+RF: conv5 r = 1 + 4·1 = 5 (j = 1) → pool r = 5 + 1·1 = 6 (j = 2) → conv3 r = 6 + 2·2 = 10
+1×1: 16·6·1·1 + 16 = 112</div>
+    <p>Lo que cambió respecto al original: con k = 5 y sin padding se pierden 4 pixeles (no 2), y c<sub>i</sub> de la Capa 3 ahora es 6, no 8.</p>
+  </div></details>
+</div>
+
+<div class="variante"><div class="vt">Variante con lógica invertida <span class="cambio">te dan el resultado y piden el dato</span></div>
+  <p class="gen-enun">Usa la red original de B1. (1) ¿Qué padding necesitaría la Capa 3 para que su salida fuera 16×16? (2) Una convolución 3×3 recibe 8 canales y tiene 1,168 parámetros: ¿cuántos filtros tiene? (3) ¿Qué stride necesitaría la Capa 1 (manteniendo padding 1) para que su salida fuera 16×16?</p>
+  <div class="chk">
+    <div class="chk-campos">
+      <label>(1) padding <input data-ans="1"></label>
+      <label>(2) filtros <input data-ans="16"></label>
+      <label>(3) stride <input data-ans="2"></label>
+    </div>
+    <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+  </div>
+  <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody">
+<div class="procm">(1) Se quiere conservar 16 con k = 3, s = 1 → same padding p = (3 − 1)/2 = 1.
+    Comprobación: (16 + 2 − 3)/1 + 1 = 16.
+(2) 1,168 = c_o·8·3·3 + c_o = c_o·(72 + 1) = 73·c_o  →  c_o = 1,168/73 = 16.
+(3) ⌊(32 + 2 − 3)/s⌋ + 1 = 16  →  ⌊31/s⌋ = 15  →  s = 2  (⌊15.5⌋ = 15).</div>
+    <p>El truco en (2): saca c<sub>o</sub> como factor común. Cada filtro aporta 73 parámetros (72 pesos + 1 bias).</p>
+  </div></details>
+</div>
+
+<div class="widget" id="genB1">
+  <div class="widget-head"><div class="wt">Generador de variantes · CNN de tres capas</div><div class="ws">Cada clic arma una red nueva con la misma estructura que B1. Resuélvela en papel y comprueba.</div></div>
+  <div class="widget-body">
+    <p class="gen-enun" id="genB1enun"></p>
+    <div class="chk" id="genB1chk"></div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody"><div class="procm" id="genB1proc"></div></div></details>
+  </div>
+  <div class="widget-foot"><button class="btn" id="genB1btn">Otra variante</button><span class="pill" id="genB1n"></span></div>
+</div>
+
+<!-- ============ 4. B2 ============ -->
+<h2 id="b2"><span class="num">Sección 4</span>Parte B2 · RNNs y modelos de lenguaje</h2>
+
+<h3 id="b2a" data-toc="B2 a · Parámetros de una RNN">a) Parámetros de una RNN simple (entrada 32, estado oculto 64)</h3>
+<div class="preg">
+  <p class="preg-enun"><span class="pid">B2 a.</span>Una RNN simple recibe inputs de dimensión 32 y tiene estado oculto de dimensión 64. ¿Cuántos parámetros tiene la recurrencia H<sub>t</sub> = φ(X<sub>t</sub>W<sub>xh</sub> + H<sub>t−1</sub>W<sub>hh</sub> + b<sub>h</sub>)? ¿Cambia si las secuencias miden 10 o 1,000 pasos?</p>
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp"><b>6,208</b> parámetros. <b>No cambia</b> con la longitud: los mismos pesos se reutilizan en cada paso.</div>
+    <div class="formula">
+      <div class="f-head">RNN simple (viene en el formulario)</div>
+      <div class="f-ejemplo">W<sub>xh</sub>: 32×64 = 2,048 · W<sub>hh</sub>: 64×64 = 4,096 · b<sub>h</sub>: 64 · total = 6,208</div>
+      <div class="eq"><span class="sym" data-s="Ht"></span> = φ( <span class="r-dato">X<sub>t</sub></span> <span class="r-param">W<sub>xh</sub></span> + <span class="r-calc">H<sub>t−1</sub></span> <span class="r-param">W<sub>hh</sub></span> + <span class="r-param">b<sub>h</sub></span> )</div>
+      <div class="f-lectura"><span class="tag">Se lee</span><p>«El estado nuevo mezcla la entrada de hoy (pasada por W<sub>xh</sub>) con el estado de ayer (pasado por W<sub>hh</sub>), suma un sesgo y aplica una activación.»</p></div>
+      <div class="f-simbolos"><span class="tag">Cómo sacar la forma de cada matriz</span><dl>
+        <dt class="r-param">W<sub>xh</sub></dt><dd>Convierte un vector de tamaño 32 (entrada) en uno de tamaño 64 (estado): <b>entrada × oculto</b> = 32 × 64.</dd>
+        <dt class="r-param">W<sub>hh</sub></dt><dd>Convierte el estado de 64 en otro de 64: <b>oculto × oculto</b> = 64 × 64. Es cuadrada siempre.</dd>
+        <dt class="r-param">b<sub>h</sub></dt><dd>Un sesgo por unidad oculta: 64.</dd>
+      </dl></div>
+      <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span><ul>
+        <li>…T pasa de 10 a 1,000: nada. La fórmula no tiene T; se aplica la misma en cada paso.</li>
+        <li>…el estado oculto se duplica a 128: W<sub>hh</sub> se multiplica por 4 (128² = 16,384). El término cuadrático domina.</li>
+      </ul></div>
+    </div>
+    <p class="escribe">Para el examen: «32·64 + 64·64 + 64 = 6,208. No depende de T: los mismos parámetros se comparten en todos los pasos.»</p>
+    <p>Teoría: <a href="07_rnn.html#contar-rnn">07 · Contar parámetros de la RNN</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variante <span class="cambio">otras dimensiones y otras celdas</span></div>
+    <p class="gen-enun">Entrada de dimensión <b>50</b>, estado oculto <b>128</b>. Calcula los parámetros de la RNN simple. Después, una LSTM tiene <b>4</b> bloques iguales (f, i, o y c̃, cada uno con su W<sub>x</sub>, W<sub>h</sub> y b) y una GRU tiene <b>3</b> (r, z y h̃).</p>
+    <div class="chk">
+      <div class="chk-campos">
+        <label>RNN simple <input data-ans="22912"></label>
+        <label>LSTM <input data-ans="91648"></label>
+        <label>GRU <input data-ans="68736"></label>
+      </div>
+      <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+    </div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody">
+<div class="procm">RNN:  50·128 + 128·128 + 128 = 6,400 + 16,384 + 128 = 22,912
+LSTM: 4 · 22,912 = 91,648
+GRU:  3 · 22,912 = 68,736</div>
+      <p>PyTorch usa dos sesgos por bloque, así que su conteo sale un poco mayor. En el examen, usa la fórmula del formulario.</p>
+    </div></details>
+    <div class="vf" data-r="F"><p>Una RNN entrenada con secuencias de 1,000 pasos tiene 100 veces más parámetros que una entrenada con secuencias de 10 pasos.</p>
+      <div class="vf-exp"><b>Falso.</b> Tienen exactamente los mismos. Lo que crece con T es el cómputo y la memoria del BPTT.</div></div>
+  </div>
+</div>
+
+<h3 id="b2b" data-toc="B2 b · Update gate de la GRU">b) ¿Qué valor de z<sub>t</sub> conserva el estado de la GRU?</h3>
+<div class="preg">
+  <p class="preg-enun"><span class="pid">B2 b.</span>En una GRU, ¿qué valor del update gate z<sub>t</sub> hace que h<sub>t</sub> ≈ h<sub>t−1</sub>? ¿Qué gate de la LSTM juega el papel análogo?</p>
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp"><b>z<sub>t</sub> ≈ 1.</b> El análogo en la LSTM es el <b>forget gate f<sub>t</sub> ≈ 1</b> (con i<sub>t</sub> ≈ 0).</div>
+    <div class="formula">
+      <div class="f-head">Estado de la GRU (viene en el formulario)</div>
+      <div class="f-ejemplo">h<sub>t−1</sub> = 5, h̃<sub>t</sub> = 2.   z = 0.99 → 0.99·5 + 0.01·2 = 4.97 (conserva).   z = 0.01 → 0.05 + 1.98 = 2.03 (reemplaza).</div>
+      <div class="eq"><span class="r-calc">h<sub>t</sub></span> = <span class="sym" data-s="zt"></span> ⊙ <span class="r-calc">h<sub>t−1</sub></span> + (1 − <span class="r-calc">z<sub>t</sub></span>) ⊙ <span class="r-calc">h̃<sub>t</sub></span></div>
+      <div class="f-lectura"><span class="tag">Se lee</span><p>«El estado nuevo es una mezcla: z partes del estado viejo y (1 − z) partes del candidato nuevo.» Es una perilla entre «no cambio nada» (z = 1) y «empiezo de cero» (z = 0).</p></div>
+    </div>
+    <ol class="logica">
+      <li>La GRU junta en una sola perilla lo que la LSTM hace con dos: z<sub>t</sub> hace de forget gate y 1 − z<sub>t</sub> hace de input gate.</li>
+      <li>Por eso el análogo es f<sub>t</sub> ≈ 1 con i<sub>t</sub> ≈ 0: conservar lo viejo y no escribir lo nuevo.</li>
+      <li>Para qué importa: si se conserva el estado, el gradiente viaja hacia atrás multiplicado por ≈ 1 en cada paso, en vez de por W<sub>hh</sub> (que lo encoge o lo explota).</li>
+    </ol>
+    <p>Teoría: <a href="07_rnn.html#gru">07 · GRU</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">la pregunta al revés y la otra compuerta</span></div>
+    <div class="vf" data-r="V"><p>Para que una GRU ignore el pasado y use solo el candidato nuevo, se necesita z<sub>t</sub> ≈ 0.</p>
+      <div class="vf-exp"><b>Verdadero.</b> h<sub>t</sub> ≈ 0·h<sub>t−1</sub> + 1·h̃<sub>t</sub> = h̃<sub>t</sub>.</div></div>
+    <div class="vf" data-r="F"><p>En la GRU, el reset gate r<sub>t</sub> ≈ 0 hace que h<sub>t</sub> ≈ h<sub>t−1</sub>.</p>
+      <div class="vf-exp"><b>Falso.</b> El reset gate actúa dentro del candidato: h̃<sub>t</sub> = tanh(x<sub>t</sub>W<sub>xh</sub> + (r<sub>t</sub> ⊙ h<sub>t−1</sub>)W<sub>hh</sub> + b<sub>h</sub>). Con r ≈ 0, el candidato se calcula como si no hubiera pasado. Quien decide conservar es z.</div></div>
+    <div class="vf" data-r="V"><p>En la LSTM, f<sub>t</sub> ≈ 1 e i<sub>t</sub> ≈ 0 hacen que el gradiente por el camino de c<sub>t</sub> no se multiplique repetidamente por W<sub>hh</sub>.</p>
+      <div class="vf-exp"><b>Verdadero.</b> ∂c<sub>t</sub>/∂c<sub>t−1</sub> = f<sub>t</sub> ≈ 1. Es la misma idea que una conexión residual: un camino casi directo.</div></div>
+  </div>
+</div>
+
+<h3 id="b2c" data-toc="B2 c · Gradient clipping">c) Gradient clipping con norma 20 y umbral 5</h3>
+<div class="preg">
+  <p class="preg-enun"><span class="pid">B2 c.</span>El gradiente de un mini-batch tiene norma 20 y el umbral de clipping es θ = 5. ¿Por qué factor se reescala? ¿Cambia su dirección? ¿Qué problema resuelve el clipping y cuál no?</p>
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Factor <b>5/20 = 0.25</b>. La <b>dirección no cambia</b>, solo la longitud (queda en 5). Resuelve los gradientes que <b>explotan</b>; no ayuda con los que se <b>desvanecen</b>.</div>
+    <div class="formula">
+      <div class="f-head">Gradient clipping (viene en el formulario)</div>
+      <div class="f-ejemplo">g = (12, 16) → ‖g‖ = √(144 + 256) = 20 → factor min(1, 5/20) = 0.25 → g = (3, 4), norma 5. La razón 12:16 = 3:4 se conserva.</div>
+      <div class="eq"><span class="r-calc">g</span> ← min( 1, <span class="sym" data-s="thetaclip"></span> / ‖<span class="r-calc">g</span>‖ ) · <span class="r-calc">g</span></div>
+      <div class="f-lectura"><span class="tag">Se lee</span><p>«Si el gradiente mide más que θ, lo encojo hasta que mida θ; si mide menos, lo dejo igual.» El min(1, …) es el «si no, déjalo igual».</p></div>
+      <div class="f-efecto"><span class="tag">¿Qué pasa si…?</span><ul>
+        <li>…‖g‖ = 3 y θ = 5: 5/3 > 1, así que el factor es 1 y g no se toca. <b>Nunca agranda.</b></li>
+        <li>…θ es muy chico: casi todos los pasos se recortan y el entrenamiento se vuelve lento.</li>
+      </ul></div>
+    </div>
+    <p class="escribe">Para el examen: «Factor θ/‖g‖ = 0.25; la dirección se conserva, solo cambia la norma. Evita pasos enormes por gradientes que explotan; no hace nada con los que se desvanecen.»</p>
+    <p>Teoría: <a href="07_rnn.html#clipping">07 · Gradient clipping</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variante fija <span class="cambio">otro vector y un caso que no se recorta</span></div>
+    <p class="gen-enun">(1) g = (6, 8) con θ = 5. (2) g = (3, 4) con θ = 10.</p>
+    <div class="chk">
+      <div class="chk-campos">
+        <label>(1) ‖g‖ <input data-ans="10"></label>
+        <label>(1) factor <input data-ans="0.5" data-tol="0.005"></label>
+        <label>(1) g nuevo, 1ª comp. <input data-ans="3" data-tol="0.01"></label>
+        <label>(1) g nuevo, 2ª comp. <input data-ans="4" data-tol="0.01"></label>
+        <label>(2) factor <input data-ans="1" data-tol="0.005"></label>
+      </div>
+      <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+    </div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody">
+<div class="procm">(1) ‖g‖ = √(36 + 64) = 10 → min(1, 5/10) = 0.5 → g = 0.5·(6, 8) = (3, 4)
+(2) ‖g‖ = 5 → min(1, 10/5) = min(1, 2) = 1 → g no cambia</div>
+      <p>El caso (2) es la lógica invertida típica: «¿por qué factor se reescala?» y la respuesta es «por ninguno».</p>
+    </div></details>
+  </div>
+  <div class="widget" id="genClip">
+    <div class="widget-head"><div class="wt">Generador de variantes · clipping</div><div class="ws">Gradientes de 2 componentes con norma exacta. A veces se recortan y a veces no.</div></div>
+    <div class="widget-body">
+      <p class="gen-enun" id="genClipEnun"></p>
+      <div class="chk" id="genClipChk"></div>
+      <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody"><div class="procm" id="genClipProc"></div></div></details>
+    </div>
+    <div class="widget-foot"><button class="btn" id="genClipBtn">Otra variante</button></div>
+  </div>
+</div>
+
+<h3 id="b2d" data-toc="B2 d · Perplejidad entre tokenizadores">d) Perplejidad 40 contra 120 con tokenizadores distintos</h3>
+<div class="preg">
+  <p class="preg-enun"><span class="pid">B2 d.</span>Un equipo compara un modelo de lenguaje sobre actas con perplejidad 40 y otro con 120, pero el segundo usa un tokenizador de caracteres. ¿Puedes concluir cuál es mejor? ¿Qué harías?</p>
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp"><b>No.</b> La perplejidad es <b>por token</b>, y «token» significa cosas distintas en cada modelo. Hay que comparar con el mismo tokenizador, o convertir ambos a la misma unidad: log-verosimilitud total del mismo texto, o bits por carácter.</div>
+    <ol class="logica">
+      <li>Perplejidad = «entre cuántas opciones duda el modelo <i>en cada predicción</i>».</li>
+      <li>Un modelo de palabras hace pocas predicciones difíciles (¿qué palabra sigue entre miles?). Uno de caracteres hace muchas predicciones fáciles (¿qué letra sigue?).</li>
+      <li>Comparar 40 contra 120 es como comparar «dudé entre 40 opciones por palabra» con «dudé entre 120 por letra»: no están en la misma escala.</li>
+      <li>La salida: medir la sorpresa <b>total</b> sobre el <b>mismo texto</b>. Sorpresa total = (número de tokens) × log(perplejidad). Dividida entre el número de caracteres, da bits por carácter, que sí es comparable.</li>
+    </ol>
+    <p class="escribe">Para el examen: «No se puede: la perplejidad es por token y los tokenizadores definen tokens distintos. Compararía con el mismo tokenizador, o convertiría a log-verosimilitud total / bits por carácter sobre el mismo texto de prueba.»</p>
+    <p>Teoría: <a href="08_transformers.html#perplejidad-tokens">08 · Perplejidad y tokenización</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variante con números <span class="cambio">convierte a la misma unidad</span></div>
+    <p class="gen-enun">Mismo texto de prueba de <b>10,000 caracteres</b>. Modelo A (subpalabras): lo parte en <b>2,000 tokens</b>, perplejidad <b>40</b>. Modelo B (caracteres): <b>10,000 tokens</b>, perplejidad <b>3</b>. Te dan log₂ 40 ≈ 5.32 y log₂ 3 ≈ 1.58. Calcula los bits totales (tokens × log₂ perplejidad) y los bits por carácter. ¿Cuál modelo es mejor?</p>
+    <div class="chk">
+      <div class="chk-campos">
+        <label>A · bits totales <input data-ans="10640" data-tol="60"></label>
+        <label>B · bits totales <input data-ans="15800" data-tol="100"></label>
+        <label>A · bits por carácter <input data-ans="1.06" data-tol="0.02"></label>
+        <label>B · bits por carácter <input data-ans="1.58" data-tol="0.02"></label>
+      </div>
+      <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+    </div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody">
+<div class="procm">A: 2,000 · 5.32 = 10,640 bits → 10,640 / 10,000 = 1.06 bits por carácter
+B: 10,000 · 1.58 = 15,800 bits → 15,800 / 10,000 = 1.58 bits por carácter</div>
+      <p><b>A es mejor</b>: se sorprende menos con el mismo texto (1.06 contra 1.58 bits por carácter), aunque su perplejidad sea 40 contra 3. B tiene la perplejidad más baja porque cada predicción es fácil (una letra), pero hace cinco veces más predicciones. Si B tuviera perplejidad 2, daría log₂ 2 = 1.00 bit por carácter y ganaría.</p>
+    </div></details>
+  </div>
+</div>
+
+<!-- ============ 5. B3 ============ -->
+<h2 id="b3"><span class="num">Sección 5</span>Parte B3 · Atención</h2>
+
+<div class="preg-enun"><span class="pid">B3.</span>Query q = (1, 1); tres pares key/value con d<sub>k</sub> = 2:
+<br>k₁ = (1, 0), v₁ = (1, 0);   k₂ = (0, 1), v₂ = (0, 1);   k₃ = (1, 1), v₃ = (1, 1).
+<br>Puedes usar 1/√2 ≈ 0.71, √2 ≈ 1.41, e<sup>0.71</sup> ≈ 2.03, e<sup>1.41</sup> ≈ 4.11.</div>
+
+<p>Antes de calcular, la analogía de la biblioteca: la <b>query</b> es lo que buscas, cada <b>key</b> es la etiqueta del lomo de un libro y cada <b>value</b> es el contenido del libro. Comparas tu búsqueda con cada etiqueta (producto punto), conviertes esas coincidencias en porcentajes (softmax) y te llevas una mezcla de los contenidos en esas proporciones.</p>
+
+<h3 id="b3a" data-toc="B3 a · Atención a mano">a) Scores escalados, pesos softmax y salida</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Scores ≈ (0.71, 0.71, 1.41) · pesos α ≈ (0.25, 0.25, 0.50) · salida ≈ <b>(0.75, 0.75)</b></div>
+    <ol class="deriv" data-revelar>
+      <li><div class="d-ex">q·k₁ = 1·1 + 1·0 = 1 ·  q·k₂ = 1·0 + 1·1 = 1 ·  q·k₃ = 1·1 + 1·1 = 2</div><div class="d-por"><b>Producto punto:</b> multiplica componente a componente y suma. Mide cuánto «coincide» la query con cada key.</div></li>
+      <li><div class="d-ex">scores = (1, 1, 2)/√2 = (0.71, 0.71, 1.41)</div><div class="d-por"><b>Escalar:</b> dividir entre √d<sub>k</sub> = √2. Multiplicar por 0.71 es lo mismo.</div></li>
+      <li><div class="d-ex">e<sup>score</sup> = (2.03, 2.03, 4.11) ·  suma = 8.17</div><div class="d-por"><b>Softmax, parte 1:</b> exponenciar cada score (con los valores que te dan) y sumar.</div></li>
+      <li><div class="d-ex">α = (2.03, 2.03, 4.11)/8.17 = (0.25, 0.25, 0.50)</div><div class="d-por"><b>Softmax, parte 2:</b> dividir cada uno entre la suma. Verifica: suman 1.</div></li>
+      <li><div class="d-ex">salida = 0.25·(1, 0) + 0.25·(0, 1) + 0.50·(1, 1) = (0.25 + 0 + 0.50, 0 + 0.25 + 0.50) = (0.75, 0.75)</div><div class="d-por"><b>Promedio ponderado de los values</b>, componente a componente.</div></li>
+      <li><div class="d-ex">k₃ coincide más con q → se lleva la mitad del peso</div><div class="d-por"><b>Interpretación:</b> q = (1, 1) «busca» las dos cosas a la vez, y k₃ = (1, 1) es la única key que tiene las dos.</div></li>
+    </ol>
+    <div class="formula">
+      <div class="f-head">Atención de producto punto escalado (viene en el formulario)</div>
+      <div class="f-ejemplo">el ejemplo de arriba: (1, 1, 2) → /√2 → softmax → (0.25, 0.25, 0.50) → mezcla de values → (0.75, 0.75)</div>
+      <div class="eq">a(<span class="r-calc">q</span>, <span class="r-calc">k<sub>i</sub></span>) = <span class="r-calc">q</span>ᵀ<span class="r-calc">k<sub>i</sub></span> / √<span class="sym" data-s="dk"></span>,     <span class="r-calc">α<sub>i</sub></span> = e<sup>a<sub>i</sub></sup> / Σ<sub>j</sub> e<sup>a<sub>j</sub></sup>,     salida = Σ<sub>i</sub> <span class="r-calc">α<sub>i</sub></span> <span class="r-calc">v<sub>i</sub></span></div>
+      <div class="f-lectura"><span class="tag">Se lee</span><p>«Compara la query con cada key y escala; convierte las comparaciones en porcentajes que suman 1; mezcla los values con esos porcentajes.»</p></div>
+    </div>
+    <p>Teoría: <a href="08_transformers.html#lab-atencion">08 · Laboratorio de atención a mano</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variante fija <span class="cambio">otra query, mismas keys</span></div>
+    <p class="gen-enun">Mismas keys y values, pero ahora <b>q = (2, 0)</b>. Puedes usar √2 ≈ 1.41, e<sup>1.41</sup> ≈ 4.11, e<sup>0</sup> = 1. Pesos y salida a dos decimales.</p>
+    <div class="chk">
+      <div class="chk-campos">
+        <label>score₁ <input data-ans="1.41" data-tol="0.02"></label>
+        <label>score₂ <input data-ans="0" data-tol="0.02"></label>
+        <label>score₃ <input data-ans="1.41" data-tol="0.02"></label>
+        <label>α₁ <input data-ans="0.446" data-tol="0.02"></label>
+        <label>α₂ <input data-ans="0.108" data-tol="0.02"></label>
+        <label>α₃ <input data-ans="0.446" data-tol="0.02"></label>
+        <label>salida, 1ª comp. <input data-ans="0.892" data-tol="0.03"></label>
+        <label>salida, 2ª comp. <input data-ans="0.554" data-tol="0.03"></label>
+      </div>
+      <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+    </div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody">
+<div class="procm">q·k = (2·1 + 0·0, 2·0 + 0·1, 2·1 + 0·1) = (2, 0, 2)
+scores = (2, 0, 2)/1.41 = (1.41, 0, 1.41)
+e^score = (4.11, 1, 4.11), suma = 9.22
+α = (0.45, 0.11, 0.45)
+salida = 0.45·(1, 0) + 0.11·(0, 1) + 0.45·(1, 1) = (0.89, 0.55)</div>
+      <p>Ahora q = (2, 0) «busca» solo la primera componente: k₁ y k₃ la tienen y empatan; k₂ no la tiene y casi no recibe peso.</p>
+    </div></details>
+  </div>
+  <div class="variante"><div class="vt">Variante del temario <span class="cambio">¿qué cambia si permutas las keys?</span></div>
+    <div class="vf" data-r="V"><p>Si reordenas los tres pares (key, value) juntos, por ejemplo (k₃, v₃), (k₁, v₁), (k₂, v₂), la salida sigue siendo (0.75, 0.75).</p>
+      <div class="vf-exp"><b>Verdadero.</b> Cada value sigue pegado a su key, así que recibe el mismo peso. Una suma no depende del orden de los sumandos. Por eso la atención no sabe el orden y necesita codificación posicional (A8).</div></div>
+    <div class="vf" data-r="F"><p>Si reordenas solo las keys (k₃, k₁, k₂) y dejas los values en su lugar (v₁, v₂, v₃), la salida sigue siendo (0.75, 0.75).</p>
+      <div class="vf-exp"><b>Falso.</b> Los pesos quedan (0.50, 0.25, 0.25), pero ahora se aplican a v₁, v₂, v₃: 0.50·(1, 0) + 0.25·(0, 1) + 0.25·(1, 1) = (0.75, 0.50). Rompiste el par etiqueta-contenido.</div></div>
+  </div>
+  <div class="widget" id="genAtt">
+    <div class="widget-head"><div class="wt">Generador de variantes · atención con 3 keys</div><div class="ws">Números chicos, d<sub>k</sub> = 2, como en el examen. Usa las exponenciales que te da el enunciado.</div></div>
+    <div class="widget-body">
+      <p class="gen-enun" id="genAttEnun"></p>
+      <div class="chk" id="genAttChk"></div>
+      <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody"><div class="procm" id="genAttProc"></div></div></details>
+    </div>
+    <div class="widget-foot"><button class="btn" id="genAttBtn">Otra variante</button></div>
+  </div>
+</div>
+
+<h3 id="b3b" data-toc="B3 b · Scores 10 veces mayores">b) ¿Qué pasa si los scores son 10 veces más grandes?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Scores (7.1, 7.1, 14.1) → el softmax se <b>satura</b>: α ≈ (0.001, 0.001, 0.998). Casi toda la atención va a k₃ y el gradiente respecto a los scores queda casi en cero. Dividir entre √d<sub>k</sub> evita que los scores crezcan con la dimensión.</div>
+    <ol class="logica">
+      <li>El softmax exagera las diferencias: con scores 0.71 contra 1.41 (diferencia 0.7) el reparto es 25/25/50. Con 7.1 contra 14.1 (diferencia 7), e<sup>7.07</sup> ≈ 1,180, así que k₃ pesa unas 1,200 veces más que cada una de las otras.</li>
+      <li>Cuando un peso está pegado a 1, mover un poco los scores casi no cambia nada: el gradiente se apaga y la red aprende lento. Es como la sigmoide saturada de las clases 3 y 4.</li>
+      <li>¿Por qué crecerían los scores? Un producto punto suma d<sub>k</sub> términos. Si cada término tiene varianza 1, la suma tiene varianza d<sub>k</sub>: con d<sub>k</sub> = 512 los scores serían enormes. Dividir entre √d<sub>k</sub> regresa la varianza a 1.</li>
+    </ol>
+    <p class="escribe">Para el examen: «El softmax se satura (α ≈ (0, 0, 1)) y el gradiente se vuelve casi cero. La varianza de qᵀk crece como d<sub>k</sub>; dividir entre √d<sub>k</sub> la mantiene en escala 1.»</p>
+    <p>Teoría: <a href="08_transformers.html#por-que-raiz">08 · Por qué √d<sub>k</sub></a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variantes <span class="cambio">sin escalar y con más dimensiones</span></div>
+    <p class="gen-enun">Si <b>olvidas dividir</b> entre √2 en B3, los scores son (1, 1, 2). Con e<sup>1</sup> ≈ 2.72 y e<sup>2</sup> ≈ 7.39, ¿cuánto vale α₃?</p>
+    <div class="chk">
+      <div class="chk-campos"><label>α₃ sin escalar <input data-ans="0.576" data-tol="0.02"></label></div>
+      <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+    </div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody"><div class="procm">7.39 / (2.72 + 2.72 + 7.39) = 7.39 / 12.83 = 0.58   (contra 0.50 escalado)</div><p>Con d<sub>k</sub> = 2 la diferencia es chica. El problema aparece con d<sub>k</sub> grande, donde los scores sin escalar se van a decenas.</p></div></details>
+    <div class="vf" data-r="F"><p>Si d<sub>k</sub> crece de 2 a 512 y no escalas, los pesos de atención tienden a ser más uniformes.</p>
+      <div class="vf-exp"><b>Falso.</b> Al revés: los scores crecen, el softmax se vuelve más «picudo» (casi one-hot) y el gradiente se apaga.</div></div>
+    <div class="vf" data-r="V"><p>Si todos los scores se multiplican por 0.01, los pesos de atención se acercan a 1/3 cada uno.</p>
+      <div class="vf-exp"><b>Verdadero.</b> Scores casi iguales a 0 dan exponenciales casi iguales a 1: softmax casi uniforme, es decir, un promedio simple (A7).</div></div>
+  </div>
+</div>
+
+<h3 id="b3c" data-toc="B3 c · Máscara causal">c) ¿Qué es la máscara causal y qué pasa si la quitas?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Pone −∞ en los scores hacia posiciones <b>futuras</b> antes del softmax, así que cada token solo atiende al pasado (e<sup>−∞</sup> = 0). Sin ella, en entrenamiento el token t ve a x<sub>t+1</sub>, que es justo lo que tiene que predecir: la pérdida se desploma por <b>fuga</b>, pero al generar el futuro no existe y el modelo no sirve.</div>
+    <ol class="logica">
+      <li>Un decoder aprende a predecir el siguiente token. En entrenamiento procesa toda la frase a la vez, por eficiencia.</li>
+      <li>Sin máscara, para predecir la palabra 4 puede «mirar» la palabra 4. Aprende a copiar, no a predecir. Es como un examen con las respuestas pegadas en la hoja.</li>
+      <li>Pérdida de entrenamiento: baja muchísimo, engañosamente. Generación: el modelo depende de algo que ya no está, y produce basura.</li>
+      <li>Fórmula: A = softmax(S + M), con M<sub>ij</sub> = 0 si j ≤ i (pasado o presente) y −∞ si j &gt; i (futuro).</li>
+    </ol>
+    <p class="escribe">Para el examen: «La máscara suma −∞ a los scores hacia el futuro, así que cada posición solo atiende a las anteriores. Sin ella, el token t ve su objetivo x<sub>t+1</sub>: la pérdida de entrenamiento cae por fuga, pero en generación el futuro no existe y el modelo falla.»</p>
+    <p>Teoría: <a href="08_transformers.html#sin-causal">08 · Qué pasa sin máscara causal</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variante <span class="cambio">calcula con máscara</span></div>
+    <p class="gen-enun">En B3, supón que la query está en la posición 2 y las keys en las posiciones 1, 2 y 3. Con máscara causal, ¿cuáles son los pesos y la salida?</p>
+    <div class="chk">
+      <div class="chk-campos">
+        <label>α₁ <input data-ans="0.5" data-tol="0.01"></label>
+        <label>α₂ <input data-ans="0.5" data-tol="0.01"></label>
+        <label>α₃ <input data-ans="0" data-tol="0.01"></label>
+        <label>salida, 1ª comp. <input data-ans="0.5" data-tol="0.02"></label>
+        <label>salida, 2ª comp. <input data-ans="0.5" data-tol="0.02"></label>
+      </div>
+      <div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>
+    </div>
+    <details class="respuesta"><summary>Ver procedimiento</summary><div class="dbody"><div class="procm">scores + máscara = (0.71 + 0, 0.71 + 0, 1.41 − ∞) = (0.71, 0.71, −∞)
+e^score = (2.03, 2.03, 0), suma 4.06 → α = (0.5, 0.5, 0)
+salida = 0.5·(1, 0) + 0.5·(0, 1) = (0.5, 0.5)</div><p>La key que más coincidía (k₃) queda fuera porque está en el futuro. El peso se reparte entre lo que sí está permitido.</p></div></details>
+    <div class="vf" data-r="F"><p>Si entrenas un decoder sin máscara causal, la pérdida de entrenamiento sube porque el modelo se confunde con información extra.</p>
+      <div class="vf-exp"><b>Falso.</b> Baja, y mucho, porque puede copiar la respuesta. El problema se ve después: al generar.</div></div>
+    <div class="vf" data-r="V"><p>Un encoder tipo BERT no usa máscara causal, pero sí puede usar una máscara de padding.</p>
+      <div class="vf-exp"><b>Verdadero.</b> El encoder puede ver ambos lados; la máscara de padding solo evita atender a los tokens de relleno.</div></div>
+  </div>
+</div>
+
+<h3 id="b3d" data-toc="B3 d · Residual y LayerNorm">d) ¿Por qué hay residual y LayerNorm alrededor de cada subcapa?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp">Los <b>residuales</b> (h + Subcapa(h)) dan un camino directo para la señal y el gradiente, lo que permite apilar muchas capas sin que el gradiente se desvanezca. <b>LayerNorm</b> mantiene estable la escala de las activaciones en cada posición. Es la misma idea que ResNet.</div>
+    <ol class="logica">
+      <li>Bloque residual: h<sub>k+1</sub> = h<sub>k</sub> + F(h<sub>k</sub>). La derivada respecto a h<sub>k</sub> es 1 + F′. Ese «1» es una vía por la que el gradiente pasa sin encogerse.</li>
+      <li>Números del artefacto 06: 10 capas planas con F′ = 0.1 dan 0.1¹⁰ = 0.0000000001; con residual, 1.1¹⁰ ≈ 2.59.</li>
+      <li>LayerNorm: después de sumar, cada vector se reescala para tener media 0 y varianza 1 (por posición, sobre sus componentes), así las capas siguientes reciben números de tamaño razonable.</li>
+      <li>Conecta con B2 b: el camino de c<sub>t</sub> en la LSTM es la misma idea, un «1» que deja pasar el gradiente.</li>
+    </ol>
+    <div class="note fix"><span class="tag">Ojo</span><p>La slide pone LayerNorm después de cada subcapa (post-LN) y el notebook antes (pre-LN). Las dos cumplen el mismo propósito.</p></div>
+    <p>Teoría: <a href="08_transformers.html#residual">08 · Residual y LayerNorm</a> y <a href="06_cnn.html#resnet">06 · ResNet</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variantes</div>
+    <div class="vf" data-r="F"><p>Las conexiones residuales mejoran el entrenamiento porque agregan muchos parámetros nuevos.</p>
+      <div class="vf-exp"><b>Falso.</b> h + F(h) es una suma: cero parámetros. Ayudan por el camino del gradiente, no por capacidad.</div></div>
+    <div class="vf" data-r="F"><p>Una red plana de 56 capas con más error de <i>entrenamiento</i> que una de 20 está sobreajustando.</p>
+      <div class="vf-exp"><b>Falso.</b> Sobreajustar es error de entrenamiento bajo y de validación alto. Aquí falla la optimización: es el problema que motivó ResNet.</div></div>
+  </div>
+</div>
+
+<!-- ============ 6. PARTE C ============ -->
+<h2 id="parte-c"><span class="num">Sección 6</span>Parte C · Diseño aplicado</h2>
+
+<div class="preg-enun"><span class="pid">C.</span>Una secretaría de salud quiere predecir la <b>demanda semanal de consultas</b> en cada uno de sus 120 centros para asignar personal. Tiene 4 años de historia por centro (unos 200 puntos por centro) y variables como semana del año, campañas activas y clima. Un equipo propone:
+<br><i>«Entrenar una LSTM <b>bidireccional</b> sobre las series, mezclando al azar todas las semanas de todos los centros en train (80%) y validación (20%), y reportar el error promedio.»</i></div>
+
+<p>En la Parte C la profesora reescribe el caso, pero los errores que esconde son casi siempre los mismos. Esta lista de seis preguntas te sirve para cualquier propuesta:</p>
+
+<table class="tbl">
+  <tr><th>#</th><th>Pregunta</th><th>Error típico que destapa</th></tr>
+  <tr><td>1</td><td><b>¿Qué se sabe en el momento de predecir?</b></td><td>Usar el futuro: bidireccional en pronóstico, variables que se conocen después.</td></tr>
+  <tr><td>2</td><td><b>¿Cómo se parten los datos?</b></td><td>Split aleatorio por renglón o imagen cuando hay unidades (centros, localidades) o tiempo. Debe ser <b>por unidad y/o por tiempo</b>.</td></tr>
+  <tr><td>3</td><td><b>¿Cuántos datos etiquetados hay?</b></td><td>Entrenar desde cero con pocos datos en vez de transfer learning o pre-entrenamiento.</td></tr>
+  <tr><td>4</td><td><b>¿Contra qué se compara?</b></td><td>No tener una línea base simple.</td></tr>
+  <tr><td>5</td><td><b>¿Qué métrica y para quién?</b></td><td>Solo el promedio global; métrica que no corresponde a la tarea (BLEU para clasificar, accuracy con clases desbalanceadas).</td></tr>
+  <tr><td>6</td><td><b>¿Quién paga si falla?</b></td><td>No pensar en los subgrupos donde el error cuesta más (rurales, chicos, con menos historia).</td></tr>
+</table>
+
+<h3 id="ca" data-toc="C a · Dos problemas de la propuesta">a) Dos problemas: uno de arquitectura y uno de validación</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <p><b>Arquitectura (pregunta 1 de la lista):</b> la LSTM bidireccional lee la serie en los dos sentidos, así que para representar la semana t usa las semanas t+1, t+2, … Para <i>pronosticar</i> la demanda, ese futuro no existe. En entrenamiento se ve muy bien; en uso real no se puede ni correr igual. <b>Corrección:</b> LSTM/GRU unidireccional, o un modelo con ventana fija de semanas pasadas.</p>
+    <p><b>Validación (pregunta 2):</b> mezclar semanas al azar mete el futuro de cada centro en el entrenamiento, y pone semanas vecinas (casi iguales) a ambos lados del split. El error de validación sale optimista. <b>Corrección:</b> partir <b>por tiempo</b> (entrenar hasta cierta fecha, validar después) y reportar también por centro; si interesa generalizar a centros nuevos, dejar centros completos fuera.</p>
+    <div class="note good"><span class="tag">Cuándo sí sirve bidireccional</span><p>Cuando la secuencia completa ya está disponible al momento de usar el modelo: clasificar una queja ya escrita, etiquetar palabras de un documento completo. No sirve para pronóstico ni para generación en tiempo real.</p></div>
+    <p>Teoría: <a href="07_rnn.html#bidireccional">07 · Bidireccionales</a>, <a href="07_rnn.html#estacionariedad">07 · Estacionariedad y split temporal</a>.</p>
+  </div></details>
+</div>
+
+<h3 id="cb" data-toc="C b · Línea base">b) ¿Qué línea base simple exigirías?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <p>Una de estas, evaluada con el <b>mismo split temporal</b>: «la misma semana del año anterior», el promedio de las últimas semanas (promedio móvil), o una regresión lineal con las mismas variables (semana del año, campañas, clima).</p>
+    <p><b>La lógica:</b> la demanda de consultas tiene mucha estacionalidad (temporada de influenza, vacaciones). Una regla tonta ya captura buena parte. Si la LSTM no le gana a eso, su complejidad no se justifica: es más cara, más difícil de explicar y de mantener.</p>
+  </div></details>
+</div>
+
+<h3 id="cc" data-toc="C c · Prompting, RAG o fine-tuning">c) Clasificar quejas: ¿prompting, RAG o fine-tuning?</h3>
+<div class="preg">
+  <p class="preg-enun"><span class="pid">C c.</span>La secretaría también quiere clasificar automáticamente 5,000 quejas escritas ya etiquetadas en 8 categorías, y luego clasificar las 40,000 que llegan al año. Un agente propone «un LLM con prompting zero-shot». ¿Prompting, RAG o fine-tuning? Justifica y di cuándo cambiarías la decisión.</p>
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <div class="resp"><b>Fine-tuning</b> (por ejemplo LoRA sobre un encoder o un LLM pequeño), evaluado con F1 por clase.</div>
+    <table class="tbl chica">
+      <tr><th>Señal del caso</th><th>Apunta a</th></tr>
+      <tr><td>5,000 ejemplos ya etiquetados</td><td>Fine-tuning: el zero-shot los desperdicia.</td></tr>
+      <tr><td>8 categorías fijas</td><td>Fine-tuning: el comportamiento es estable.</td></tr>
+      <tr><td>40,000 al año</td><td>Fine-tuning: mucho volumen, conviene que cada clasificación sea barata y consistente.</td></tr>
+      <tr><td>Es clasificar, no responder preguntas sobre documentos</td><td>RAG no aplica.</td></tr>
+    </table>
+    <p><b>Cuándo cambiarías:</b> si las categorías cambian con frecuencia o hay muy pocas etiquetas → prompting (few-shot). Si la tarea fuera responder preguntas citando quejas o normas → RAG. El prompting zero-shot sí sirve como <b>línea base rápida</b>.</p>
+    <p>La tabla de la slide: formato o tono en una tarea estándar → prompting · documentos propios o cambiantes, con fuentes → RAG · comportamiento especializado, mucho volumen, datos etiquetados → fine-tuning (LoRA) · varios pasos con acciones → agente + herramientas. Empieza siempre por lo más barato y escala solo si la evaluación lo justifica.</p>
+    <p>Teoría: <a href="08_transformers.html#decidir">08 · Cómo decidir</a>.</p>
+  </div></details>
+  <div class="variante"><div class="vt">Variante · elige la herramienta <span class="cambio">cambia una condición del caso y cambia la respuesta</span></div>
+    <div class="decide" data-r="prompt"><p>1. Reescribir en lenguaje claro unos 50 avisos oficiales al mes. No hay ejemplos etiquetados.</p>
+      <div class="decide-exp"><b>Prompting.</b> Es cambiar formato o tono en una tarea estándar, con poco volumen. Lo más barato primero.</div></div>
+    <div class="decide" data-r="rag"><p>2. Un asistente que responde dudas de ciudadanos sobre las reglas de operación de programas sociales. Las reglas cambian cada año y la respuesta debe citar el artículo.</p>
+      <div class="decide-exp"><b>RAG.</b> Documentos propios que cambian, y la cita es obligatoria. Se actualiza el corpus, no los pesos (A10).</div></div>
+    <div class="decide" data-r="ft"><p>3. Clasificar 200,000 solicitudes al año en 15 tipos. Hay 8,000 ya etiquetadas.</p>
+      <div class="decide-exp"><b>Fine-tuning (LoRA).</b> Es el caso C c con más volumen: categorías fijas, muchos datos etiquetados y la necesidad de que cada clasificación sea consistente y barata.</div></div>
+    <div class="decide" data-r="prompt"><p>4. Las mismas quejas de C c, pero las 8 categorías se redefinen cada trimestre y solo hay 30 ejemplos por categoría.</p>
+      <div class="decide-exp"><b>Prompting (few-shot).</b> Es la condición que cambia la decisión: con pocas etiquetas y categorías móviles, reentrenar cada trimestre no compensa. Pones los ejemplos en el prompt.</div></div>
+    <div class="decide" data-r="agente"><p>5. Revisar expedientes: buscar al solicitante en el padrón, verificar requisitos en tres sistemas distintos y redactar el dictamen.</p>
+      <div class="decide-exp"><b>Agente con herramientas.</b> Son varios pasos con acciones en sistemas externos. Lo importante: qué le está permitido hacer y cómo se verifica su trabajo.</div></div>
+  </div>
+</div>
+
+<h3 id="cd" data-toc="C d · Métrica y modo de falla">d) ¿Qué métrica adicional pedirías y qué modo de falla te preocupa?</h3>
+<div class="preg">
+  <details class="respuesta"><summary>Ver respuesta y lógica</summary><div class="dbody">
+    <p><b>Métrica:</b> el error <b>por centro</b> y por tipo de centro (rural/urbano, tamaño), no solo el promedio. También el desempeño en semanas atípicas (campañas, brotes).</p>
+    <p><b>Modo de falla:</b> subestimar la demanda justo en los centros pequeños o rurales. Tienen menos historia y pesan poco en el promedio, y ahí el error se traduce en falta de personal.</p>
+    <p><b>La lógica:</b> un promedio puede esconder que el modelo funciona muy bien en 100 centros urbanos grandes y muy mal en 20 rurales. Para asignar personal, el error que importa es el de cada centro. En política pública siempre pregunta <i>para quién falla</i>.</p>
+    <p>Los cinco mínimos de la slide para desplegar un modelo en el sector público: evaluación propia, métricas por subgrupo, tasa de alucinación o citas verificables (si es un LLM), monitoreo continuo y ruta de escalamiento a un humano.</p>
+  </div></details>
+</div>
+
+<h3 id="c-var" class="lab" data-toc="C · Casos reescritos">C · Casos reescritos: encuentra los problemas</h3>
+<p>Tres propuestas con el estilo del examen. Marca todos los problemas que veas y comprueba. Una de las tres es la «lógica invertida»: está bien hecha y tienes que reconocerlo.</p>
+
+<div class="variante"><div class="vt">Caso 1 · Pobreza desde el satélite <span class="cambio">otro dominio, mismos errores</span></div>
+  <div class="detector" data-must="split,transfer,subgrupo" data-ok="base">
+    <p>Hay 600 localidades con encuesta de pobreza y 50,000 imágenes satelitales sin etiqueta. Un agente propone: «Entrenar una CNN <b>desde cero</b> con las 600 localidades (10 imágenes cada una, 6,000 imágenes), con un <b>split aleatorio por imagen</b> 80/20, y reportar el R² global.»</p>
+    <div class="detector-exp">
+      <p><b>Split aleatorio por imagen:</b> imágenes de la misma localidad caen en train y en validación; la red reconoce el lugar, no la pobreza. Partir <b>por localidad</b> (o por región).</p>
+      <p><b>Desde cero con pocas etiquetas:</b> 600 etiquetas reales es poquísimo para una CNN. Usar transfer learning en dos pasos, como Jean et al. (2016): red pre-entrenada en ImageNet → ajustarla a predecir luminosidad nocturna (que existe para todas las imágenes) → usar esas features para predecir pobreza con las 600 encuestas.</p>
+      <p><b>Solo R² global:</b> reportar por subgrupo (rural/urbano, región). La luminosidad es un proxy que puede volver invisibles a las zonas pobres sin electricidad.</p>
+      <p>Pedir una línea base (por ejemplo, regresión con luminosidad sola) también es defendible.</p>
+    </div>
+  </div>
+</div>
+
+<div class="variante"><div class="vt">Caso 2 · Iniciativas de ley <span class="cambio">texto en vez de series</span></div>
+  <div class="detector" data-must="split,metrica,herramienta" data-ok="subgrupo,base">
+    <p>Se quieren clasificar iniciativas de ley en 20 temas. Hay 3,000 ya etiquetadas y llegan 6,000 al año. Un equipo propone: «Un LLM con <b>prompting zero-shot</b>, evaluado con <b>BLEU</b> entre la etiqueta predicha y la verdadera, sobre un <b>split aleatorio</b>.» En el corpus hay muchas versiones casi idénticas de la misma iniciativa (dictámenes, reformas).</p>
+    <div class="detector-exp">
+      <p><b>Herramienta:</b> 3,000 etiquetas, 20 temas fijos y mucho volumen apuntan a fine-tuning (por ejemplo, un encoder tipo BERT con cabeza de clasificación o LoRA). El zero-shot sirve como línea base.</p>
+      <p><b>Métrica:</b> BLEU mide coincidencia de n-gramas en texto generado; para clasificar se usa accuracy o F1, mejor F1 por clase si los temas están desbalanceados.</p>
+      <p><b>Split:</b> versiones casi idénticas de la misma iniciativa en train y en validación inflan el resultado. Agrupar por iniciativa (o partir por fecha).</p>
+      <p>Pedir F1 por tema (subgrupos) y una línea base también es defendible.</p>
+    </div>
+  </div>
+</div>
+
+<div class="variante"><div class="vt">Caso 3 · Demanda de agua <span class="cambio">otra serie de tiempo</span></div>
+  <div class="detector" data-must="nada" data-ok="">
+    <p>Se quiere pronosticar el consumo semanal de agua en 80 colonias. Un equipo propone: «Una <b>GRU unidireccional</b> con ventana de las últimas 52 semanas. Entrenar con 2019–2023 y validar en 2024. Comparar contra "la misma semana del año anterior". Reportar el error por colonia y por nivel socioeconómico.»</p>
+    <div class="detector-exp">
+      <p><b>No hay un error estructural.</b> Unidireccional (no usa el futuro), split por tiempo, línea base estacional y métricas por subgrupo. Es la versión corregida del caso del examen.</p>
+      <p>En el examen, si te piden criticar una propuesta así, no inventes errores. Puedes proponer mejoras: validar también con colonias completas fuera si interesa generalizar a colonias nuevas, revisar semanas atípicas (sequías) y monitorear después del despliegue.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 7. FORMULARIO ============ -->
+<h2 id="formulario"><span class="num">Sección 7</span>El formulario, leído en palabras</h2>
+<p>El examen trae estas fórmulas. No hace falta memorizarlas, pero sí reconocer en un segundo cuál usar y qué significa cada letra.</p>
+
+<div class="scroll"><table class="tbl chica">
+  <tr><th>Fórmula</th><th>En palabras</th><th>Pregunta</th></tr>
+  <tr><td class="nw">⌊(n + 2p − k)/s⌋ + 1</td><td>Tamaño de salida: entrada + relleno − kernel, entre el salto, más 1.</td><td><a href="#b1a">B1 a</a>, <a href="#a2">A2</a></td></tr>
+  <tr><td class="nw">c<sub>o</sub>c<sub>i</sub>k<sub>h</sub>k<sub>w</sub> + c<sub>o</sub></td><td>Parámetros: un peso por pixel del kernel y por canal de entrada, por filtro; más un bias por filtro.</td><td><a href="#b1b">B1 b</a>, <a href="#b1d">d</a></td></tr>
+  <tr><td class="nw">r<sub>l</sub> = r<sub>l−1</sub> + (k<sub>l</sub> − 1)j<sub>l−1</sub><br>j<sub>l</sub> = j<sub>l−1</sub>s<sub>l</sub></td><td>Receptive field: cada capa agrega (k − 1) saltos; el salto se multiplica por cada stride.</td><td><a href="#b1c">B1 c</a>, <a href="#a3">A3</a></td></tr>
+  <tr><td class="nw">H<sub>t</sub> = φ(X<sub>t</sub>W<sub>xh</sub> + H<sub>t−1</sub>W<sub>hh</sub> + b<sub>h</sub>)</td><td>Estado nuevo = mezcla de la entrada de hoy y el estado de ayer. Mismos pesos en cada paso.</td><td><a href="#b2a">B2 a</a></td></tr>
+  <tr><td class="nw">c<sub>t</sub> = f<sub>t</sub> ⊙ c<sub>t−1</sub> + i<sub>t</sub> ⊙ c̃<sub>t</sub></td><td>Memoria = lo viejo que conservo (f) + lo nuevo que escribo (i). f ≈ 1 conserva.</td><td><a href="#a6">A6</a>, <a href="#b2b">B2 b</a></td></tr>
+  <tr><td class="nw">h<sub>t</sub> = z<sub>t</sub> ⊙ h<sub>t−1</sub> + (1 − z<sub>t</sub>) ⊙ h̃<sub>t</sub></td><td>GRU: z partes de lo viejo, 1 − z de lo nuevo. z ≈ 1 conserva.</td><td><a href="#b2b">B2 b</a></td></tr>
+  <tr><td class="nw">g ← min(1, θ/‖g‖) g</td><td>Si el gradiente mide más que θ, encógelo a θ; si no, déjalo. La dirección no cambia.</td><td><a href="#b2c">B2 c</a></td></tr>
+  <tr><td class="nw">exp(−(1/n) Σ log P(x<sub>t</sub> | x<sub>&lt;t</sub>))</td><td>Perplejidad: exponencial de la sorpresa promedio por token. «Entre cuántas opciones duda.»</td><td><a href="#a4">A4</a>, <a href="#b2d">B2 d</a></td></tr>
+  <tr><td class="nw">α<sub>i</sub> = softmax(qᵀk<sub>i</sub>/√d<sub>k</sub>)</td><td>Compara la query con cada key, escala, convierte en porcentajes; salida = mezcla de values.</td><td><a href="#b3a">B3 a</a>, <a href="#b3b">b</a></td></tr>
+  <tr><td class="nw">softmax(S + M), M ∈ {0, −∞}</td><td>Máscara: −∞ donde no se permite mirar (futuro, padding); ese peso queda en 0.</td><td><a href="#b3c">B3 c</a></td></tr>
+  <tr><td class="nw">[h<sub>1</sub>; …; h<sub>H</sub>]W<sup>o</sup></td><td>Multi-head: varias atenciones en paralelo con proyecciones distintas; se pegan y se mezclan.</td><td>—</td></tr>
+  <tr><td class="nw">PE = sin, cos(pos/10000<sup>2i/d</sup>)</td><td>Posición codificada con ondas de distintas frecuencias. Sin parámetros; vale para cualquier posición.</td><td><a href="#a8">A8</a></td></tr>
+  <tr><td class="nw">h<sub>k+1</sub> = h<sub>k</sub> + F(h<sub>k</sub>)</td><td>Residual: lo que había más una corrección. El «+ h» es un camino directo para el gradiente.</td><td><a href="#b3d">B3 d</a></td></tr>
+</table></div>
+
+<!-- ============ 8. SIMULACRO ============ -->
+<h2 id="practica"><span class="num">Sección 8</span>Simulacro: un «examen B»</h2>
+<div class="note exam">
+  <span class="tag">Cómo usar esta sección</span>
+  <p>Hazlo al final, en papel y con reloj de 25 minutos, sin volver a las secciones de arriba. Es el examen de práctica con los tres tipos de cambio aplicados a la vez. Usa el <a href="#formulario">formulario</a> como lo usarías en el examen.</p>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Variante de A2 · otros parámetros</span>
+  <div class="e-enun">V o F, y justifica: «Una convolución 5×5 con padding 2 y stride 2 convierte una entrada de 64×64 en una de 32×32.»</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p><b>V.</b> ⌊(64 + 4 − 5)/2⌋ + 1 = ⌊31.5⌋ + 1 = 32. El padding 2 es same padding para k = 5, y el stride 2 divide entre 2.</p></div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Variante de A6 · lógica invertida</span>
+  <div class="e-enun">V o F, y justifica: «En una LSTM, con f<sub>t</sub> ≈ 1 e i<sub>t</sub> ≈ 1, la memoria anterior se borra y se reemplaza por el candidato.»</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p><b>F.</b> c<sub>t</sub> ≈ 1·c<sub>t−1</sub> + 1·c̃<sub>t</sub>: conserva lo anterior <i>y</i> suma lo nuevo. Borrar y reemplazar es f ≈ 0, i ≈ 1.</p></div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Variante de A4 · los dos extremos</span>
+  <div class="e-enun">V o F, y justifica: «Sobre un vocabulario de 30,000 tokens, un modelo con perplejidad 1 y uno uniforme son igual de malos.»</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p><b>F.</b> Perplejidad 1 es el mejor caso posible: asigna probabilidad 1 al token correcto (no duda). El uniforme tiene perplejidad 30,000: duda entre todo el vocabulario.</p></div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Variante de B1 · ejemplo del temario</span>
+  <div class="e-enun">Entrada 64×64×3. Capa 1: 16 filtros 5×5, padding 2, stride 2, con bias. Capa 2: convolución 3×3, stride 1. Calcula la forma de salida de la Capa 1, sus parámetros y el receptive field tras la Capa 2.</div>
+  <details class="pista"><summary>Pista</summary><div class="dbody"><p>En el receptive field, el stride 2 de la Capa 1 duplica el salto j que usa la Capa 2.</p></div></details>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+<div class="procm">Salida: ⌊(64 + 4 − 5)/2⌋ + 1 = 32  → 32×32×16
+Parámetros: 16·3·5·5 + 16 = 1,200 + 16 = 1,216
+RF: conv 5, s 2: r = 1 + 4·1 = 5, j = 2  →  conv 3: r = 5 + 2·2 = 9   → 9×9 pixeles</div>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Variante de B2 a y c</span>
+  <div class="e-enun">(1) Una RNN simple tiene entrada de dimensión 16 y estado oculto de 32. ¿Cuántos parámetros tiene la recurrencia? (2) Un gradiente tiene norma 2 y el umbral de clipping es θ = 5. ¿Por qué factor se reescala?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+<div class="procm">(1) 16·32 + 32·32 + 32 = 512 + 1,024 + 32 = 1,568
+(2) min(1, 5/2) = min(1, 2.5) = 1 → no se reescala. El clipping solo encoge.</div>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Calcular</span><span class="e-tem">Variante de B3 a · otra query</span>
+  <div class="e-enun">Mismas keys y values de B3, con q = (1, 0). Usa 1/√2 ≈ 0.71, e<sup>0.71</sup> ≈ 2.03, e<sup>0</sup> = 1. Calcula scores, pesos y salida. Después: ¿qué cambia si permutas los pares (key, value) juntos?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+<div class="procm">q·k = (1, 0, 1) → scores = (0.71, 0, 0.71)
+e^score = (2.03, 1, 2.03), suma 5.06 → α = (0.40, 0.20, 0.40)
+salida = 0.40·(1, 0) + 0.20·(0, 1) + 0.40·(1, 1) = (0.80, 0.60)</div>
+    <p>Si permutas los pares juntos, la salida no cambia: cada value conserva su peso y la suma no depende del orden.</p>
+  </div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Predecir</span><span class="e-tem">Ablación mental · codificación posicional</span>
+  <div class="e-enun">Entrenas un encoder sin codificación posicional, que promedia las salidas de todos los tokens antes de clasificar. ¿Puede distinguir «el perro mordió al hombre» de «el hombre mordió al perro»? ¿Por qué?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p><b>No.</b> Son los mismos tokens en otro orden. Sin posición, la self-attention da a cada token la misma salida aunque cambie su lugar (solo se reordenan las salidas), y el promedio de las salidas no depende del orden. Las dos frases quedan con la misma representación. La codificación posicional es lo que rompe ese empate.</p></div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Explicar</span><span class="e-tem">Variante de B2 d · lógica invertida</span>
+  <div class="e-enun">Dos modelos de lenguaje usan <b>el mismo tokenizador</b> y se evalúan sobre <b>el mismo texto de prueba</b>: perplejidad 60 y 95. ¿Cuál es mejor como modelo de lenguaje? ¿Eso garantiza que sea mejor para responder preguntas de ciudadanos?</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody"><p>Ahora sí son comparables: el de <b>60</b> predice mejor el texto (duda entre menos opciones por token). Pero no garantiza nada sobre la utilidad: la perplejidad mide fluidez al predecir texto, no veracidad ni utilidad. Para un despliegue harían falta una evaluación propia, métricas por subgrupo y tasa de alucinación.</p></div></details>
+</div>
+
+<div class="ejercicio">
+  <span class="e-tipo">Diagnosticar</span><span class="e-tem">Variante de C a · caso reescrito</span>
+  <div class="e-enun">Un agente propone una LSTM <b>bidireccional</b> que lee la transcripción de una llamada al 911 <b>mientras ocurre</b> y decide en tiempo real si es una emergencia médica. Para validar, mezcla al azar llamadas de 2019 a 2025 y reporta la accuracy global. Señala dos problemas y corrígelos.</div>
+  <details class="respuesta"><summary>Ver respuesta</summary><div class="dbody">
+    <p><b>Arquitectura:</b> en tiempo real el resto de la llamada todavía no existe; la bidireccional necesita la secuencia completa. Usar un modelo unidireccional (LSTM/GRU o un decoder con máscara causal) que decida con lo dicho hasta el momento.</p>
+    <p><b>Validación:</b> mezclar años mete el futuro en el entrenamiento (cambian protocolos y vocabulario). Partir por tiempo: entrenar con 2019–2023 y validar en 2024–2025.</p>
+    <p><b>Métrica:</b> la accuracy global esconde lo importante. Si las emergencias son pocas, un modelo que dice siempre «no» tiene accuracy alta. Reportar recall de emergencias (no perderse ninguna) y resultados por subgrupo (idioma, región).</p>
+  </div></details>
+</div>
+
+<!-- ============ 9. GLOSARIO ============ -->
+<h2 id="glosario"><span class="num">Sección 9</span>Glosario: frases para justificar</h2>
+<p>Una frase por concepto, del tamaño de una justificación de la Parte A.</p>
+<div class="gloss">
+  <div class="item"><div class="term">same padding</div><div class="def">p = (k − 1)/2 con stride 1: la salida mide lo mismo que la entrada.</div></div>
+  <div class="item"><div class="term">parámetros de una convolución</div><div class="def">No dependen del tamaño de la imagen, solo de canales y kernel: los pesos se comparten en todas las posiciones.</div></div>
+  <div class="item"><div class="term">receptive field</div><div class="def">Los pixeles originales que pueden afectar a una unidad; crece con la profundidad y más rápido con stride o pooling.</div></div>
+  <div class="item"><div class="term">convolución 1×1</div><div class="def">Capa lineal entre canales, aplicada igual en cada posición; no mira vecinos.</div></div>
+  <div class="item"><div class="term">pooling</div><div class="def">Operación fija por ventana y canal: sin parámetros, con hiperparámetros.</div></div>
+  <div class="item"><div class="term">perplejidad</div><div class="def">exp de la cross-entropy por token: entre cuántas opciones duda el modelo. Solo es comparable con el mismo tokenizador.</div></div>
+  <div class="item"><div class="term">BPTT truncado</div><div class="def">Retropropagar solo τ pasos: aproximación más barata y estable que no aprende dependencias más largas.</div></div>
+  <div class="item"><div class="term">gradient clipping</div><div class="def">Encoge el gradiente a norma θ conservando su dirección; arregla la explosión, no el desvanecimiento.</div></div>
+  <div class="item"><div class="term">forget gate</div><div class="def">«Cuánto conservo» de la memoria: 1 conserva, 0 borra.</div></div>
+  <div class="item"><div class="term">update gate (GRU)</div><div class="def">Con la convención del curso, z ≈ 1 conserva el estado y z ≈ 0 lo reemplaza por el candidato.</div></div>
+  <div class="item"><div class="term">bidireccional</div><div class="def">Usa pasado y futuro: sirve si la secuencia completa está disponible, no para pronóstico ni generación.</div></div>
+  <div class="item"><div class="term">√d<sub>k</sub></div><div class="def">La varianza de qᵀk crece como d<sub>k</sub>; dividir evita que el softmax se sature y el gradiente se apague.</div></div>
+  <div class="item"><div class="term">máscara causal</div><div class="def">−∞ hacia el futuro antes del softmax; sin ella, el decoder ve su objetivo y aprende a copiar.</div></div>
+  <div class="item"><div class="term">codificación posicional</div><div class="def">Necesaria porque la self-attention no ve el orden; la sinusoidal no tiene parámetros y extrapola mejor.</div></div>
+  <div class="item"><div class="term">conexión residual</div><div class="def">h + F(h): camino directo para el gradiente, sin parámetros extra.</div></div>
+  <div class="item"><div class="term">RAG</div><div class="def">Recupera documentos y los pone en el prompt: conocimiento actualizable y citable sin tocar los pesos.</div></div>
+  <div class="item"><div class="term">LoRA</div><div class="def">Congela W y entrena una corrección de rango bajo ΔW = AB: fine-tuning barato.</div></div>
+  <div class="item"><div class="term">split por unidad y por tiempo</div><div class="def">Validar con centros, localidades o fechas que el modelo no vio; el split aleatorio por renglón filtra información.</div></div>
+</div>
+
+<nav class="serie" data-actual="09"></nav>
+
+<footer>
+  <p>Artefacto de estudio basado en <code>Examenes/Examen2_GuiaEstudio.md</code> y las slides CNN, RNN y Transformers del curso Aprendizaje Profundo (Tec, 2026). Las variantes son propias; sus números están verificados con un script.</p>
+</footer>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script src="_compartido/notacion.js"></script>
+<script src="_compartido/componentes.js"></script>
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ---------- lectura de números escritos por el estudiante ---------- */
+  function leer(s){
+    s = String(s).trim().replace(/\s/g, "").replace(/−/g, "-");
+    if(s === "") return NaN;
+    if(/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, "");
+    else s = s.replace(",", ".");
+    if(/^-?\d+\/\d+$/.test(s)){ var p = s.split("/"); return parseFloat(p[0])/parseFloat(p[1]); }
+    return parseFloat(s);
+  }
+
+  /* ---------- V/F ---------- */
+  document.querySelectorAll(".vf").forEach(function(el){
+    var r = el.getAttribute("data-r"), exp = el.querySelector(".vf-exp");
+    exp.hidden = true;
+    var bar = document.createElement("div"); bar.className = "vf-bar";
+    var st = document.createElement("span"); st.className = "status"; st.hidden = true;
+    [["V", "Verdadero"], ["F", "Falso"]].forEach(function(o){
+      var b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = o[1];
+      b.addEventListener("click", function(){
+        bar.querySelectorAll(".btn").forEach(function(x){ x.classList.remove("sel"); }); b.classList.add("sel");
+        var ok = o[0] === r;
+        st.hidden = false; st.className = "status " + (ok ? "ok" : "bad");
+        st.textContent = ok ? "Correcto" : "No: es " + (r === "V" ? "verdadero" : "falso");
+        exp.hidden = false;
+      });
+      bar.appendChild(b);
+    });
+    var ver = document.createElement("button"); ver.type = "button"; ver.className = "btn"; ver.textContent = "Solo ver la respuesta";
+    ver.addEventListener("click", function(){ exp.hidden = !exp.hidden; });
+    bar.appendChild(ver); bar.appendChild(st);
+    exp.parentNode.insertBefore(bar, exp);
+  });
+
+  /* ---------- casillas que se comprueban ---------- */
+  function htmlChk(campos){
+    return '<div class="chk-campos">' + campos.map(function(c){
+      return '<label>' + c[0] + ' <input data-ans="' + c[1] + '" data-tol="' + (c[2] || 0) + '"></label>';
+    }).join("") + '</div><div class="chk-fila"><button class="btn primary chk-btn">Comprobar</button><span class="status chk-sal" hidden></span></div>';
+  }
+  document.addEventListener("click", function(e){
+    var b = e.target.closest(".chk-btn"); if(!b) return;
+    var chk = b.closest(".chk"), ins = chk.querySelectorAll("input"), bien = 0, vacios = 0;
+    ins.forEach(function(inp){
+      var v = leer(inp.value), ans = parseFloat(inp.getAttribute("data-ans")), tol = parseFloat(inp.getAttribute("data-tol") || "0");
+      inp.classList.remove("ok", "bad");
+      if(isNaN(v)){ vacios++; return; }
+      var ok = Math.abs(v - ans) <= tol + 1e-9;
+      inp.classList.add(ok ? "ok" : "bad"); if(ok) bien++;
+    });
+    var sal = chk.querySelector(".chk-sal"); sal.hidden = false;
+    sal.className = "status chk-sal " + (bien === ins.length ? "ok" : "bad");
+    sal.textContent = bien + " de " + ins.length + " correctas" + (vacios ? " (" + vacios + " sin contestar)" : "") + (bien === ins.length ? ". Bien." : ". Revisa las marcadas y el procedimiento.");
+  });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Enter" && e.target.matches(".chk input")){ e.target.closest(".chk").querySelector(".chk-btn").click(); }
+  });
+
+  function f2(x){ return DL.fmt(x, 2); }
+  function miles(x){ return String(x).replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+
+  /* ---------- generador B1: CNN de tres capas ---------- */
+  var semB1 = 1;
+  function salida(n, k, p, s){ return Math.floor((n + 2*p - k)/s) + 1; }
+  function genB1(){
+    var R = DL.rng(100 + semB1), pick = function(a){ return a[R.entero(a.length)]; }, d;
+    for(var intento = 0; intento < 50; intento++){
+      d = {n:pick([28, 32, 48, 64]), ci:pick([1, 3]), f1:pick([6, 8, 16, 32]), k1:pick([3, 5]), s1:pick([1, 1, 2]), f3:pick([16, 32, 64]), k3:pick([3, 5]), p3:pick([0, 1])};
+      d.p1 = pick([0, (d.k1 - 1)/2]);
+      d.o1 = salida(d.n, d.k1, d.p1, d.s1); d.o2 = salida(d.o1, 2, 0, 2); d.o3 = salida(d.o2, d.k3, d.p3, 1);
+      if(d.o3 >= 2) break;
+    }
+    d.par1 = d.f1*d.ci*d.k1*d.k1 + d.f1; d.par3 = d.f3*d.f1*d.k3*d.k3 + d.f3; d.par11 = d.f3*d.f1 + d.f3;
+    var r1 = 1 + (d.k1 - 1), j1 = d.s1, r2 = r1 + 1*j1, j2 = j1*2, r3 = r2 + (d.k3 - 1)*j2;
+    $("genB1enun").innerHTML = "Entrada <b>" + d.n + "×" + d.n + "×" + d.ci + "</b>. Capa 1: <b>" + d.f1 + " filtros " + d.k1 + "×" + d.k1 + "</b>, padding " + d.p1 + ", stride " + d.s1 +
+      ". Capa 2: max-pooling 2×2, stride 2. Capa 3: <b>" + d.f3 + " filtros " + d.k3 + "×" + d.k3 + "</b>, padding " + d.p3 + ", stride 1. Todas con bias.";
+    $("genB1chk").innerHTML = htmlChk([["Capa 1 · alto", d.o1], ["Capa 2 · alto", d.o2], ["Capa 3 · alto", d.o3],
+      ["Capa 1 · parámetros", d.par1], ["Capa 3 · parámetros", d.par3], ["Receptive field tras Capa 3", r3], ["Parámetros si Capa 3 fuera 1×1", d.par11]]);
+    $("genB1proc").textContent =
+      "Capa 1: ⌊(" + d.n + " + 2·" + d.p1 + " − " + d.k1 + ")/" + d.s1 + "⌋ + 1 = " + d.o1 + "  → " + d.o1 + "×" + d.o1 + "×" + d.f1 + "\n" +
+      "Capa 2: ⌊(" + d.o1 + " − 2)/2⌋ + 1 = " + d.o2 + "  → " + d.o2 + "×" + d.o2 + "×" + d.f1 + "  (0 parámetros)\n" +
+      "Capa 3: ⌊(" + d.o2 + " + 2·" + d.p3 + " − " + d.k3 + ")/1⌋ + 1 = " + d.o3 + "  → " + d.o3 + "×" + d.o3 + "×" + d.f3 + "\n\n" +
+      "Parámetros Capa 1: " + d.f1 + "·" + d.ci + "·" + d.k1 + "·" + d.k1 + " + " + d.f1 + " = " + miles(d.par1) + "\n" +
+      "Parámetros Capa 3: " + d.f3 + "·" + d.f1 + "·" + d.k3 + "·" + d.k3 + " + " + d.f3 + " = " + miles(d.par3) + "   (c_i = " + d.f1 + ", los canales que salen del pooling)\n\n" +
+      "Receptive field:\n  conv " + d.k1 + ", s " + d.s1 + ":  r = 1 + " + (d.k1 - 1) + "·1 = " + r1 + ",  j = " + j1 + "\n" +
+      "  pool 2, s 2:  r = " + r1 + " + 1·" + j1 + " = " + r2 + ",  j = " + j2 + "\n" +
+      "  conv " + d.k3 + ", s 1:  r = " + r2 + " + " + (d.k3 - 1) + "·" + j2 + " = " + r3 + "\n\n" +
+      "1×1: " + d.f3 + "·" + d.f1 + "·1·1 + " + d.f3 + " = " + miles(d.par11);
+    $("genB1n").textContent = "variante " + semB1;
+  }
+  $("genB1btn").addEventListener("click", function(){ semB1++; genB1(); });
+  genB1();
+
+  /* ---------- generador de clipping ---------- */
+  var semClip = 1;
+  function genClip(){
+    var R = DL.rng(500 + semClip), pick = function(a){ return a[R.entero(a.length)]; };
+    var t = pick([[3, 4, 5], [6, 8, 10], [5, 12, 13], [8, 15, 17], [12, 16, 20], [9, 12, 15], [7, 24, 25]]);
+    var g = [t[0]*(R.u() < 0.3 ? -1 : 1), t[1]*(R.u() < 0.3 ? -1 : 1)], nrm = t[2], th = pick([1, 2, 5, 10, 20]);
+    var fac = Math.min(1, th/nrm), g2 = [g[0]*fac, g[1]*fac];
+    $("genClipEnun").innerHTML = "g = (" + DL.fmt(g[0], 0) + ", " + DL.fmt(g[1], 0) + "), umbral θ = " + th + ". Calcula la norma, el factor y el gradiente recortado.";
+    $("genClipChk").innerHTML = htmlChk([["‖g‖", nrm, 0.01], ["factor", fac.toFixed(4), 0.01], ["g nuevo, 1ª comp.", g2[0].toFixed(4), 0.03], ["g nuevo, 2ª comp.", g2[1].toFixed(4), 0.03]]);
+    $("genClipProc").textContent = "‖g‖ = √(" + g[0]*g[0] + " + " + g[1]*g[1] + ") = √" + (nrm*nrm) + " = " + nrm + "\n" +
+      "factor = min(1, " + th + "/" + nrm + ") = min(1, " + f2(th/nrm) + ") = " + f2(fac) + "\n" +
+      (fac < 1 ? "g nuevo = " + f2(fac) + "·(" + DL.fmt(g[0], 0) + ", " + DL.fmt(g[1], 0) + ") = (" + f2(g2[0]) + ", " + f2(g2[1]) + "), norma " + th + ". Misma dirección."
+               : "La norma ya es ≤ θ: el gradiente no se toca. El clipping nunca agranda.");
+  }
+  $("genClipBtn").addEventListener("click", function(){ semClip++; genClip(); });
+  genClip();
+
+  /* ---------- generador de atención ---------- */
+  var semAtt = 1;
+  function genAtt(){
+    var R = DL.rng(900 + semAtt), pick = function(a){ return a[R.entero(a.length)]; };
+    var vals = [-1, 0, 1, 2], q, K, V, dots;
+    for(var intento = 0; intento < 50; intento++){
+      q = [pick(vals), pick(vals)];
+      K = [0, 1, 2].map(function(){ return [pick(vals), pick(vals)]; });
+      V = [0, 1, 2].map(function(){ return [pick([0, 1, 2]), pick([0, 1, 2])]; });
+      dots = K.map(function(k){ return q[0]*k[0] + q[1]*k[1]; });
+      var distintos = dots.filter(function(x, i){ return dots.indexOf(x) === i; }).length;
+      if((q[0] || q[1]) && distintos >= 2) break;
+    }
+    var sc = dots.map(function(x){ return x/Math.SQRT2; });
+    var ex = sc.map(Math.exp), sum = ex.reduce(function(a, b){ return a + b; }, 0);
+    var al = ex.map(function(x){ return x/sum; });
+    var out = [0, 1].map(function(c){ return al[0]*V[0][c] + al[1]*V[1][c] + al[2]*V[2][c]; });
+    var vec = function(v){ return "(" + v.map(function(x){ return DL.fmt(x, 0); }).join(", ") + ")"; };
+    var unicos = sc.filter(function(x, i){ return sc.indexOf(x) === i; }).sort(function(a, b){ return a - b; });
+    $("genAttEnun").innerHTML = "q = " + vec(q) + ";  k₁ = " + vec(K[0]) + ", v₁ = " + vec(V[0]) + ";  k₂ = " + vec(K[1]) + ", v₂ = " + vec(V[1]) + ";  k₃ = " + vec(K[2]) + ", v₃ = " + vec(V[2]) +
+      ".<br>Puedes usar √2 ≈ 1.41, " + unicos.map(function(s){ return "e<sup>" + f2(s) + "</sup> ≈ " + f2(Math.exp(s)); }).join(", ") + ".";
+    $("genAttChk").innerHTML = htmlChk([["score₁", sc[0].toFixed(4), 0.02], ["score₂", sc[1].toFixed(4), 0.02], ["score₃", sc[2].toFixed(4), 0.02],
+      ["α₁", al[0].toFixed(4), 0.02], ["α₂", al[1].toFixed(4), 0.02], ["α₃", al[2].toFixed(4), 0.02],
+      ["salida, 1ª comp.", out[0].toFixed(4), 0.03], ["salida, 2ª comp.", out[1].toFixed(4), 0.03]]);
+    $("genAttProc").textContent = "q·k = (" + dots.map(function(x){ return DL.fmt(x, 0); }).join(", ") + ")\n" +
+      "scores = (" + dots.map(function(x){ return DL.fmt(x, 0); }).join(", ") + ")/√2 = (" + sc.map(f2).join(", ") + ")\n" +
+      "e^score = (" + ex.map(f2).join(", ") + "), suma = " + f2(sum) + "\n" +
+      "α = (" + al.map(f2).join(", ") + ")\n" +
+      "salida = " + f2(al[0]) + "·" + vec(V[0]) + " + " + f2(al[1]) + "·" + vec(V[1]) + " + " + f2(al[2]) + "·" + vec(V[2]) + " = (" + out.map(f2).join(", ") + ")";
+  }
+  $("genAttBtn").addEventListener("click", function(){ semAtt++; genAtt(); });
+  genAtt();
+
+  /* ---------- elegir herramienta ---------- */
+  var HERR = [["prompt", "Prompting"], ["rag", "RAG"], ["ft", "Fine-tuning"], ["agente", "Agente"]];
+  document.querySelectorAll(".decide").forEach(function(el){
+    var r = el.getAttribute("data-r"), exp = el.querySelector(".decide-exp"); exp.hidden = true;
+    var bar = document.createElement("div"); bar.className = "vf-bar";
+    var st = document.createElement("span"); st.className = "status"; st.hidden = true;
+    HERR.forEach(function(h){
+      var b = document.createElement("button"); b.type = "button"; b.className = "btn"; b.textContent = h[1];
+      b.addEventListener("click", function(){
+        bar.querySelectorAll(".btn").forEach(function(x){ x.classList.remove("sel"); }); b.classList.add("sel");
+        var ok = h[0] === r; st.hidden = false; st.className = "status " + (ok ? "ok" : "bad");
+        st.textContent = ok ? "Correcto" : "No es la mejor opción"; exp.hidden = false;
+      });
+      bar.appendChild(b);
+    });
+    bar.appendChild(st); exp.parentNode.insertBefore(bar, exp);
+  });
+
+  /* ---------- detector de problemas ---------- */
+  var PROB = [
+    ["split", "Split aleatorio cuando debería ser por unidad o por tiempo (fuga)"],
+    ["futuro", "Usa información del futuro que no existe al predecir"],
+    ["transfer", "Entrena desde cero con pocos datos; falta transfer learning"],
+    ["metrica", "Métrica que no corresponde a la tarea"],
+    ["subgrupo", "Solo un resultado global, sin métricas por subgrupo"],
+    ["base", "No compara contra una línea base simple"],
+    ["herramienta", "Herramienta equivocada (prompting / RAG / fine-tuning)"],
+    ["nada", "No tiene errores estructurales"]
+  ];
+  document.querySelectorAll(".detector").forEach(function(el, n){
+    var must = el.getAttribute("data-must").split(","), okx = (el.getAttribute("data-ok") || "").split(",");
+    var exp = el.querySelector(".detector-exp"); exp.hidden = true;
+    var box = document.createElement("div"); box.className = "opciones";
+    box.innerHTML = PROB.map(function(p){ return '<label data-k="' + p[0] + '"><input type="checkbox" value="' + p[0] + '"> ' + p[1] + '</label>'; }).join("");
+    var fila = document.createElement("div"); fila.className = "chk-fila";
+    var b = document.createElement("button"); b.type = "button"; b.className = "btn primary"; b.textContent = "Comprobar";
+    var st = document.createElement("span"); st.className = "status"; st.hidden = true;
+    fila.appendChild(b); fila.appendChild(st);
+    b.addEventListener("click", function(){
+      var faltan = 0, sobran = 0;
+      box.querySelectorAll("label").forEach(function(l){
+        var k = l.getAttribute("data-k"), c = l.querySelector("input").checked;
+        l.classList.remove("acierto", "falta", "sobra");
+        if(must.indexOf(k) >= 0){ l.classList.add(c ? "acierto" : "falta"); if(!c) faltan++; }
+        else if(c && okx.indexOf(k) < 0){ l.classList.add("sobra"); sobran++; }
+        else if(c){ l.classList.add("acierto"); }
+      });
+      st.hidden = false; st.className = "status " + (faltan + sobran === 0 ? "ok" : "bad");
+      st.textContent = faltan + sobran === 0 ? "Bien: encontraste lo importante." : (faltan ? faltan + " sin marcar (en naranja)" : "") + (faltan && sobran ? " · " : "") + (sobran ? sobran + " que no aplica (tachado)" : "");
+      exp.hidden = false;
+    });
+    exp.parentNode.insertBefore(box, exp); exp.parentNode.insertBefore(fila, exp);
+  });
+})();
+</script>
+</body>
+</html>
